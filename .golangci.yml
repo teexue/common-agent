@@ -1,0 +1,24 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - gosimple
+    - misspell
+    - unconvert
+    - gosec
+
+linters-settings:
+  gosec:
+    excludes:
+      - G104 # duplicate of errcheck for many cases
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
