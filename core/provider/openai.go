@@ -1,0 +1,283 @@
+package provider
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+)
+
+const defaultOpenAIBaseURL = "https://api.openai.com/v1"
+
+// OpenAIConfig configures an OpenAI-compatible provider.
+type OpenAIConfig struct {
+	APIKey   string
+	BaseURL  string
+	Client   *http.Client
+	Thinking *ThinkingConfig
+}
+
+// OpenAI implements Provider against OpenAI-compatible chat completions APIs.
+type OpenAI struct {
+	apiKey   string
+	baseURL  string
+	client   *http.Client
+	thinking *ThinkingConfig
+}
+
+// NewOpenAI creates an OpenAI-compatible provider.
+func NewOpenAI(cfg OpenAIConfig) (*OpenAI, error) {
+	if cfg.APIKey == "" {
+		return nil, fmt.Errorf("openai api key is required")
+	}
+	baseURL := cfg.BaseURL
+	if baseURL == "" {
+		baseURL = defaultOpenAIBaseURL
+	}
+	client := cfg.Client
+	if client == nil {
+		client = DefaultHTTPClient()
+	}
+	return &OpenAI{apiKey: cfg.APIKey, baseURL: strings.TrimRight(baseURL, "/"), client: client, thinking: cfg.Thinking}, nil
+}
+
+type openAIThinking struct {
+	Type string  `json:"type"`
+	Keep *string `json:"keep,omitempty"`
+}
+
+type openAIRequest struct {
+	Model     string          `json:"model"`
+	Messages  []openAIMessage `json:"messages"`
+	Tools     []openAITool    `json:"tools,omitempty"`
+	Stream    bool            `json:"stream"`
+	MaxTokens int             `json:"max_tokens,omitempty"`
+	Thinking  *openAIThinking `json:"thinking,omitempty"`
+}
+
+type openAIMessage struct {
+	Role             string           `json:"role"`
+	Content          string           `json:"content,omitempty"`
+	ReasoningContent string           `json:"reasoning_content,omitempty"`
+	ToolCalls        []openAIToolCall `json:"tool_calls,omitempty"`
+	ToolCallID       string           `json:"tool_call_id,omitempty"`
+	Name             string           `json:"name,omitempty"`
+}
+
+type openAITool struct {
+	Type     string         `json:"type"`
+	Function openAIFunction `json:"function"`
+}
+
+type openAIFunction struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  map[string]any `json:"parameters"`
+}
+
+type openAIToolCall struct {
+	Index    int                `json:"index"`
+	ID       string             `json:"id"`
+	Type     string             `json:"type"`
+	Function openAIFunctionCall `json:"function"`
+}
+
+type openAIFunctionCall struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+type openAIStreamResponse struct {
+	Choices []struct {
+		Delta struct {
+			Content          string           `json:"content"`
+			ReasoningContent string           `json:"reasoning_content"`
+			ToolCalls        []openAIToolCall `json:"tool_calls"`
+		} `json:"delta"`
+		FinishReason *string `json:"finish_reason"`
+	} `json:"choices"`
+}
+
+// Stream implements Provider.
+func (o *OpenAI) Stream(ctx context.Context, req Request) (<-chan Chunk, error) {
+	body, err := json.Marshal(o.buildRequest(req))
+	if err != nil {
+		return nil, fmt.Errorf("marshal openai request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, o.baseURL+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create openai request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+o.apiKey)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := o.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("openai request: %w", err)
+	}
+	if resp.StatusCode >= 400 {
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("openai status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+
+	ch := make(chan Chunk)
+	go func() {
+		defer close(ch)
+		defer resp.Body.Close()
+		o.readStream(ctx, resp.Body, ch)
+	}()
+	return ch, nil
+}
+
+func (o *OpenAI) buildRequest(req Request) openAIRequest {
+	msgs := make([]openAIMessage, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		msg := openAIMessage{
+			Role:             string(m.Role),
+			Content:          m.Content,
+			ReasoningContent: m.ReasoningContent,
+			ToolCallID:       m.ToolCallID,
+			Name:             m.Name,
+		}
+		if len(m.ToolCalls) > 0 {
+			msg.ToolCalls = make([]openAIToolCall, 0, len(m.ToolCalls))
+			for _, tc := range m.ToolCalls {
+				msg.ToolCalls = append(msg.ToolCalls, openAIToolCall{
+					ID:   tc.ID,
+					Type: "function",
+					Function: openAIFunctionCall{
+						Name:      tc.Name,
+						Arguments: string(tc.Arguments),
+					},
+				})
+			}
+		}
+		msgs = append(msgs, msg)
+	}
+
+	tools := make([]openAITool, 0, len(req.Tools))
+	for _, t := range req.Tools {
+		tools = append(tools, openAITool{
+			Type: "function",
+			Function: openAIFunction{
+				Name:        t.Name,
+				Description: t.Description,
+				Parameters:  t.Parameters,
+			},
+		})
+	}
+
+	maxTokens := req.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = 4096
+	}
+	out := openAIRequest{Model: req.Model, Messages: msgs, Tools: tools, Stream: true, MaxTokens: maxTokens}
+	if o.thinking != nil && o.thinking.Type != "" {
+		th := openAIThinking{Type: o.thinking.Type}
+		if o.thinking.Keep != "" {
+			keep := o.thinking.Keep
+			th.Keep = &keep
+		}
+		out.Thinking = &th
+	}
+	return out
+}
+
+func flushToolCalls(toolAcc map[int]*ToolCall, ch chan<- Chunk, ctx context.Context) {
+	if len(toolAcc) == 0 {
+		return
+	}
+	calls := make([]ToolCall, 0, len(toolAcc))
+	for i := 0; i < len(toolAcc); i++ {
+		if acc, ok := toolAcc[i]; ok {
+			calls = append(calls, *acc)
+		}
+	}
+	if len(calls) > 0 {
+		select {
+		case <-ctx.Done():
+		case ch <- Chunk{ToolCalls: calls}:
+		}
+	}
+}
+
+func (o *OpenAI) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+
+	toolAcc := map[int]*ToolCall{}
+
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			ch <- Chunk{Done: true}
+			return
+		}
+
+		var stream openAIStreamResponse
+		if err := json.Unmarshal([]byte(data), &stream); err != nil {
+			continue
+		}
+		if len(stream.Choices) == 0 {
+			continue
+		}
+		choice := stream.Choices[0]
+		if choice.Delta.ReasoningContent != "" {
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- Chunk{ReasoningDelta: choice.Delta.ReasoningContent}:
+			}
+		}
+		if choice.Delta.Content != "" {
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- Chunk{TextDelta: choice.Delta.Content}:
+			}
+		}
+		for _, tc := range choice.Delta.ToolCalls {
+			idx := tc.Index
+			acc, ok := toolAcc[idx]
+			if !ok {
+				acc = &ToolCall{}
+				toolAcc[idx] = acc
+			}
+			if tc.ID != "" {
+				acc.ID = tc.ID
+			}
+			if tc.Function.Name != "" {
+				acc.Name = tc.Function.Name
+			}
+			if tc.Function.Arguments != "" {
+				acc.Arguments = append(acc.Arguments, []byte(tc.Function.Arguments)...)
+			}
+		}
+		if choice.FinishReason != nil && *choice.FinishReason == "tool_calls" {
+			flushToolCalls(toolAcc, ch, ctx)
+			toolAcc = map[int]*ToolCall{}
+		}
+		if choice.FinishReason != nil && *choice.FinishReason == "stop" {
+			flushToolCalls(toolAcc, ch, ctx)
+			ch <- Chunk{Done: true}
+			return
+		}
+	}
+	flushToolCalls(toolAcc, ch, ctx)
+}

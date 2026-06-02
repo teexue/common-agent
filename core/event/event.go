@@ -1,0 +1,87 @@
+package event
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+)
+
+// Type identifies an agent stream event.
+type Type string
+
+const (
+	TypeTextDelta      Type = "text_delta"
+	TypeReasoningDelta Type = "reasoning_delta"
+	TypeToolStart      Type = "tool_start"
+	TypeToolResult     Type = "tool_result"
+	TypeError          Type = "error"
+	TypeDone           Type = "done"
+)
+
+// Event is the unified outward-facing agent event.
+type Event struct {
+	Type Type `json:"type"`
+
+	// text_delta / reasoning_delta
+	Content string `json:"content,omitempty"`
+
+	// tool_start / tool_result
+	Tool  string          `json:"tool,omitempty"`
+	Input json.RawMessage `json:"input,omitempty"`
+
+	// tool_result
+	Output json.RawMessage `json:"output,omitempty"`
+
+	// error
+	Code    string `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+
+	// done
+	Status string `json:"status,omitempty"`
+	Turns  int    `json:"turns,omitempty"`
+}
+
+// StreamEvents writes JSON-line events to w until done or ctx cancelled.
+func StreamEvents(ctx context.Context, w io.Writer, events <-chan Event) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case ev, ok := <-events:
+			if !ok {
+				return nil
+			}
+			data, err := json.Marshal(ev)
+			if err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(w, "%s\n", data); err != nil {
+				return err
+			}
+			if ev.Type == TypeDone {
+				return nil
+			}
+		}
+	}
+}
+
+// PrintEvents prints human-readable events to stdout.
+func PrintEvents(events <-chan Event) {
+	for ev := range events {
+		switch ev.Type {
+		case TypeTextDelta:
+			fmt.Print(ev.Content)
+		case TypeReasoningDelta:
+			fmt.Print(ev.Content)
+		case TypeToolStart:
+			fmt.Printf("\n[tool_start] %s input=%s\n", ev.Tool, string(ev.Input))
+		case TypeToolResult:
+			fmt.Printf("[tool_result] %s output=%s\n", ev.Tool, string(ev.Output))
+		case TypeError:
+			fmt.Printf("\n[error] %s: %s\n", ev.Code, ev.Message)
+		case TypeDone:
+			fmt.Printf("\n[done] status=%s turns=%d\n", ev.Status, ev.Turns)
+		}
+	}
+}

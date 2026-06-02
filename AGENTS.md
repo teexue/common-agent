@@ -17,8 +17,9 @@ cmd/agent-server/     # 入口，仅 wiring
 core/{loop,event,session,scenario,provider,permission}
 tools/{registry,builtin}
 server/http/          # HTTP/SSE handler
-scenarios/            # YAML 场景配置
 ```
+
+运行时配置在 `~/.common-agent/`（`providers.yaml`、`credentials.yaml`、`scenarios/`）。仓库内不再存放用户配置。
 
 - 包名小写、短、无下划线（`loop` 而非 `agent_loop`）
 - 每个目录一个包；禁止 `util`、`common`、`helper` 包
@@ -57,7 +58,7 @@ type Tool interface {
 - 用 struct + `Type` 字段，禁止 `any` 裸传
 - 新增事件类型须同步更新所有 consumer（HTTP SSE encoder 等）
 
-**Scenario**（YAML，放 `scenarios/`）
+**Scenario**（YAML，默认在 `~/.common-agent/scenarios/`）
 
 - 启动时加载；校验失败 fail fast，禁止 silent fallback
 - schema 变更需向后兼容或显式 `version` 字段
