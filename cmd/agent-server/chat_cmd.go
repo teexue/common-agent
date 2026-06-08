@@ -127,11 +127,12 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 	case "/exit", "/quit":
 		return true
 	case "/help":
-		fmt.Println(`命令:
-	  /help              显示帮助
-	  /exit, /quit       退出
-	  /clear             清空当前会话
-	  /scenario NAME     切换 scenario`)
+		fmt.Println("命令:")
+		fmt.Println("  /help              显示帮助")
+		fmt.Println("  /exit, /quit       退出")
+		fmt.Println("  /clear             清空当前会话")
+		fmt.Println("  /scenario [NAME]   切换 scenario（无参数列出可用 scenario）")
+		fmt.Println("  /tools [SCENARIO]  列出工具（可选验证 scenario 的工具）")
 		return false
 	case "/clear":
 		state.sess.Clear()
@@ -139,7 +140,24 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 		return false
 	case "/scenario":
 		if len(parts) < 2 {
-			fmt.Println("usage: /scenario NAME")
+			// List available scenarios.
+			names, err := scenario.ListAvailable(state.paths.scenariosDir)
+			if err != nil {
+				fmt.Printf("列出 scenario 失败: %v\n", err)
+				return false
+			}
+			if len(names) == 0 {
+				fmt.Println("没有可用的 scenario")
+				return false
+			}
+			fmt.Println("可用 scenario:")
+			for _, n := range names {
+				marker := " "
+				if n == state.sc.Name {
+					marker = "*"
+				}
+				fmt.Printf("  %s %s\n", marker, n)
+			}
 			return false
 		}
 		loaded, err := scenario.LoadByName(state.paths.scenariosDir, parts[1])
@@ -156,6 +174,28 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 		state.provider = p
 		state.sess = session.New(loaded.Name)
 		fmt.Printf("已切换 scenario=%s (provider=%s, model=%s)\n", loaded.Name, loaded.Provider, loaded.Model)
+		return false
+	case "/tools":
+		if len(parts) >= 2 {
+			// Validate tools for a specific scenario.
+			sc, err := scenario.LoadByNameAndValidate(state.paths.scenariosDir, parts[1], state.reg.Names())
+			if err != nil {
+				fmt.Printf("验证失败: %v\n", err)
+				return false
+			}
+			fmt.Printf("scenario %q 工具验证通过: %v\n", sc.Name, sc.Tools)
+			return false
+		}
+		// List all registered tools.
+		names := state.reg.Names()
+		if len(names) == 0 {
+			fmt.Println("没有已注册的工具")
+			return false
+		}
+		fmt.Printf("已注册工具 (%d):\n", len(names))
+		for _, t := range state.reg.List() {
+			fmt.Printf("  %-20s %s\n", t.Name(), t.Description())
+		}
 		return false
 	default:
 		fmt.Println("未知命令，输入 /help")

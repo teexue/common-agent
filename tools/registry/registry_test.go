@@ -1,6 +1,7 @@
 package registry_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/teexue/common-agent/tools/builtin"
@@ -61,5 +62,83 @@ func TestDefinitionsUnknownTool(t *testing.T) {
 	_, err := reg.Definitions([]string{"nonexistent"})
 	if err == nil {
 		t.Fatal("expected error for unknown tool")
+	}
+}
+
+func TestNames(t *testing.T) {
+	reg := registry.New()
+	builtin.RegisterAll(reg)
+
+	names := reg.Names()
+	if len(names) != 2 {
+		t.Fatalf("got %d names, want 2", len(names))
+	}
+	// Names should be sorted.
+	if names[0] != "echo" {
+		t.Fatalf("names[0] = %q, want echo", names[0])
+	}
+	if names[1] != "get_time" {
+		t.Fatalf("names[1] = %q, want get_time", names[1])
+	}
+}
+
+func TestNamesEmpty(t *testing.T) {
+	reg := registry.New()
+	names := reg.Names()
+	if len(names) != 0 {
+		t.Fatalf("got %d names, want 0", len(names))
+	}
+}
+
+func TestList(t *testing.T) {
+	reg := registry.New()
+	builtin.RegisterAll(reg)
+
+	tools := reg.List()
+	if len(tools) != 2 {
+		t.Fatalf("got %d tools, want 2", len(tools))
+	}
+	// List should be sorted by name.
+	if tools[0].Name() != "echo" {
+		t.Fatalf("tools[0].Name() = %q, want echo", tools[0].Name())
+	}
+	if tools[1].Name() != "get_time" {
+		t.Fatalf("tools[1].Name() = %q, want get_time", tools[1].Name())
+	}
+}
+
+func TestValidateTools(t *testing.T) {
+	reg := registry.New()
+	builtin.RegisterAll(reg)
+
+	if err := reg.ValidateTools([]string{"echo", "get_time"}); err != nil {
+		t.Fatalf("ValidateTools: %v", err)
+	}
+}
+
+func TestValidateToolsMissing(t *testing.T) {
+	reg := registry.New()
+	builtin.RegisterAll(reg)
+
+	err := reg.ValidateTools([]string{"echo", "nonexistent", "also_missing"})
+	if err == nil {
+		t.Fatal("expected error for missing tools")
+	}
+	// Verify the error message mentions the missing tools.
+	msg := err.Error()
+	for _, name := range []string{"nonexistent", "also_missing"} {
+		if !strings.Contains(msg, name) {
+			t.Errorf("error %q should mention %q", msg, name)
+		}
+	}
+}
+
+func TestValidateToolsEmpty(t *testing.T) {
+	reg := registry.New()
+	builtin.RegisterAll(reg)
+
+	// Empty list should be valid.
+	if err := reg.ValidateTools([]string{}); err != nil {
+		t.Fatalf("ValidateTools empty: %v", err)
 	}
 }

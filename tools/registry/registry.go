@@ -2,6 +2,7 @@ package registry
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/tool"
@@ -58,4 +59,41 @@ func (r *Registry) Definitions(names []string) ([]provider.ToolDefinition, error
 		})
 	}
 	return defs, nil
+}
+
+// Names returns all registered tool names in sorted order.
+func (r *Registry) Names() []string {
+	names := make([]string, 0, len(r.tools))
+	for name := range r.tools {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// List returns all registered tools in sorted name order.
+func (r *Registry) List() []tool.Tool {
+	tools := make([]tool.Tool, 0, len(r.tools))
+	for _, t := range r.tools {
+		tools = append(tools, t)
+	}
+	sort.Slice(tools, func(i, j int) bool {
+		return tools[i].Name() < tools[j].Name()
+	})
+	return tools
+}
+
+// ValidateTools checks that all given tool names are registered.
+// Returns an error listing missing tools if any are not found.
+func (r *Registry) ValidateTools(names []string) error {
+	var missing []string
+	for _, name := range names {
+		if _, ok := r.tools[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("tools not found in registry: %v", missing)
+	}
+	return nil
 }

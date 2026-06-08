@@ -1,2 +1,10 @@
 /bin/
+agent-server
 .env
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# local docs (not committed)
+docs/

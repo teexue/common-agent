@@ -16,10 +16,13 @@ type MockStep struct {
 
 // MockProvider returns predefined streaming steps for tests and offline demos.
 // Each Stream invocation consumes the next entry in Calls.
+// If BlockOnStream is true, Stream blocks until the context is cancelled
+// when there are no more predefined calls (useful for testing cancellation).
 type MockProvider struct {
-	Calls [][]MockStep
-	mu    sync.Mutex
-	index int
+	Calls         [][]MockStep
+	BlockOnStream bool
+	mu            sync.Mutex
+	index         int
 }
 
 // Stream implements Provider.
@@ -36,6 +39,11 @@ func (m *MockProvider) Stream(ctx context.Context, req Request) (<-chan Chunk, e
 	go func() {
 		defer close(ch)
 		if len(steps) == 0 {
+			if m.BlockOnStream {
+				// Block until context is cancelled.
+				<-ctx.Done()
+				return
+			}
 			select {
 			case <-ctx.Done():
 			case ch <- Chunk{TextDelta: "mock empty response", Done: true}:

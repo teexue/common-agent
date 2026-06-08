@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -115,4 +117,54 @@ func (s *Scenario) validate() error {
 		s.ToolExecution = &ToolExecution{Mode: "parallel", MaxParallel: 4}
 	}
 	return nil
+}
+
+// ListAvailable returns the names of all scenario YAML files in dir.
+// Each name is the filename without the .yaml extension.
+func ListAvailable(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("read scenarios dir %q: %w", dir, err)
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(e.Name(), ".yaml") {
+			names = append(names, strings.TrimSuffix(e.Name(), ".yaml"))
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// LoadAndValidate loads a scenario and validates that all referenced tools
+// exist in the provided toolNames list. This is an optional enhanced validation
+// step; callers decide whether to use it.
+func LoadAndValidate(path string, toolNames []string) (*Scenario, error) {
+	sc, err := Load(path)
+	if err != nil {
+		return nil, err
+	}
+	nameSet := make(map[string]bool, len(toolNames))
+	for _, n := range toolNames {
+		nameSet[n] = true
+	}
+	var missing []string
+	for _, t := range sc.Tools {
+		if !nameSet[t] {
+			missing = append(missing, t)
+		}
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("scenario %q references unregistered tools: %v", sc.Name, missing)
+	}
+	return sc, nil
+}
+
+// LoadByNameAndValidate loads a scenario by name and validates tools.
+func LoadByNameAndValidate(dir, name string, toolNames []string) (*Scenario, error) {
+	path := filepath.Join(dir, name+".yaml")
+	return LoadAndValidate(path, toolNames)
 }

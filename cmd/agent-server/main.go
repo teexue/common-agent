@@ -34,6 +34,8 @@ func main() {
 		runCLI(os.Args[2:], logger)
 	case "chat":
 		runChat(os.Args[2:], logger)
+	case "tools":
+		runTools(os.Args[2:], logger)
 	case "config":
 		runConfig(os.Args[2:])
 	default:
@@ -52,6 +54,7 @@ func usage() {
   agent-server chat                     交互式终端对话
   agent-server run --prompt "hello"     单次对话
   agent-server serve                    启动 HTTP SSE 服务
+  agent-server tools                    列出已注册工具
 
   默认配置目录: ~/.common-agent
   可用 --home 覆盖；可用 --mock 离线调试
@@ -172,4 +175,39 @@ func runCLI(args []string, logger *slog.Logger) {
 		"home", paths.home,
 	)
 	event.PrintEvents(events)
+}
+
+func runTools(args []string, _ *slog.Logger) {
+	fs := flag.NewFlagSet("tools", flag.ExitOnError)
+	scenarioName := fs.String("scenario", "", "validate tools for a scenario")
+	_ = fs.Parse(args)
+
+	reg := newRegistry()
+
+	if *scenarioName != "" {
+		// Validate scenario tools against registry.
+		home, err := config.Home(false)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		sc, err := scenario.LoadByNameAndValidate(config.ScenariosDir(home), *scenarioName, reg.Names())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("scenario %q tools validated OK: %v\n", sc.Name, sc.Tools)
+		return
+	}
+
+	// List all registered tools.
+	names := reg.Names()
+	if len(names) == 0 {
+		fmt.Println("no tools registered")
+		return
+	}
+	fmt.Printf("Registered tools (%d):\n", len(names))
+	for _, t := range reg.List() {
+		fmt.Printf("  %-20s %s\n", t.Name(), t.Description())
+	}
 }

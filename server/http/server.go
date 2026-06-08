@@ -49,6 +49,8 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.HandleFunc("POST /v1/agents/run", s.handleRun)
+	mux.HandleFunc("GET /v1/tools", s.handleTools)
+	mux.HandleFunc("GET /v1/scenarios", s.handleScenarios)
 	return mux
 }
 
@@ -115,6 +117,40 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		}
 		flusher.Flush()
 	}
+}
+
+// ToolInfo is the HTTP DTO for tool information.
+type ToolInfo struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  map[string]any `json:"parameters"`
+}
+
+func (s *Server) handleTools(w http.ResponseWriter, _ *http.Request) {
+	tools := s.registry.List()
+	result := make([]ToolInfo, len(tools))
+	for i, t := range tools {
+		result[i] = ToolInfo{
+			Name:        t.Name(),
+			Description: t.Description(),
+			Parameters:  t.InputSchema(),
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleScenarios(w http.ResponseWriter, _ *http.Request) {
+	names, err := scenario.ListAvailable(s.scenarioDir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "scenario_error", err.Error())
+		return
+	}
+	if names == nil {
+		names = []string{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(names)
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {

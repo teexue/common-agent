@@ -87,8 +87,8 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 	for turn := 1; turn <= maxTurns; turn++ {
 		select {
 		case <-ctx.Done():
-			emit(ctx, out, event.Event{Type: event.TypeError, Code: "cancelled", Message: ctx.Err().Error()})
-			emit(ctx, out, event.Event{Type: event.TypeDone, Status: "cancelled", Turns: turn})
+			forceEmit(out, event.Event{Type: event.TypeError, Code: "cancelled", Message: ctx.Err().Error()})
+			forceEmit(out, event.Event{Type: event.TypeDone, Status: "cancelled", Turns: turn})
 			return
 		default:
 		}
@@ -102,8 +102,8 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 
 		chunks, err := cfg.Provider.Stream(ctx, req)
 		if err != nil {
-			emit(ctx, out, event.Event{Type: event.TypeError, Code: "provider_error", Message: err.Error()})
-			emit(ctx, out, event.Event{Type: event.TypeDone, Status: "failed", Turns: turn})
+			forceEmit(out, event.Event{Type: event.TypeError, Code: "provider_error", Message: err.Error()})
+			forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: turn})
 			return
 		}
 
@@ -164,6 +164,15 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 			}
 		}
 
+		// Check if context was cancelled during stream processing.
+		select {
+		case <-ctx.Done():
+			forceEmit(out, event.Event{Type: event.TypeError, Code: "cancelled", Message: ctx.Err().Error()})
+			forceEmit(out, event.Event{Type: event.TypeDone, Status: "cancelled", Turns: turn})
+			return
+		default:
+		}
+
 		// No tool calls → assistant text-only response → done.
 		if len(assistantToolCalls) == 0 {
 			cfg.Session.AddMessages(provider.Message{
@@ -171,7 +180,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 				Content:          assistantText,
 				ReasoningContent: reasoningText,
 			})
-			emit(ctx, out, event.Event{Type: event.TypeDone, Status: "completed", Turns: turn})
+			forceEmit(out, event.Event{Type: event.TypeDone, Status: "completed", Turns: turn})
 			return
 		}
 
@@ -224,8 +233,8 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		}
 	}
 
-	emit(ctx, out, event.Event{Type: event.TypeError, Code: "max_turns", Message: fmt.Sprintf("exceeded max turns %d", maxTurns)})
-	emit(ctx, out, event.Event{Type: event.TypeDone, Status: "failed", Turns: maxTurns})
+	forceEmit(out, event.Event{Type: event.TypeError, Code: "max_turns", Message: fmt.Sprintf("exceeded max turns %d", maxTurns)})
+	forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: maxTurns})
 }
 
 // executeOneTool runs a single tool call and emits tool_start / tool_result events.
@@ -269,4 +278,10 @@ func emit(ctx context.Context, out chan<- event.Event, ev event.Event) {
 	case out <- ev:
 	case <-ctx.Done():
 	}
+}
+
+// forceEmit sends an event to the channel without checking ctx cancellation.
+// Used for terminal events (cancelled, done) that must always be delivered.
+func forceEmit(out chan<- event.Event, ev event.Event) {
+	out <- ev
 }
