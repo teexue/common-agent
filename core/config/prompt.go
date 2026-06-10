@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/manifoldco/promptui"
+	"github.com/charmbracelet/huh"
 	"golang.org/x/term"
 )
 
@@ -14,49 +14,82 @@ func isInteractive() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
+func huhTheme() *huh.Theme {
+	return huh.ThemeCharm()
+}
+
 func selectOption(label string, items []string, defaultIdx int) (string, error) {
 	if !isInteractive() {
 		return fallbackSelect(label, items, defaultIdx)
 	}
-	p := promptui.Select{
-		Label:     label,
-		Items:     items,
-		CursorPos: defaultIdx,
-		Templates: &promptui.SelectTemplates{
-			Label:    "{{ . }}",
-			Active:   "▸ {{ . | cyan }}",
-			Inactive: "  {{ . }}",
-			Selected: "{{ . | green }}",
-		},
+	if defaultIdx < 0 || defaultIdx >= len(items) {
+		defaultIdx = 0
 	}
-	idx, result, err := p.Run()
-	if err != nil {
+
+	var choice string
+	opts := make([]huh.Option[string], len(items))
+	for i, item := range items {
+		opts[i] = huh.NewOption(item, item)
+	}
+	choice = items[defaultIdx]
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title(label).
+				Description("↑↓ 选择 · Enter 确认").
+				Options(opts...).
+				Value(&choice),
+		),
+	).WithTheme(huhTheme())
+
+	if err := form.Run(); err != nil {
 		return "", err
 	}
-	_ = idx
-	return result, nil
+	return choice, nil
 }
 
 func inputString(label, defaultVal string) (string, error) {
 	if !isInteractive() {
 		return fallbackInput(label, defaultVal), nil
 	}
-	p := promptui.Prompt{
-		Label:   label,
-		Default: defaultVal,
+	var value string
+	if defaultVal != "" {
+		value = defaultVal
 	}
-	return p.Run()
+	field := huh.NewInput().
+		Title(label).
+		Value(&value)
+	if defaultVal != "" {
+		field = field.Placeholder(defaultVal)
+	}
+	form := huh.NewForm(huh.NewGroup(field)).WithTheme(huhTheme())
+	if err := form.Run(); err != nil {
+		return "", err
+	}
+	if value == "" {
+		return defaultVal, nil
+	}
+	return value, nil
 }
 
 func inputSecret(label string) (string, error) {
 	if !isInteractive() {
 		return fallbackInput(label, ""), nil
 	}
-	p := promptui.Prompt{
-		Label: label,
-		Mask:  '*',
+	var value string
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title(label).
+				EchoMode(huh.EchoModePassword).
+				Value(&value),
+		),
+	).WithTheme(huhTheme())
+	if err := form.Run(); err != nil {
+		return "", err
 	}
-	return p.Run()
+	return strings.TrimSpace(value), nil
 }
 
 func fallbackSelect(label string, items []string, defaultIdx int) (string, error) {
@@ -69,8 +102,7 @@ func fallbackSelect(label string, items []string, defaultIdx int) (string, error
 		fmt.Printf("  %s [%d] %s\n", mark, i+1, item)
 	}
 	fmt.Printf("选择 [1-%d，默认 %d]: ", len(items), defaultIdx+1)
-	var in *bufio.Reader
-	in = bufio.NewReader(os.Stdin)
+	in := bufio.NewReader(os.Stdin)
 	line, _ := in.ReadString('\n')
 	line = strings.TrimSpace(line)
 	if line == "" {

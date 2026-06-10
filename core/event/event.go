@@ -67,21 +67,20 @@ func StreamEvents(ctx context.Context, w io.Writer, events <-chan Event) error {
 }
 
 // PrintEvents prints human-readable events to stdout.
+// Deprecated: use tui.PrintEvents for Claude Code–style output.
 func PrintEvents(events <-chan Event) {
 	for ev := range events {
 		switch ev.Type {
-		case TypeTextDelta:
-			fmt.Print(ev.Content)
-		case TypeReasoningDelta:
+		case TypeTextDelta, TypeReasoningDelta:
 			fmt.Print(ev.Content)
 		case TypeToolStart:
-			fmt.Printf("\n[tool_start] %s input=%s\n", ev.Tool, string(ev.Input))
+			fmt.Printf("\n⏺ %s(%s)\n", ev.Tool, string(ev.Input))
 		case TypeToolResult:
-			fmt.Printf("[tool_result] %s output=%s\n", ev.Tool, string(ev.Output))
+			fmt.Printf("  ⎿ %s\n", string(ev.Output))
 		case TypeError:
-			fmt.Printf("\n[error] %s: %s\n", ev.Code, ev.Message)
+			fmt.Printf("\n✗ %s: %s\n", ev.Code, ev.Message)
 		case TypeDone:
-			fmt.Printf("\n[done] status=%s turns=%d\n", ev.Status, ev.Turns)
+			// quiet
 		}
 	}
 }

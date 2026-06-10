@@ -1,15 +1,15 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"strings"
 
-	"github.com/teexue/common-agent/core/event"
+	"github.com/gin-gonic/gin"
+
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/scenario"
@@ -19,20 +19,23 @@ import (
 
 // RunRequest is the HTTP DTO for POST /v1/agents/run.
 type RunRequest struct {
-	Scenario string `json:"scenario"`
-	Prompt   string `json:"prompt"`
+	Scenario string            `json:"scenario"`
+	Prompt   string            `json:"prompt"`
+	Messages []provider.Message `json:"messages,omitempty"`
 }
 
-// Server exposes agent HTTP endpoints.
+// Server exposes agent HTTP endpoints via Gin.
 type Server struct {
 	scenarioDir string
 	registry    *registry.Registry
 	newProvider func(sc *scenario.Scenario) (provider.Provider, error)
+	staticFS    fs.FS // optional embedded frontend; nil disables static serving
 	logger      *slog.Logger
 }
 
 // NewServer creates an HTTP server wiring.
-func NewServer(scenarioDir string, reg *registry.Registry, newProvider func(sc *scenario.Scenario) (provider.Provider, error), logger *slog.Logger) *Server {
+// If staticFS is non-nil, the server also serves the embedded frontend SPA.
+func NewServer(scenarioDir string, reg *registry.Registry, newProvider func(sc *scenario.Scenario) (provider.Provider, error), staticFS fs.FS, logger *slog.Logger) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -40,50 +43,86 @@ func NewServer(scenarioDir string, reg *registry.Registry, newProvider func(sc *
 		scenarioDir: scenarioDir,
 		registry:    reg,
 		newProvider: newProvider,
+		staticFS:    staticFS,
 		logger:      logger,
 	}
 }
 
-// Handler returns the root HTTP handler.
-func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", s.handleHealth)
-	mux.HandleFunc("POST /v1/agents/run", s.handleRun)
-	mux.HandleFunc("GET /v1/tools", s.handleTools)
-	mux.HandleFunc("GET /v1/scenarios", s.handleScenarios)
-	return mux
+// Handler returns the root Gin engine.
+func (s *Server) Handler() *gin.Engine {
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	r.Use(gin.Recovery())
+
+	// API routes.
+	r.GET("/healthz", s.handleHealth)
+	r.POST("/v1/agents/run", s.handleRun)
+	r.GET("/v1/tools", s.handleTools)
+	r.GET("/v1/scenarios", s.handleScenarios)
+
+	// Static frontend serving (only when embedded).
+	if s.staticFS != nil {
+		fileServer := http.FileServerFS(s.staticFS)
+
+		r.NoRoute(func(c *gin.Context) {
+			path := c.Request.URL.Path
+			// API routes — 404.
+			if strings.HasPrefix(path, "/v1") || path == "/healthz" {
+				c.AbortWithStatus(http.StatusNotFound)
+				return
+			}
+			// Try to serve the file from embedded FS.
+			// Strip leading slash for fs lookup.
+			name := strings.TrimPrefix(path, "/")
+			if name == "" {
+				name = "index.html"
+			}
+			if f, err := s.staticFS.Open(name); err == nil {
+				f.Close()
+				fileServer.ServeHTTP(c.Writer, c.Request)
+				return
+			}
+			// SPA fallback — serve index.html.
+			c.Request.URL.Path = "/"
+			fileServer.ServeHTTP(c.Writer, c.Request)
+		})
+	}
+
+	return r
 }
 
-func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
+func (s *Server) handleHealth(c *gin.Context) {
+	c.String(http.StatusOK, "ok")
 }
 
-func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRun(c *gin.Context) {
 	var req RunRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_json", "message": err.Error()})
 		return
 	}
 	if req.Scenario == "" || req.Prompt == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "scenario and prompt are required")
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "scenario and prompt are required"})
 		return
 	}
 
 	sc, err := scenario.LoadByName(s.scenarioDir, req.Scenario)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "scenario_error", err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"code": "scenario_error", "message": err.Error()})
 		return
 	}
 
 	p, err := s.newProvider(sc)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "provider_error", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "provider_error", "message": err.Error()})
 		return
 	}
 
 	sess := session.New(sc.Name)
-	events, err := loop.Run(r.Context(), loop.Config{
+	if len(req.Messages) > 0 {
+		sess.SetMessages(req.Messages)
+	}
+	events, err := loop.Run(c.Request.Context(), loop.Config{
 		Provider: p,
 		Registry: s.registry,
 		Scenario: sc,
@@ -92,27 +131,24 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		Logger:   s.logger,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "run_error", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "run_error", "message": err.Error()})
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
 
-	flusher, ok := w.(http.Flusher)
+	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "stream_error", "streaming unsupported")
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "stream_error", "message": "streaming unsupported"})
 		return
 	}
 
 	s.logger.Info("agent run started", "session_id", sess.ID, "scenario", sc.Name, "provider", sc.Provider, "model", sc.Model)
 	for ev := range events {
-		data, err := json.Marshal(ev)
-		if err != nil {
-			continue
-		}
-		if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+		data, _ := json.Marshal(ev)
+		if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", data); err != nil {
 			return
 		}
 		flusher.Flush()
@@ -126,7 +162,7 @@ type ToolInfo struct {
 	Parameters  map[string]any `json:"parameters"`
 }
 
-func (s *Server) handleTools(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleTools(c *gin.Context) {
 	tools := s.registry.List()
 	result := make([]ToolInfo, len(tools))
 	for i, t := range tools {
@@ -136,39 +172,19 @@ func (s *Server) handleTools(w http.ResponseWriter, _ *http.Request) {
 			Parameters:  t.InputSchema(),
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(result)
+	c.JSON(http.StatusOK, result)
 }
 
-func (s *Server) handleScenarios(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleScenarios(c *gin.Context) {
 	names, err := scenario.ListAvailable(s.scenarioDir)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "scenario_error", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "scenario_error", "message": err.Error()})
 		return
 	}
 	if names == nil {
 		names = []string{}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(names)
-}
-
-func writeError(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"code": code, "message": message})
-}
-
-// StreamEvents writes events to w (for CLI reuse).
-// Deprecated: use event.StreamEvents instead.
-func StreamEvents(ctx context.Context, w io.Writer, events <-chan event.Event) error {
-	return event.StreamEvents(ctx, w, events)
-}
-
-// PrintEvents prints human-readable events to stdout.
-// Deprecated: use event.PrintEvents instead.
-func PrintEvents(events <-chan event.Event) {
-	event.PrintEvents(events)
+	c.JSON(http.StatusOK, names)
 }
 
 // NormalizeScenarioName strips optional .yaml suffix.

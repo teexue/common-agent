@@ -1,20 +1,21 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/chzyer/readline"
 	"github.com/teexue/common-agent/core/config"
-	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/scenario"
 	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/tui"
 	httpapi "github.com/teexue/common-agent/server/http"
 	"github.com/teexue/common-agent/tools/registry"
 )
@@ -63,13 +64,17 @@ func runChat(args []string, logger *slog.Logger) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("common-agent 交互对话 (scenario=%s, provider=%s, model=%s)\n", state.sc.Name, state.sc.Provider, state.sc.Model)
-	fmt.Println("输入消息开始对话；/help 查看命令；/exit 退出")
+	tui.PrintWelcome(state.sc.Name, state.sc.Provider, state.sc.Model)
 
-	in := bufio.NewReader(os.Stdin)
+	rl, err := newChatReadline(paths.home)
+	if err != nil {
+		logger.Error("readline", "error", err)
+		os.Exit(1)
+	}
+	defer rl.Close()
+
 	for {
-		fmt.Print("\n> ")
-		line, err := in.ReadString('\n')
+		line, err := rl.Readline()
 		if err != nil {
 			fmt.Println()
 			return
@@ -93,12 +98,22 @@ func runChat(args []string, logger *slog.Logger) {
 			Prompt:   line,
 		})
 		if err != nil {
-			fmt.Printf("[error] %v\n", err)
+			fmt.Println(tui.Error(err.Error()))
 			continue
 		}
-		fmt.Println()
-		event.PrintEvents(events)
+		tui.PrintEvents(events)
 	}
+}
+
+func newChatReadline(home string) (*readline.Instance, error) {
+	historyPath := filepath.Join(home, ".chat_history")
+	return readline.NewEx(&readline.Config{
+		Prompt:          tui.Prompt(),
+		HistoryFile:     historyPath,
+		HistoryLimit:    500,
+		InterruptPrompt: "^C",
+		EOFPrompt:       "/exit",
+	})
 }
 
 func newChatState(catalog *provider.Catalog, mock bool, paths runtimePaths, scenarioName string) (*chatState, error) {
@@ -125,36 +140,31 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 	parts := strings.Fields(line)
 	switch parts[0] {
 	case "/exit", "/quit":
+		fmt.Println(tui.Muted("再见"))
 		return true
 	case "/help":
-		fmt.Println("命令:")
-		fmt.Println("  /help              显示帮助")
-		fmt.Println("  /exit, /quit       退出")
-		fmt.Println("  /clear             清空当前会话")
-		fmt.Println("  /scenario [NAME]   切换 scenario（无参数列出可用 scenario）")
-		fmt.Println("  /tools [SCENARIO]  列出工具（可选验证 scenario 的工具）")
+		tui.PrintHelp()
 		return false
 	case "/clear":
 		state.sess.Clear()
-		fmt.Println("会话已清空")
+		fmt.Println(tui.Success("会话已清空"))
 		return false
 	case "/scenario":
 		if len(parts) < 2 {
-			// List available scenarios.
 			names, err := scenario.ListAvailable(state.paths.scenariosDir)
 			if err != nil {
-				fmt.Printf("列出 scenario 失败: %v\n", err)
+				fmt.Println(tui.Error(err.Error()))
 				return false
 			}
 			if len(names) == 0 {
-				fmt.Println("没有可用的 scenario")
+				fmt.Println(tui.Muted("没有可用的 scenario"))
 				return false
 			}
-			fmt.Println("可用 scenario:")
+			fmt.Println(tui.Muted("可用 scenario:"))
 			for _, n := range names {
 				marker := " "
 				if n == state.sc.Name {
-					marker = "*"
+					marker = tui.Success("●")
 				}
 				fmt.Printf("  %s %s\n", marker, n)
 			}
@@ -162,43 +172,41 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 		}
 		loaded, err := scenario.LoadByName(state.paths.scenariosDir, parts[1])
 		if err != nil {
-			fmt.Printf("load scenario: %v\n", err)
+			fmt.Println(tui.Error(err.Error()))
 			return false
 		}
 		p, err := resolveProvider(state.catalog, state.mock)(loaded)
 		if err != nil {
-			fmt.Printf("provider: %v\n", err)
+			fmt.Println(tui.Error(err.Error()))
 			return false
 		}
 		state.sc = loaded
 		state.provider = p
 		state.sess = session.New(loaded.Name)
-		fmt.Printf("已切换 scenario=%s (provider=%s, model=%s)\n", loaded.Name, loaded.Provider, loaded.Model)
+		fmt.Println(tui.Success(fmt.Sprintf("已切换 %s · %s · %s", loaded.Name, loaded.Provider, loaded.Model)))
 		return false
 	case "/tools":
 		if len(parts) >= 2 {
-			// Validate tools for a specific scenario.
 			sc, err := scenario.LoadByNameAndValidate(state.paths.scenariosDir, parts[1], state.reg.Names())
 			if err != nil {
-				fmt.Printf("验证失败: %v\n", err)
+				fmt.Println(tui.Error(err.Error()))
 				return false
 			}
-			fmt.Printf("scenario %q 工具验证通过: %v\n", sc.Name, sc.Tools)
+			fmt.Println(tui.Success(fmt.Sprintf("%s 工具验证通过: %v", sc.Name, sc.Tools)))
 			return false
 		}
-		// List all registered tools.
 		names := state.reg.Names()
 		if len(names) == 0 {
-			fmt.Println("没有已注册的工具")
+			fmt.Println(tui.Muted("没有已注册的工具"))
 			return false
 		}
-		fmt.Printf("已注册工具 (%d):\n", len(names))
+		fmt.Println(tui.Muted(fmt.Sprintf("已注册工具 (%d):", len(names))))
 		for _, t := range state.reg.List() {
-			fmt.Printf("  %-20s %s\n", t.Name(), t.Description())
+			fmt.Printf("  %-16s %s\n", tui.Muted(t.Name()), t.Description())
 		}
 		return false
 	default:
-		fmt.Println("未知命令，输入 /help")
+		fmt.Println(tui.Muted("未知命令，输入 /help"))
 		return false
 	}
 }

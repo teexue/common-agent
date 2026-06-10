@@ -16,11 +16,12 @@ import (
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/scenario"
 	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/tui"
 	httpapi "github.com/teexue/common-agent/server/http"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	if len(os.Args) < 2 {
 		usage()
@@ -52,7 +53,8 @@ func usage() {
   agent-server config show              查看当前配置
 
   agent-server chat                     交互式终端对话
-  agent-server run --prompt "hello"     单次对话
+  agent-server run --prompt "hello"     单次对话（默认终端可读输出）
+  agent-server run --prompt "hello" --format json  NDJSON 事件流（便于脚本解析）
   agent-server serve                    启动 HTTP SSE 服务
   agent-server tools                    列出已注册工具
 
@@ -82,7 +84,7 @@ func runServe(args []string, logger *slog.Logger) {
 	}
 
 	reg := newRegistry()
-	srv := httpapi.NewServer(paths.scenariosDir, reg, resolveProvider(catalog, *mock), logger)
+	srv := httpapi.NewServer(paths.scenariosDir, reg, resolveProvider(catalog, *mock), distFS(), logger)
 
 	httpServer := &http.Server{
 		Addr:              *addr,
@@ -111,9 +113,15 @@ func runCLI(args []string, logger *slog.Logger) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	scenarioName := fs.String("scenario", "", "scenario name (default from config)")
 	prompt := fs.String("prompt", "", "user prompt")
+	format := fs.String("format", "text", "output format: text (TUI) or json (NDJSON events)")
 	homeFlag := fs.String("home", "", "config home")
 	mock := fs.Bool("mock", false, "use mock provider")
 	_ = fs.Parse(args)
+
+	if *format != "text" && *format != "json" {
+		fmt.Fprintf(os.Stderr, "error: --format must be text or json\n")
+		os.Exit(1)
+	}
 
 	if *prompt == "" {
 		fmt.Fprintln(os.Stderr, "error: --prompt is required")
@@ -167,6 +175,14 @@ func runCLI(args []string, logger *slog.Logger) {
 		os.Exit(1)
 	}
 
+	if *format == "json" {
+		if err := event.StreamEvents(context.Background(), os.Stdout, events); err != nil {
+			logger.Error("stream events", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	logger.Info("agent run started",
 		"session_id", sess.ID,
 		"scenario", sc.Name,
@@ -174,7 +190,7 @@ func runCLI(args []string, logger *slog.Logger) {
 		"model", sc.Model,
 		"home", paths.home,
 	)
-	event.PrintEvents(events)
+	tui.PrintEvents(events)
 }
 
 func runTools(args []string, _ *slog.Logger) {

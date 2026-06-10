@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/teexue/common-agent/core/provider"
+	"github.com/teexue/common-agent/core/tui"
 	"gopkg.in/yaml.v3"
 )
 
@@ -67,9 +68,8 @@ func InitInteractive(home string) error {
 		return err
 	}
 
-	fmt.Println("common-agent 交互式配置")
-	fmt.Printf("配置目录: %s\n", home)
-	fmt.Println("↑↓ 选择，Enter 确认")
+	tui.PrintWelcome("setup", "config", "wizard")
+	fmt.Println(tui.Muted("配置目录: " + home))
 
 	spec, scenarioName, apiKeyEnv, err := runProviderWizard()
 	if err != nil {
@@ -119,9 +119,9 @@ max_turns: 10
 		return err
 	}
 
-	fmt.Println("\n配置完成。运行:")
-	fmt.Printf("  agent-server chat\n")
-	fmt.Printf("  agent-server run --prompt \"hello\"\n")
+	fmt.Println("\n配置完成")
+	fmt.Println(tui.Success("配置已写入 " + home))
+	fmt.Println(tui.Muted("运行: agent-server chat"))
 	return nil
 }
 
