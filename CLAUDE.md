@@ -11,9 +11,16 @@ golangci-lint run                                   # lint (config in .golangci.
 go test ./...                                       # all tests
 go test ./core/loop/                                # single package
 go test -run TestRunWithMockProvider ./core/loop/    # single test
+
+cd frontend && pnpm test                            # frontend tests
 ```
 
 There is no `go generate`, `go install`, or Docker step at this phase.
+
+## Dependency management
+
+- **Go**: Use `go mod` to manage dependencies. Never manually edit `go.mod`.
+- **Frontend (pnpm)**: Use `pnpm add` / `pnpm add -D` to add dependencies. Never manually edit `package.json` version numbers — let the package manager resolve the latest compatible version.
 
 ## Architecture
 
@@ -52,6 +59,17 @@ This is a Go agent runtime (`common-agent`). The project is in **Phase 1** (prod
 ## Events are the contract
 
 `core/event.Event` is the universal output format. Adding a new event type requires updating all consumers: `PrintEvents` in `core/event`, HTTP SSE encoder in `server/http`, and any future gRPC handler.
+
+## Documentation management
+
+- **Authority**: `docs/html/` is the authoritative documentation layer. All `docs/*.md` files are legacy reference only — do not treat them as source of truth.
+- **index.html**: Records the completed project state — architecture, core modules, API reference, development guides. Updated each phase when features are DONE.
+- **roadmap.html**: The development plan — detailed task breakdowns per phase with sub-tasks, acceptance criteria, dependencies, and complexity estimates. Updated at the START of each phase to define scope, and throughout as tasks progress.
+- **When implementing a phase**: Update `roadmap.html` to mark subtasks as done, then update `index.html` to document newly completed features.
+- **New HTML docs**: When a phase has substantial new capabilities, create a dedicated HTML page (e.g., `mcp-integration.html`) and link it from both `index.html` and `roadmap.html`.
+- **CSS**: All HTML docs share `docs/html/css/style.css`. Add page-specific styles in `<style>` tags within each HTML file — do not modify shared CSS unless the change benefits all pages.
+- **CLAUDE.md** records project-level instructions for AI assistants (build commands, architecture, patterns).
+- **AGENTS.md** records coding conventions and development discipline rules.
 
 ## Scenario YAML reference
 

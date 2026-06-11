@@ -106,10 +106,10 @@ tools:
   - echo
   - get_time
 max_turns: 10
-	max_tokens: 4096
-	tool_execution:
-	  mode: parallel
-	  max_parallel: 4
+max_tokens: 4096
+tool_execution:
+  mode: parallel
+  max_parallel: 4
 `, scenarioName, spec.Name, spec.DefaultModel)
 	if err := os.WriteFile(scPath, []byte(scContent), 0o644); err != nil {
 		return fmt.Errorf("write scenario: %w", err)
@@ -343,10 +343,10 @@ tools:
   - echo
   - get_time
 max_turns: 10
-	max_tokens: 4096
-	tool_execution:
-	  mode: parallel
-	  max_parallel: 4
+max_tokens: 4096
+tool_execution:
+  mode: parallel
+  max_parallel: 4
 `
 		if err := os.WriteFile(scPath, []byte(content), 0o644); err != nil {
 			return err

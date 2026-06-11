@@ -1,6 +1,6 @@
 # common-agent 编码规范
 
-通用 Agent 基座（Go 核心）。当前 Phase 0：Agent Loop、内置 Tool、HTTP SSE。完整路线图见 [README.md](README.md)。
+通用 Agent 基座（Go 核心）。当前 Phase 1：生产基座。完整路线图见 [README.md](README.md)。
 
 ## 架构约束（最高优先级）
 
@@ -14,9 +14,10 @@
 
 ```
 cmd/agent-server/     # 入口，仅 wiring
-core/{loop,event,session,scenario,provider,permission}
+core/{loop,event,session,scenario,provider,config,permission,hook,telemetry,compaction,subagent,mcp,workflow,tenant,billing}
 tools/{registry,builtin}
-server/http/          # HTTP/SSE handler
+server/{http,grpc}    # HTTP/SSE + gRPC handler
+sdk/{ts,python}       # 客户端 SDK
 ```
 
 运行时配置在 `~/.common-agent/`（`providers.yaml`、`credentials.yaml`、`scenarios/`）。仓库内不再存放用户配置。
@@ -91,6 +92,7 @@ type Tool interface {
 - 为单个 Scenario 写 if/else 分支
 - 提交 `.env`、API Key、credentials
 - 过度抽象（YAGNI）：Phase 0 不需要的 interface 不提前定义
+- 手动编辑 `go.mod` 或 `package.json` 中的版本号 — 使用包管理器（`go mod`、`pnpm add`）自动解析
 
 ## 变更纪律
 
@@ -98,3 +100,17 @@ type Tool interface {
 - 新增 Tool 须同步：registry 注册 + scenario 示例 + 测试
 - 修改 AgentEvent schema 视为 breaking change，须注明
 - 仅用户明确要求时才 git commit
+
+## 文档维护规范
+
+- `docs/html/` 是项目文档的权威来源。`docs/*.md` 是旧文档，已删除，不再维护。
+- 文档为**多页面纯 HTML 站点**，由 `_assets/nav.js` 动态注入统一侧边栏导航。
+- **index.html** — 首页/项目概览。
+- **roadmap.html** — 开发计划 Roadmap。
+- **核心模块页面**（`core/*.html`）— Tool、Provider、Event、Loop、Scenario、Session、Config 等独立主题页。
+- **执行流程页面**（`flow/*.html`）— 数据流、CLI 流程、HTTP 流程等。
+- **开发指南页面**（`guide/*.html`）— 添加工具/Provider、目录结构等。
+- 新增页面时：在对应目录新建 `.html` 文件 → 在 `_assets/nav-config.js` 注册导航链接 → 沿用统一模板（引用 `_assets/style.css` + `nav-config.js` + `nav.js` + `theme.js`）。
+- 共享样式在 `docs/html/_assets/style.css`，页面特有样式可写在各自 `<style>` 标签内。
+- **CLAUDE.md** — AI 助手的项目级指令（构建命令、架构、模式、文档管理规则）。
+- **AGENTS.md** — 编码规范和开发纪律（本文件）。
