@@ -1,14 +1,14 @@
 import type {
   AgentEvent,
   ConversationEntry,
-  ScenarioInfo,
+  AgentInfo,
   ToolCallEntry,
   ToolInfo,
 } from "@/types/agent"
 
-// ─── Mock Scenarios ───────────────────────────────────────────────
+// ─── Mock Agents ──────────────────────────────────────────────────
 
-export const MOCK_SCENARIOS: ScenarioInfo[] = [
+export const MOCK_AGENTS: AgentInfo[] = [
   {
     name: "general-chat",
     provider: "anthropic",
@@ -155,7 +155,7 @@ function delay(ms: number): Promise<void> {
 }
 
 export async function* generateMockEventStream(
-  _scenario: string,
+  _agent: string,
   prompt: string
 ): AsyncGenerator<AgentEvent> {
   const lower = prompt.toLowerCase()

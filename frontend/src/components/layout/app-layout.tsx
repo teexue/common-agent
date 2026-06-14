@@ -5,22 +5,27 @@ import {
 } from "@/components/ui/resizable"
 import { TopBar } from "./top-bar"
 import { Sidebar } from "./sidebar"
-import type { ScenarioInfo, StreamStatus, ToolInfo } from "@/types/agent"
+import type { AgentInfo, SessionMeta, StreamStatus, ToolInfo } from "@/types/agent"
 
 interface AppLayoutProps {
   // Sidebar
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
-  scenarios: ScenarioInfo[]
-  selectedScenario: string
-  onSelectScenario: (name: string) => void
+  agents: AgentInfo[]
+  selectedAgent: string
+  onSelectAgent: (name: string) => void
   tools: ToolInfo[]
   onSelectTool: (tool: ToolInfo) => void
   onOpenSettings: () => void
   onNewSession?: () => void
+  // Session props
+  sessions?: SessionMeta[]
+  activeSessionId?: string | null
+  onResumeSession?: (id: string) => void
+  onDeleteSession?: (id: string) => void
 
   // Top bar
-  scenario: ScenarioInfo
+  agent: AgentInfo
   status: StreamStatus
   inspectorOpen: boolean
   onToggleInspector: () => void
@@ -35,14 +40,18 @@ interface AppLayoutProps {
 export function AppLayout({
   sidebarCollapsed,
   onToggleSidebar,
-  scenarios,
-  selectedScenario,
-  onSelectScenario,
+  agents,
+  selectedAgent,
+  onSelectAgent,
   tools,
   onSelectTool,
   onOpenSettings,
   onNewSession,
-  scenario,
+  sessions,
+  activeSessionId,
+  onResumeSession,
+  onDeleteSession,
+  agent,
   status,
   inspectorOpen,
   onToggleInspector,
@@ -56,18 +65,22 @@ export function AppLayout({
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={onToggleSidebar}
-        scenarios={scenarios}
-        selectedScenario={selectedScenario}
-        onSelectScenario={onSelectScenario}
+        agents={agents}
+        selectedAgent={selectedAgent}
+        onSelectAgent={onSelectAgent}
         tools={tools}
         onSelectTool={onSelectTool}
         onOpenSettings={onOpenSettings}
         onNewSession={onNewSession}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onResumeSession={onResumeSession}
+        onDeleteSession={onDeleteSession}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
-          scenario={scenario}
+          agent={agent}
           status={status}
           artifactOpen={inspectorOpen}
           onToggleArtifact={onToggleInspector}

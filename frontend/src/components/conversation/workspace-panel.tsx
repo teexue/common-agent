@@ -10,8 +10,11 @@ interface WorkspacePanelProps {
   isStreaming: boolean
   error: string | null
   onSendMessage: (text: string) => void
+  onStop?: () => void
   selectedToolCallId: string | null
   onSelectToolCall: (id: string) => void
+  onApproveTool?: (approvalId: string) => void
+  onDenyTool?: (approvalId: string) => void
 }
 
 export function WorkspacePanel({
@@ -19,8 +22,11 @@ export function WorkspacePanel({
   isStreaming,
   error,
   onSendMessage,
+  onStop,
   selectedToolCallId,
   onSelectToolCall,
+  onApproveTool,
+  onDenyTool,
 }: WorkspacePanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const isEmpty = messages.length === 0 && !error
@@ -70,6 +76,8 @@ export function WorkspacePanel({
                     entry={entry}
                     selectedToolCallId={selectedToolCallId}
                     onSelectToolCall={onSelectToolCall}
+                    onApproveTool={onApproveTool}
+                    onDenyTool={onDenyTool}
                   />
                 ))}
 
@@ -88,7 +96,9 @@ export function WorkspacePanel({
       {/* Input bar — floating */}
       <InputBar
         onSend={onSendMessage}
-        disabled={isStreaming}
+        onStop={onStop}
+        disabled={false}
+        isStreaming={isStreaming}
       />
     </div>
   )

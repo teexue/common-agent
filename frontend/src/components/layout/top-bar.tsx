@@ -7,10 +7,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { StatusIndicator } from "@/components/shared/status-indicator"
-import type { ScenarioInfo, StreamStatus } from "@/types/agent"
+import type { AgentInfo, StreamStatus } from "@/types/agent"
 
 interface TopBarProps {
-  scenario: ScenarioInfo
+  agent: AgentInfo
   status: StreamStatus
   artifactOpen: boolean
   onToggleArtifact: () => void
@@ -19,7 +19,7 @@ interface TopBarProps {
 }
 
 export function TopBar({
-  scenario,
+  agent,
   status,
   artifactOpen,
   onToggleArtifact,
@@ -30,14 +30,14 @@ export function TopBar({
     <header className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md">
       <div className="flex items-center gap-2.5">
         <span className="font-heading text-sm tracking-tight text-foreground">
-          {scenario.name}
+          {agent.name}
         </span>
-        {scenario.model && (
+        {agent.model && (
           <Badge
             variant="secondary"
             className="rounded-md px-1.5 py-0 text-[10px] font-mono"
           >
-            {scenario.model}
+            {agent.model}
           </Badge>
         )}
         <StatusIndicator status={status} />

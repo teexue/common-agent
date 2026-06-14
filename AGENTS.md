@@ -6,7 +6,7 @@
 
 - **单入口 Agent Loop**：CLI / HTTP / gRPC 等所有路径必须调用同一个 `Run` 函数，禁止在 handler 内重复实现 loop
 - **Tool 统一抽象**：一切能力通过 `Tool` 接口暴露，禁止在 loop 内 hardcode 业务逻辑
-- **Scenario 驱动差异**：提示词、工具白名单、权限、模型配置来自 Scenario，禁止在 core 写 `switch scenario` 分支
+- **Agent 驱动差异**：提示词、工具白名单、权限、模型配置来自 Agent，禁止在 core 写 `switch agent` 分支
 - **事件流输出**：对外统一 `AgentEvent`（`text_delta` / `tool_start` / `tool_result` / `error` / `done`）
 - **依赖方向**：`cmd → server → core ← tools`；core 不得依赖 server / cmd
 
@@ -14,17 +14,17 @@
 
 ```
 cmd/agent-server/     # 入口，仅 wiring
-core/{loop,event,session,scenario,provider,config,permission,hook,telemetry,compaction,subagent,mcp,workflow,tenant,billing}
+core/{loop,event,session,agent,provider,config,permission,hook,telemetry,compaction,subagent,mcp,workflow,tenant,billing,skill}
 tools/{registry,builtin}
 server/{http,grpc}    # HTTP/SSE + gRPC handler
 sdk/{ts,python}       # 客户端 SDK
 ```
 
-运行时配置在 `~/.common-agent/`（`providers.yaml`、`credentials.yaml`、`scenarios/`）。仓库内不再存放用户配置。
+运行时配置在 `~/.common-agent/`（`providers.yaml`、`credentials.yaml`、`agents/`）。仓库内不再存放用户配置。
 
 - 包名小写、短、无下划线（`loop` 而非 `agent_loop`）
 - 每个目录一个包；禁止 `util`、`common`、`helper` 包
-- 跨包共享类型放语义明确的包（如 `core/event`、`core/scenario`）
+- 跨包共享类型放语义明确的包（如 `core/event`、`core/agent`）
 
 ## Go 编码规范
 
@@ -59,7 +59,7 @@ type Tool interface {
 - 用 struct + `Type` 字段，禁止 `any` 裸传
 - 新增事件类型须同步更新所有 consumer（HTTP SSE encoder 等）
 
-**Scenario**（YAML，默认在 `~/.common-agent/scenarios/`）
+**Agent**（YAML，默认在 `~/.common-agent/agents/`）
 
 - 启动时加载；校验失败 fail fast，禁止 silent fallback
 - schema 变更需向后兼容或显式 `version` 字段
@@ -80,7 +80,7 @@ type Tool interface {
 ## 日志（Phase 0）
 
 - 使用 `log/slog` 结构化日志
-- 统一字段：`session_id`, `scenario`, `tool`, `turn`
+- 统一字段：`session_id`, `agent`, `tool`, `turn`
 - 不在 loop 热路径打大量 Debug 日志
 
 ## 禁止事项
@@ -89,7 +89,7 @@ type Tool interface {
 - 创建 `utils`、`helpers`、`misc` 包
 - loop 外直接调用 LLM Provider
 - 跳过 Permission 检查执行 Tool（Phase 1 起强制）
-- 为单个 Scenario 写 if/else 分支
+- 为单个 Agent 写 if/else 分支
 - 提交 `.env`、API Key、credentials
 - 过度抽象（YAGNI）：Phase 0 不需要的 interface 不提前定义
 - 手动编辑 `go.mod` 或 `package.json` 中的版本号 — 使用包管理器（`go mod`、`pnpm add`）自动解析
@@ -97,7 +97,7 @@ type Tool interface {
 ## 变更纪律
 
 - 单次变更聚焦一个 Phase 子任务
-- 新增 Tool 须同步：registry 注册 + scenario 示例 + 测试
+- 新增 Tool 须同步：registry 注册 + agent 示例 + 测试
 - 修改 AgentEvent schema 视为 breaking change，须注明
 - 仅用户明确要求时才 git commit
 
@@ -107,7 +107,7 @@ type Tool interface {
 - 文档为**多页面纯 HTML 站点**，由 `_assets/nav.js` 动态注入统一侧边栏导航。
 - **index.html** — 首页/项目概览。
 - **roadmap.html** — 开发计划 Roadmap。
-- **核心模块页面**（`core/*.html`）— Tool、Provider、Event、Loop、Scenario、Session、Config 等独立主题页。
+- **核心模块页面**（`core/*.html`）— Tool、Provider、Event、Loop、Agent、Session、Config 等独立主题页。
 - **执行流程页面**（`flow/*.html`）— 数据流、CLI 流程、HTTP 流程等。
 - **开发指南页面**（`guide/*.html`）— 添加工具/Provider、目录结构等。
 - 新增页面时：在对应目录新建 `.html` 文件 → 在 `_assets/nav-config.js` 注册导航链接 → 沿用统一模板（引用 `_assets/style.css` + `nav-config.js` + `nav.js` + `theme.js`）。

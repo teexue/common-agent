@@ -50,9 +50,9 @@ func TestResolveAnthropicProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, err := catalog.ResolveForScenario("anthropic")
+	p, err := catalog.ResolveForAgent("anthropic")
 	if err != nil {
-		t.Fatalf("ResolveForScenario: %v", err)
+		t.Fatalf("ResolveForAgent: %v", err)
 	}
 	if p == nil {
 		t.Fatal("expected provider")
@@ -92,7 +92,7 @@ func TestResolveMissingAPIKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := catalog.ResolveForScenario("anthropic"); err == nil {
+	if _, err := catalog.ResolveForAgent("anthropic"); err == nil {
 		t.Fatal("expected error for missing api key")
 	}
 }

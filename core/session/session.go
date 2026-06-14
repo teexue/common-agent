@@ -15,19 +15,29 @@ import (
 type Session struct {
 	mu        sync.RWMutex
 	ID        string
-	Scenario  string
+	Agent     string
 	Messages  []provider.Message
+	Metadata  map[string]string
 	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // New creates a session with a random UUID-based ID.
-func New(scenarioName string) *Session {
+func New(agentName string) *Session {
+	now := time.Now().UTC()
 	return &Session{
 		ID:        newID("sess"),
-		Scenario:  scenarioName,
+		Agent:     agentName,
 		Messages:  nil,
-		CreatedAt: time.Now().UTC(),
+		Metadata:  make(map[string]string),
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
+}
+
+// touch updates the UpdatedAt timestamp. Caller must hold s.mu.
+func (s *Session) touch() {
+	s.UpdatedAt = time.Now().UTC()
 }
 
 // AddMessages appends messages to the session in a concurrency-safe way.
@@ -35,6 +45,7 @@ func (s *Session) AddMessages(msgs ...provider.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.Messages = append(s.Messages, msgs...)
+	s.touch()
 }
 
 // GetMessages returns a copy of the current messages slice.
@@ -51,6 +62,7 @@ func (s *Session) SetMessages(msgs []provider.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.Messages = msgs
+	s.touch()
 }
 
 // Clear removes all messages.
@@ -58,6 +70,29 @@ func (s *Session) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.Messages = nil
+	s.touch()
+}
+
+// GetMetadata returns a copy of the metadata map.
+func (s *Session) GetMetadata() map[string]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]string, len(s.Metadata))
+	for k, v := range s.Metadata {
+		out[k] = v
+	}
+	return out
+}
+
+// SetMetadata sets a key-value pair in the metadata map.
+func (s *Session) SetMetadata(key, value string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.Metadata == nil {
+		s.Metadata = make(map[string]string)
+	}
+	s.Metadata[key] = value
+	s.touch()
 }
 
 func newID(prefix string) string {

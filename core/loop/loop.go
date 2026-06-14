@@ -7,9 +7,11 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/event"
+	"github.com/teexue/common-agent/core/hook"
+	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
-	"github.com/teexue/common-agent/core/scenario"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/tool"
 )
@@ -24,10 +26,31 @@ type ToolRegistry interface {
 type Config struct {
 	Provider provider.Provider
 	Registry ToolRegistry
-	Scenario *scenario.Scenario
+	Agent    *agent.Agent
 	Session  *session.Session
 	Prompt   string
 	Logger   *slog.Logger
+
+	// Store is an optional session persistence backend.
+	// When set alongside SessionID, the loop loads the existing session
+	// from the store at the start and saves it after each run.
+	Store session.Store
+
+	// SessionID, when set with Store, resumes an existing session.
+	// When empty, a new session is created and its ID is stored after the run.
+	SessionID string
+
+	// Policy controls tool execution permissions.
+	// When nil, all tools are allowed (AllowAllPolicy).
+	Policy permission.Policy
+
+	// Hooks are lifecycle callbacks invoked around tool execution and turns.
+	// When nil, no hooks are called.
+	Hooks *hook.Chain
+
+	// Approver handles interactive tool approval when Policy returns Confirm.
+	// When nil, DenyAllApprover is used (tools requiring approval are denied).
+	Approver Approver
 }
 
 // Run executes the agent loop and streams events.
@@ -38,17 +61,27 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 	if cfg.Registry == nil {
 		return nil, fmt.Errorf("registry is required")
 	}
-	if cfg.Scenario == nil {
-		return nil, fmt.Errorf("scenario is required")
+	if cfg.Agent == nil {
+		return nil, fmt.Errorf("agent is required")
 	}
 	if cfg.Session == nil {
 		return nil, fmt.Errorf("session is required")
 	}
+
+	// If a Store and SessionID are provided, load the existing session.
+	if cfg.Store != nil && cfg.SessionID != "" {
+		loaded, err := cfg.Store.Load(cfg.SessionID)
+		if err != nil {
+			return nil, fmt.Errorf("load session %s: %w", cfg.SessionID, err)
+		}
+		cfg.Session = loaded
+	}
+
 	if cfg.Prompt == "" && len(cfg.Session.GetMessages()) == 0 {
 		return nil, fmt.Errorf("prompt is required for a new session")
 	}
 
-	toolDefs, err := cfg.Registry.Definitions(cfg.Scenario.Tools)
+	toolDefs, err := cfg.Registry.Definitions(cfg.Agent.Tools)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +89,7 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 	msgs := cfg.Session.GetMessages()
 	if len(msgs) == 0 {
 		msgs = []provider.Message{
-			{Role: provider.RoleSystem, Content: cfg.Scenario.SystemPrompt},
+			{Role: provider.RoleSystem, Content: cfg.Agent.SystemPrompt},
 		}
 		cfg.Session.SetMessages(msgs)
 	}
@@ -71,17 +104,33 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 	go func() {
 		defer close(out)
 		runLoop(ctx, cfg, toolDefs, out)
+
+		// Persist session after run completes.
+		if cfg.Store != nil {
+			if err := cfg.Store.Save(cfg.Session); err != nil {
+				slog.Warn("failed to persist session", "session_id", cfg.Session.ID, "error", err)
+			}
+		}
 	}()
 	return out, nil
 }
 
 func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition, out chan<- event.Event) {
-	maxTurns := cfg.Scenario.MaxTurns
-	execMode := cfg.Scenario.ToolExecMode()
-	maxParallel := cfg.Scenario.ToolMaxParallel()
+	maxTurns := cfg.Agent.MaxTurns
+	execMode := cfg.Agent.ToolExecMode()
+	maxParallel := cfg.Agent.ToolMaxParallel()
 	log := cfg.Logger
 	if log == nil {
 		log = slog.Default()
+	}
+	pol := cfg.Policy
+	if pol == nil {
+		pol = permission.AllowAllPolicy{}
+	}
+	hooks := cfg.Hooks
+	approver := cfg.Approver
+	if approver == nil {
+		approver = DenyAllApprover{}
 	}
 
 	for turn := 1; turn <= maxTurns; turn++ {
@@ -93,11 +142,18 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		default:
 		}
 
+		// OnTurnStart hook.
+		if hooks != nil {
+			if err := hooks.OnTurnStart(ctx, hook.TurnInfo{TurnNumber: turn}); err != nil {
+				log.Warn("hook OnTurnStart error", "turn", turn, "error", err)
+			}
+		}
+
 		req := provider.Request{
-			Model:     cfg.Scenario.Model,
+			Model:     cfg.Agent.Model,
 			Messages:  cfg.Session.GetMessages(),
 			Tools:     toolDefs,
-			MaxTokens: cfg.Scenario.MaxTokens,
+			MaxTokens: cfg.Agent.MaxTokens,
 		}
 
 		chunks, err := cfg.Provider.Stream(ctx, req)
@@ -150,7 +206,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 						}
 						defer func() { <-sem }()
 
-						res := executeOneTool(ctx, cfg.Registry, tc, out, log)
+						res := executeOneTool(ctx, cfg.Registry, tc, out, log, pol, hooks, approver)
 						select {
 						case resultCh <- pendingResult{
 							idx: idx, callID: tc.ID, toolName: tc.Name, output: res,
@@ -212,13 +268,20 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		} else {
 			// Serial mode: execute one at a time after all tool calls received.
 			for i, tc := range assistantToolCalls {
-				res := executeOneTool(ctx, cfg.Registry, tc, out, log)
+				res := executeOneTool(ctx, cfg.Registry, tc, out, log, pol, hooks, approver)
 				toolResults = append(toolResults, pendingResult{
 					idx:      i,
 					callID:   tc.ID,
 					toolName: tc.Name,
 					output:   res,
 				})
+			}
+		}
+
+		// OnTurnEnd hook.
+		if hooks != nil {
+			if err := hooks.OnTurnEnd(ctx, hook.TurnInfo{TurnNumber: turn}); err != nil {
+				log.Warn("hook OnTurnEnd error", "turn", turn, "error", err)
 			}
 		}
 
@@ -238,7 +301,8 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 }
 
 // executeOneTool runs a single tool call and emits tool_start / tool_result events.
-func executeOneTool(ctx context.Context, reg ToolRegistry, call provider.ToolCall, out chan<- event.Event, log *slog.Logger) json.RawMessage {
+func executeOneTool(ctx context.Context, reg ToolRegistry, call provider.ToolCall, out chan<- event.Event, log *slog.Logger, pol permission.Policy, hooks *hook.Chain, approver Approver) json.RawMessage {
+	// Prepare input for display.
 	var input any
 	if err := json.Unmarshal(call.Arguments, &input); err != nil {
 		log.Warn("unmarshal tool arguments", "tool", call.Name, "error", err)
@@ -249,15 +313,67 @@ func executeOneTool(ctx context.Context, reg ToolRegistry, call provider.ToolCal
 		log.Warn("marshal tool input", "tool", call.Name, "error", err)
 		inputJSON = call.Arguments
 	}
-	emit(ctx, out, event.Event{Type: event.TypeToolStart, Tool: call.Name, Input: json.RawMessage(inputJSON)})
+
+	// Emit tool_start FIRST so the frontend has a tool entry.
+	emit(ctx, out, event.Event{Type: event.TypeToolStart, Tool: call.Name, Input: json.RawMessage(inputJSON), ToolCallID: call.ID})
+
+	// Permission check.
+	decision := pol.Check(permission.ToolCall{Name: call.Name, Arguments: call.Arguments})
+	if decision == permission.Deny {
+		errJSON, _ := json.Marshal(map[string]string{"error": "permission denied", "tool": call.Name})
+		emit(ctx, out, event.Event{
+			Type:       event.TypeToolResult,
+			Tool:       call.Name,
+			Output:     json.RawMessage(errJSON),
+			ToolCallID: call.ID,
+		})
+		return json.RawMessage(errJSON)
+	}
+	if decision == permission.Confirm {
+		// Emit approval required event.
+		emit(ctx, out, event.Event{
+			Type:       event.TypeToolApproval,
+			Tool:       call.Name,
+			Input:      call.Arguments,
+			ToolCallID: call.ID,
+			ApprovalID: call.ID,
+		})
+		// Wait for approval decision.
+		approved := approver.Approve(ctx, ApprovalRequest{
+			Tool:       call.Name,
+			Arguments:  call.Arguments,
+			ApprovalID: call.ID,
+		})
+		if !approved {
+			errJSON, _ := json.Marshal(map[string]string{"error": "tool approval denied", "tool": call.Name})
+			emit(ctx, out, event.Event{
+				Type:       event.TypeToolResult,
+				Tool:       call.Name,
+				Output:     json.RawMessage(errJSON),
+				ToolCallID: call.ID,
+			})
+			return json.RawMessage(errJSON)
+		}
+	}
+
+	// OnToolStart hook.
+	if hooks != nil {
+		if err := hooks.OnToolStart(ctx, hook.ToolStartInfo{Name: call.Name, Arguments: call.Arguments}); err != nil {
+			log.Warn("hook OnToolStart error", "tool", call.Name, "error", err)
+		}
+	}
 
 	t, ok := reg.Get(call.Name)
 	if !ok {
 		errJSON, _ := json.Marshal(map[string]string{"error": "tool not found"})
+		if hooks != nil {
+			hooks.OnToolResult(ctx, hook.ToolResultInfo{Name: call.Name, Output: errJSON, Error: fmt.Errorf("tool not found")})
+		}
 		emit(ctx, out, event.Event{
-			Type:   event.TypeToolResult,
-			Tool:   call.Name,
-			Output: json.RawMessage(errJSON),
+			Type:       event.TypeToolResult,
+			Tool:       call.Name,
+			Output:     json.RawMessage(errJSON),
+			ToolCallID: call.ID,
 		})
 		return json.RawMessage(errJSON)
 	}
@@ -265,11 +381,17 @@ func executeOneTool(ctx context.Context, reg ToolRegistry, call provider.ToolCal
 	res, execErr := t.Execute(ctx, call.Arguments)
 	if execErr != nil {
 		outVal, _ := json.Marshal(map[string]string{"error": execErr.Error()})
-		emit(ctx, out, event.Event{Type: event.TypeToolResult, Tool: call.Name, Output: json.RawMessage(outVal)})
+		if hooks != nil {
+			hooks.OnToolResult(ctx, hook.ToolResultInfo{Name: call.Name, Output: outVal, Error: execErr})
+		}
+		emit(ctx, out, event.Event{Type: event.TypeToolResult, Tool: call.Name, Output: json.RawMessage(outVal), ToolCallID: call.ID})
 		return json.RawMessage(outVal)
 	}
 
-	emit(ctx, out, event.Event{Type: event.TypeToolResult, Tool: call.Name, Output: res.Output})
+	if hooks != nil {
+		hooks.OnToolResult(ctx, hook.ToolResultInfo{Name: call.Name, Output: res.Output})
+	}
+	emit(ctx, out, event.Event{Type: event.TypeToolResult, Tool: call.Name, Output: res.Output, ToolCallID: call.ID})
 	return res.Output
 }
 

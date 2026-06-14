@@ -63,6 +63,7 @@ interface ChatState {
   messages: ConversationEntry[]
   isStreaming: boolean
   error: string | null
+  sessionId: string | null // current backend session ID (null = new session)
 }
 
 type ChatAction =
@@ -71,10 +72,21 @@ type ChatAction =
   | { type: "APPEND_TEXT"; entryId: string; content: string }
   | { type: "APPEND_REASONING"; entryId: string; content: string }
   | { type: "TOOL_START"; entryId: string; toolCall: ToolCallEntry }
-  | { type: "TOOL_RESULT"; entryId: string; toolName: string; output: unknown }
+  | { type: "TOOL_RESULT"; entryId: string; toolName: string; toolCallId?: string; output: unknown }
+  | { type: "TOOL_DENIED"; entryId: string; toolName: string; toolCallId?: string; output: unknown }
+  | { type: "TOOL_APPROVAL_REQUIRED"; entryId: string; toolName: string; toolCallId?: string; approvalId?: string }
   | { type: "STREAM_DONE"; entryId: string; status: string; turns: number }
   | { type: "STREAM_ERROR"; message: string }
   | { type: "CLEAR" }
+  | { type: "SET_SESSION_ID"; sessionId: string | null }
+  | { type: "LOAD_SESSION"; sessionId: string; messages: ConversationEntry[] }
+
+function matchesToolCall(tc: ToolCallEntry, toolName: string, toolCallId?: string): boolean {
+  if (toolCallId && tc.toolCallId) {
+    return tc.toolCallId === toolCallId
+  }
+  return tc.name === toolName
+}
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
@@ -142,8 +154,44 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
             ? {
                 ...m,
                 toolCalls: m.toolCalls?.map((tc) =>
-                  tc.name === action.toolName
+                  matchesToolCall(tc, action.toolName, action.toolCallId)
                     ? { ...tc, output: action.output, status: "completed" as const, endTime: Date.now() }
+                    : tc
+                ),
+              }
+            : m
+        ),
+      }
+    }
+
+    case "TOOL_DENIED": {
+      return {
+        ...state,
+        messages: state.messages.map((m) =>
+          m.id === action.entryId
+            ? {
+                ...m,
+                toolCalls: m.toolCalls?.map((tc) =>
+                  matchesToolCall(tc, action.toolName, action.toolCallId)
+                    ? { ...tc, output: action.output, status: "denied" as const, endTime: Date.now() }
+                    : tc
+                ),
+              }
+            : m
+        ),
+      }
+    }
+
+    case "TOOL_APPROVAL_REQUIRED": {
+      return {
+        ...state,
+        messages: state.messages.map((m) =>
+          m.id === action.entryId
+            ? {
+                ...m,
+                toolCalls: m.toolCalls?.map((tc) =>
+                  matchesToolCall(tc, action.toolName, action.toolCallId)
+                    ? { ...tc, status: "pending_approval" as const, approvalId: action.approvalId }
                     : tc
                 ),
               }
@@ -167,7 +215,21 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     }
 
     case "CLEAR": {
-      return { messages: [], isStreaming: false, error: null }
+      return { messages: [], isStreaming: false, error: null, sessionId: null }
+    }
+
+    case "SET_SESSION_ID": {
+      return { ...state, sessionId: action.sessionId }
+    }
+
+    case "LOAD_SESSION": {
+      return {
+        ...state,
+        sessionId: action.sessionId,
+        messages: action.messages,
+        isStreaming: false,
+        error: null,
+      }
     }
 
     default:
@@ -186,6 +248,52 @@ function parseSSELine(line: string): AgentEvent | null {
   }
 }
 
+// ─── Backend message → ConversationEntry conversion ───────────────
+
+interface BackendMsg {
+  role: string
+  content?: string
+  reasoning_content?: string
+  tool_calls?: Array<{ id: string; name: string; arguments: unknown }>
+  tool_call_id?: string
+  name?: string
+}
+
+function fromBackendMessages(msgs: BackendMsg[]): ConversationEntry[] {
+  const entries: ConversationEntry[] = []
+  for (const msg of msgs) {
+    if (msg.role === "system") continue // skip system messages in UI
+
+    if (msg.role === "user") {
+      entries.push({
+        id: `loaded-user-${entries.length}`,
+        role: "user",
+        content: msg.content ?? "",
+        timestamp: Date.now(),
+      })
+    }
+
+    if (msg.role === "assistant") {
+      entries.push({
+        id: `loaded-assistant-${entries.length}`,
+        role: "assistant",
+        content: msg.content ?? "",
+        reasoningContent: msg.reasoning_content,
+        toolCalls: msg.tool_calls?.map((tc) => ({
+          id: tc.id,
+          name: tc.name,
+          input: tc.arguments,
+          status: "completed" as const,
+        })),
+        timestamp: Date.now(),
+      })
+    }
+
+    // tool results are embedded in the assistant entry's toolCalls
+  }
+  return entries
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────
 
 export function useChat() {
@@ -193,14 +301,17 @@ export function useChat() {
     messages: [],
     isStreaming: false,
     error: null,
+    sessionId: null,
   })
 
   const abortRef = useRef<AbortController | null>(null)
   const messagesRef = useRef(state.messages)
   messagesRef.current = state.messages
+  const sessionIdRef = useRef(state.sessionId)
+  sessionIdRef.current = state.sessionId
 
   const sendMessage = useCallback(
-    async (text: string, scenario: string) => {
+    async (text: string, agent: string) => {
       // Abort any in-flight request
       abortRef.current?.abort()
       const controller = new AbortController()
@@ -215,10 +326,20 @@ export function useChat() {
       dispatch({ type: "START_ASSISTANT", entryId })
 
       try {
+        const body: Record<string, unknown> = {
+          agent,
+          prompt: text,
+          messages: history,
+        }
+        // Send session_id if we have one (for resume/continue)
+        if (sessionIdRef.current) {
+          body.session_id = sessionIdRef.current
+        }
+
         const res = await fetch("/v1/agents/run", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scenario, prompt: text, messages: history }),
+          body: JSON.stringify(body),
           signal: controller.signal,
         })
 
@@ -267,6 +388,7 @@ export function useChat() {
                   entryId,
                   toolCall: {
                     id: `tc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    toolCallId: event.tool_call_id,
                     name: event.tool ?? "unknown",
                     input: event.input,
                     status: "running",
@@ -275,12 +397,28 @@ export function useChat() {
                 })
                 break
 
-              case "tool_result":
+              case "tool_result": {
+                // Check if this is a permission denied result
+                const output = event.output as Record<string, unknown> | undefined
+                const isDenied = output && typeof output === "object" && "error" in output &&
+                  (output.error === "permission denied" || output.error === "tool requires approval" || output.error === "tool approval denied")
                 dispatch({
-                  type: "TOOL_RESULT",
+                  type: isDenied ? "TOOL_DENIED" : "TOOL_RESULT",
                   entryId,
                   toolName: event.tool ?? "unknown",
+                  toolCallId: event.tool_call_id,
                   output: event.output,
+                })
+                break
+              }
+
+              case "tool_approval_required":
+                dispatch({
+                  type: "TOOL_APPROVAL_REQUIRED",
+                  entryId,
+                  toolName: event.tool ?? "unknown",
+                  toolCallId: event.tool_call_id,
+                  approvalId: event.approval_id,
                 })
                 break
 
@@ -316,6 +454,8 @@ export function useChat() {
   const abort = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = null
+    // Reset streaming state when aborting.
+    dispatch({ type: "STREAM_DONE", entryId: "", status: "cancelled", turns: 0 })
   }, [])
 
   const clear = useCallback(() => {
@@ -323,5 +463,25 @@ export function useChat() {
     dispatch({ type: "CLEAR" })
   }, [abort])
 
-  return { ...state, sendMessage, abort, clear }
+  const loadSession = useCallback(
+    async (sessionId: string, messages: BackendMsg[]) => {
+      abort()
+      const entries = fromBackendMessages(messages)
+      dispatch({ type: "LOAD_SESSION", sessionId, messages: entries })
+    },
+    [abort]
+  )
+
+  const setSessionId = useCallback((sessionId: string | null) => {
+    dispatch({ type: "SET_SESSION_ID", sessionId })
+  }, [])
+
+  return {
+    ...state,
+    sendMessage,
+    abort,
+    clear,
+    loadSession,
+    setSessionId,
+  }
 }

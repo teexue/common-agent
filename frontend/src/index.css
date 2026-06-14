@@ -27,6 +27,7 @@
 
     /* Semantic colors */
     --color-success: var(--success);
+    --color-warning: var(--warning);
 
     /* Sidebar tokens */
     --color-sidebar-ring: var(--sidebar-ring);
@@ -97,6 +98,7 @@
     --ring: #c05746;
     --radius: 12px;
     --success: #2d7a4f;
+    --warning: #b45309;
 
     --chart-1: #c05746;
     --chart-2: #0e7490;
@@ -136,6 +138,7 @@
     --ring: #e07a5f;
     --radius: 12px;
     --success: #5cb882;
+    --warning: #fbbf24;
 
     --chart-1: #e07a5f;
     --chart-2: #22d3ee;

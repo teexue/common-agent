@@ -2,10 +2,12 @@ import {
   Bot,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Layers,
   MessageSquare,
   Plus,
   Settings,
+  Trash2,
   Wrench,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -17,30 +19,40 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import type { ScenarioInfo, ToolInfo } from "@/types/agent"
+import type { AgentInfo, SessionMeta, ToolInfo } from "@/types/agent"
+import { formatRelativeTime } from "@/lib/format"
 
 interface SidebarProps {
   collapsed: boolean
   onToggle: () => void
-  scenarios: ScenarioInfo[]
-  selectedScenario: string
-  onSelectScenario: (name: string) => void
+  agents: AgentInfo[]
+  selectedAgent: string
+  onSelectAgent: (name: string) => void
   tools: ToolInfo[]
   onSelectTool: (tool: ToolInfo) => void
   onOpenSettings: () => void
   onNewSession?: () => void
+  // Session props
+  sessions?: SessionMeta[]
+  activeSessionId?: string | null
+  onResumeSession?: (id: string) => void
+  onDeleteSession?: (id: string) => void
 }
 
 export function Sidebar({
   collapsed,
   onToggle,
-  scenarios,
-  selectedScenario,
-  onSelectScenario,
+  agents,
+  selectedAgent,
+  onSelectAgent,
   tools,
   onSelectTool,
   onOpenSettings,
   onNewSession,
+  sessions = [],
+  activeSessionId,
+  onResumeSession,
+  onDeleteSession,
 }: SidebarProps) {
   if (collapsed) {
     return (
@@ -63,21 +75,21 @@ export function Sidebar({
 
         <Separator className="my-2 w-6" />
 
-        {scenarios.map((sc) => (
-          <Tooltip key={sc.name}>
+        {agents.map((a) => (
+          <Tooltip key={a.name}>
             <TooltipTrigger
               render={
                 <Button
-                  variant={selectedScenario === sc.name ? "secondary" : "ghost"}
+                  variant={selectedAgent === a.name ? "secondary" : "ghost"}
                   size="icon-xs"
-                  onClick={() => onSelectScenario(sc.name)}
+                  onClick={() => onSelectAgent(a.name)}
                   className="rounded-lg"
                 />
               }
             >
               <MessageSquare className="h-3.5 w-3.5" />
             </TooltipTrigger>
-            <TooltipContent side="right">{sc.name}</TooltipContent>
+            <TooltipContent side="right">{a.name}</TooltipContent>
           </Tooltip>
         ))}
 
@@ -142,42 +154,109 @@ export function Sidebar({
       <Separator />
 
       <ScrollArea className="flex-1">
-        {/* Scenarios */}
+        {/* Sessions history */}
+        {sessions.length > 0 && (
+          <>
+            <div className="p-2.5">
+              <div className="mb-2 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+                <Clock className="h-3 w-3" />
+                历史会话
+              </div>
+              <div className="flex flex-col gap-0.5">
+                {sessions.map((sess) => (
+                  <div
+                    key={sess.id}
+                    className={`group flex items-center gap-2 rounded-xl px-2.5 py-2 text-left transition-all ${
+                      activeSessionId === sess.id
+                        ? "bg-primary/8 text-primary"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent"
+                    }`}
+                  >
+                    <button
+                      onClick={() => onResumeSession?.(sess.id)}
+                      className="flex min-w-0 flex-1 items-center gap-2"
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${
+                          activeSessionId === sess.id
+                            ? "bg-primary"
+                            : "bg-muted-foreground/25 group-hover:bg-primary/40"
+                        }`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-medium">
+                          {sess.agent}
+                        </span>
+                        <span className="block truncate text-[10px] text-muted-foreground">
+                          {formatRelativeTime(sess.updated_at)}
+                        </span>
+                      </div>
+                    </button>
+                    {onDeleteSession && (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onDeleteSession(sess.id)
+                              }}
+                              className="h-5 w-5 shrink-0 rounded-md opacity-0 transition-opacity group-hover:opacity-100"
+                            />
+                          }
+                        >
+                          <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                        </TooltipTrigger>
+                        <TooltipContent side="right">删除会话</TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Separator className="mx-2.5" />
+          </>
+        )}
+
+        {/* Agents */}
         <div className="p-2.5">
           <div className="mb-2 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
             <Layers className="h-3 w-3" />
-            场景
+            Agent
           </div>
           <div className="flex flex-col gap-0.5">
-            {scenarios.map((sc) => (
+            {agents.map((a) => (
               <button
-                key={sc.name}
-                onClick={() => onSelectScenario(sc.name)}
+                key={a.name}
+                onClick={() => onSelectAgent(a.name)}
                 className={`group flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-all ${
-                  selectedScenario === sc.name
+                  selectedAgent === a.name
                     ? "bg-primary/8 text-primary"
                     : "text-sidebar-foreground hover:bg-sidebar-accent"
                 }`}
               >
                 <span
                   className={`h-1.5 w-1.5 rounded-full transition-colors ${
-                    selectedScenario === sc.name
+                    selectedAgent === a.name
                       ? "bg-primary"
                       : "bg-muted-foreground/25 group-hover:bg-primary/40"
                   }`}
                 />
                 <span className="flex-1 truncate text-xs font-medium">
-                  {sc.name}
+                  {a.name}
                 </span>
                 <Badge
                   variant="outline"
                   className={`shrink-0 border-0 text-[9px] ${
-                    selectedScenario === sc.name
+                    selectedAgent === a.name
                       ? "bg-primary/10 text-primary"
                       : "bg-muted text-muted-foreground"
                   }`}
                 >
-                  {sc.tools.length}
+                  {a.tools.length}
                 </Badge>
               </button>
             ))}

@@ -7,17 +7,19 @@ import { ToolDetailDialog } from "@/components/tools/tool-detail-dialog"
 import { SettingsSheet } from "@/components/settings/settings-sheet"
 import { useChat } from "@/hooks/use-chat"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
+import { fetchAgents, fetchSessions, fetchSession, fetchTools, deleteSession, resolveApproval } from "@/lib/api"
 import type {
   ConversationEntry,
   ToolCallEntry,
   ToolInfo,
-  ScenarioInfo,
+  AgentInfo,
+  SessionMeta,
   StreamStatus,
 } from "@/types/agent"
 
 // ─── Default / Fallback Data ──────────────────────────────────────
 
-const DEFAULT_SCENARIO: ScenarioInfo = {
+const DEFAULT_AGENT: AgentInfo = {
   name: "general-chat",
   provider: "",
   model: "",
@@ -32,7 +34,7 @@ export function App() {
   const chat = useChat()
 
   // UI state
-  const [scenario, setScenario] = useState("general-chat")
+  const [agent, setAgent] = useState("general-chat")
   const [selectedToolCallId, setSelectedToolCallId] = useState<string | null>(
     null
   )
@@ -43,20 +45,20 @@ export function App() {
   const [selectedTool, setSelectedTool] = useState<ToolInfo | null>(null)
 
   // Data fetched from API
-  const [scenarios, setScenarios] = useState<ScenarioInfo[]>([
-    DEFAULT_SCENARIO,
+  const [agents, setAgents] = useState<AgentInfo[]>([
+    DEFAULT_AGENT,
   ])
   const [tools, setTools] = useState<ToolInfo[]>([])
+  const [sessions, setSessions] = useState<SessionMeta[]>([])
 
-  // ── Fetch scenarios & tools on mount ──
+  // ── Fetch agents & tools on mount ──
 
   useEffect(() => {
-    fetch("/v1/scenarios")
-      .then((r) => r.json())
-      .then((data: string[]) => {
+    fetchAgents()
+      .then((data: AgentInfo[]) => {
         if (data.length > 0) {
-          setScenarios(data.map((name) => ({ ...DEFAULT_SCENARIO, name })))
-          setScenario(data[0])
+          setAgents(data)
+          setAgent(data[0].name)
         }
       })
       .catch(() => {
@@ -65,20 +67,33 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    fetch("/v1/tools")
-      .then((r) => r.json())
+    fetchTools()
       .then((data: ToolInfo[]) => setTools(data))
       .catch(() => {
         // Keep empty
       })
   }, [])
 
+  // ── Fetch sessions on mount and after changes ──
+
+  const refreshSessions = useCallback(() => {
+    fetchSessions()
+      .then((data) => setSessions(data))
+      .catch(() => {
+        // Sessions endpoint may not be available
+      })
+  }, [])
+
+  useEffect(() => {
+    refreshSessions()
+  }, [refreshSessions])
+
   // ── Derived state ──
 
-  const scenarioInfo =
-    scenarios.find((s) => s.name === scenario) ??
-    scenarios[0] ??
-    DEFAULT_SCENARIO
+  const agentInfo =
+    agents.find((a) => a.name === agent) ??
+    agents[0] ??
+    DEFAULT_AGENT
 
   const status: StreamStatus = chat.isStreaming
     ? "streaming"
@@ -90,9 +105,9 @@ export function App() {
 
   const handleSendMessage = useCallback(
     (text: string) => {
-      chat.sendMessage(text, scenario)
+      chat.sendMessage(text, agent)
     },
-    [chat.sendMessage, scenario]
+    [chat.sendMessage, agent]
   )
 
   const handleSelectToolCall = useCallback(
@@ -103,9 +118,9 @@ export function App() {
     [inspectorOpen]
   )
 
-  const handleSelectScenario = useCallback(
+  const handleSelectAgent = useCallback(
     (name: string) => {
-      setScenario(name)
+      setAgent(name)
       chat.clear()
       setSelectedToolCallId(null)
     },
@@ -131,6 +146,72 @@ export function App() {
       document.documentElement.classList.toggle("dark", prefersDark)
     }
   }, [])
+
+  const handleNewSession = useCallback(() => {
+    chat.clear()
+    setSelectedToolCallId(null)
+    refreshSessions()
+  }, [chat.clear, refreshSessions])
+
+  const handleResumeSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        const sess = await fetchSession(sessionId)
+        await chat.loadSession(sessionId, sess.messages as Array<{
+          role: string
+          content?: string
+          reasoning_content?: string
+          tool_calls?: Array<{ id: string; name: string; arguments: unknown }>
+          tool_call_id?: string
+          name?: string
+        }>)
+        setAgent(sess.agent)
+        setSelectedToolCallId(null)
+      } catch (err) {
+        console.error("Failed to resume session:", err)
+      }
+    },
+    [chat.loadSession]
+  )
+
+  const handleDeleteSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        await deleteSession(sessionId)
+        // If we deleted the active session, clear it
+        if (chat.sessionId === sessionId) {
+          chat.clear()
+          setSelectedToolCallId(null)
+        }
+        refreshSessions()
+      } catch (err) {
+        console.error("Failed to delete session:", err)
+      }
+    },
+    [chat, refreshSessions]
+  )
+
+  const handleApproveTool = useCallback(
+    async (approvalId: string) => {
+      try {
+        await resolveApproval(approvalId, true)
+      } catch (err) {
+        console.error("Failed to approve tool:", err)
+      }
+    },
+    []
+  )
+
+  const handleDenyTool = useCallback(
+    async (approvalId: string) => {
+      try {
+        await resolveApproval(approvalId, false)
+      } catch (err) {
+        console.error("Failed to deny tool:", err)
+      }
+    },
+    []
+  )
 
   // ── Keyboard shortcuts ──
 
@@ -165,18 +246,20 @@ export function App() {
         // Sidebar
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
-        scenarios={scenarios}
-        selectedScenario={scenario}
-        onSelectScenario={handleSelectScenario}
+        agents={agents}
+        selectedAgent={agent}
+        onSelectAgent={handleSelectAgent}
         tools={tools}
         onSelectTool={setSelectedTool}
         onOpenSettings={() => setSettingsOpen(true)}
-        onNewSession={() => {
-          chat.clear()
-          setSelectedToolCallId(null)
-        }}
+        onNewSession={handleNewSession}
+        // Sessions
+        sessions={sessions}
+        activeSessionId={chat.sessionId}
+        onResumeSession={handleResumeSession}
+        onDeleteSession={handleDeleteSession}
         // Top bar
-        scenario={scenarioInfo}
+        agent={agentInfo}
         status={status}
         inspectorOpen={inspectorOpen}
         onToggleInspector={() => {
@@ -194,8 +277,11 @@ export function App() {
             isStreaming={chat.isStreaming}
             error={chat.error}
             onSendMessage={handleSendMessage}
+            onStop={chat.abort}
             selectedToolCallId={selectedToolCallId}
             onSelectToolCall={handleSelectToolCall}
+            onApproveTool={handleApproveTool}
+            onDenyTool={handleDenyTool}
           />
         }
         rightPanel={

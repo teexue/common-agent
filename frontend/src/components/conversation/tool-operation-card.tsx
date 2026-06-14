@@ -1,14 +1,18 @@
 import { useState } from "react"
 import {
+  AlertTriangle,
   Check,
   ChevronDown,
   ChevronRight,
   Clock,
   Loader2,
+  ShieldCheck,
+  ShieldQuestion,
   Wrench,
   X,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Collapsible,
   CollapsibleContent,
@@ -22,6 +26,8 @@ interface ToolOperationCardProps {
   toolCall: ToolCallEntry
   isSelected: boolean
   onSelect: () => void
+  onApprove?: (approvalId: string) => void
+  onDeny?: (approvalId: string) => void
 }
 
 const statusConfig = {
@@ -49,6 +55,18 @@ const statusConfig = {
     bg: "bg-destructive/10",
     label: "错误",
   },
+  denied: {
+    icon: AlertTriangle,
+    color: "text-warning",
+    bg: "bg-warning/10",
+    label: "拒绝",
+  },
+  pending_approval: {
+    icon: ShieldQuestion,
+    color: "text-warning",
+    bg: "bg-warning/10",
+    label: "待审批",
+  },
 }
 
 function formatDuration(start?: number, end?: number): string | null {
@@ -62,10 +80,16 @@ export function ToolOperationCard({
   toolCall,
   isSelected,
   onSelect,
+  onApprove,
+  onDeny,
 }: ToolOperationCardProps) {
-  const [expanded, setExpanded] = useState(false)
+  // Auto-expand when pending approval or denied
+  const [expanded, setExpanded] = useState(
+    toolCall.status === "pending_approval" || toolCall.status === "denied"
+  )
   const config = statusConfig[toolCall.status]
   const duration = formatDuration(toolCall.startTime, toolCall.endTime)
+  const needsApproval = toolCall.status === "pending_approval"
 
   const inputPreview = toolCall.input
     ? truncate(JSON.stringify(toolCall.input), 80)
@@ -85,9 +109,11 @@ export function ToolOperationCard({
       <div
         className={cn(
           "rounded-xl border transition-all",
-          isSelected
-            ? "border-primary/40 bg-primary/5"
-            : "border-border bg-card hover:border-primary/15"
+          needsApproval
+            ? "border-warning/50 bg-warning/5"
+            : isSelected
+              ? "border-primary/40 bg-primary/5"
+              : "border-border bg-card hover:border-primary/15"
         )}
       >
         {/* Header */}
@@ -113,6 +139,8 @@ export function ToolOperationCard({
               <Loader2
                 className={cn("h-3.5 w-3.5 animate-spin", config.color)}
               />
+            ) : toolCall.status === "denied" || toolCall.status === "pending_approval" ? (
+              <config.icon className={cn("h-3.5 w-3.5", config.color)} />
             ) : (
               <Wrench className={cn("h-3.5 w-3.5", config.color)} />
             )}
@@ -140,13 +168,67 @@ export function ToolOperationCard({
                 toolCall.status === "error" &&
                   "bg-destructive/10 text-destructive",
                 toolCall.status === "running" &&
-                  "bg-primary/10 text-primary"
+                  "bg-primary/10 text-primary",
+                (toolCall.status === "denied" || toolCall.status === "pending_approval") &&
+                  "bg-warning/10 text-warning"
               )}
             >
               {config.label}
             </Badge>
           </div>
         </div>
+
+        {/* Approval buttons - shown directly when pending approval */}
+        {needsApproval && (
+          <div className="border-t border-warning/20 bg-warning/5 px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-warning">
+                此工具需要确认才能执行
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="h-7 gap-1.5 rounded-lg bg-success text-xs text-white hover:bg-success/90"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (toolCall.approvalId) {
+                      onApprove?.(toolCall.approvalId)
+                    }
+                  }}
+                  disabled={!toolCall.approvalId}
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  批准
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 rounded-lg border-destructive/30 text-xs text-destructive hover:bg-destructive/10"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (toolCall.approvalId) {
+                      onDeny?.(toolCall.approvalId)
+                    }
+                  }}
+                  disabled={!toolCall.approvalId}
+                >
+                  <X className="h-3.5 w-3.5" />
+                  拒绝
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Denied message */}
+        {toolCall.status === "denied" && (
+          <div className="border-t border-warning/20 bg-warning/5 px-3 py-2">
+            <span className="text-xs text-warning">
+              工具执行被拒绝
+            </span>
+          </div>
+        )}
 
         {/* Collapsible detail */}
         <CollapsibleContent>

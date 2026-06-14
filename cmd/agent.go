@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/provider"
-	"github.com/teexue/common-agent/core/scenario"
 	"github.com/teexue/common-agent/tools/builtin"
 	"github.com/teexue/common-agent/tools/registry"
 )
@@ -13,12 +13,12 @@ func newRegistry() *registry.Registry {
 	return reg
 }
 
-func resolveProvider(catalog *provider.Catalog, useMock bool) func(sc *scenario.Scenario) (provider.Provider, error) {
-	return func(sc *scenario.Scenario) (provider.Provider, error) {
+func resolveProvider(catalog *provider.Catalog, useMock bool) func(a *agent.Agent) (provider.Provider, error) {
+	return func(a *agent.Agent) (provider.Provider, error) {
 		if useMock {
 			return mockProvider(), nil
 		}
-		return catalog.ResolveForScenario(sc.Provider)
+		return catalog.ResolveForAgent(a.Provider)
 	}
 }
 

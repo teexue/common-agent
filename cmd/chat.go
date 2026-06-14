@@ -10,10 +10,11 @@ import (
 	"strings"
 
 	"github.com/chzyer/readline"
+	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/loop"
+	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
-	"github.com/teexue/common-agent/core/scenario"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/tui"
 	httpapi "github.com/teexue/common-agent/server/http"
@@ -24,15 +25,16 @@ type chatState struct {
 	catalog  *provider.Catalog
 	mock     bool
 	paths    runtimePaths
-	sc       *scenario.Scenario
+	agent    *agent.Agent
 	provider provider.Provider
 	sess     *session.Session
 	reg      *registry.Registry
+	store    session.Store
 }
 
 func runChat(args []string, logger *slog.Logger) {
 	fs := flag.NewFlagSet("chat", flag.ExitOnError)
-	scenarioName := fs.String("scenario", "", "scenario name (default from config)")
+	agentName := fs.String("agent", "", "agent name (default from config)")
 	homeFlag := fs.String("home", "", "config home")
 	mock := fs.Bool("mock", false, "use mock provider")
 	_ = fs.Parse(args)
@@ -53,9 +55,9 @@ func runChat(args []string, logger *slog.Logger) {
 		logger.Error("load settings", "error", err)
 		os.Exit(1)
 	}
-	name := *scenarioName
+	name := *agentName
 	if name == "" {
-		name = settings.DefaultScenario
+		name = settings.DefaultAgent
 	}
 
 	state, err := newChatState(catalog, *mock, paths, name)
@@ -64,7 +66,7 @@ func runChat(args []string, logger *slog.Logger) {
 		os.Exit(1)
 	}
 
-	tui.PrintWelcome(state.sc.Name, state.sc.Provider, state.sc.Model)
+	tui.PrintWelcome(state.agent.Name, state.agent.Provider, state.agent.Model)
 
 	rl, err := newChatReadline(paths.home)
 	if err != nil {
@@ -90,12 +92,23 @@ func runChat(args []string, logger *slog.Logger) {
 			continue
 		}
 
+		// Create policy from agent permissions.
+		var pol permission.Policy
+		if state.agent.Permissions != nil {
+			pol = permission.NewAgentPolicy(*state.agent.Permissions)
+		} else {
+			pol = permission.AllowAllPolicy{}
+		}
+
 		events, err := loop.Run(context.Background(), loop.Config{
 			Provider: state.provider,
 			Registry: state.reg,
-			Scenario: state.sc,
+			Agent:    state.agent,
 			Session:  state.sess,
 			Prompt:   line,
+			Store:    state.store,
+			Policy:   pol,
+			Approver: CLIApprover{},
 		})
 		if err != nil {
 			fmt.Println(tui.Error(err.Error()))
@@ -116,23 +129,33 @@ func newChatReadline(home string) (*readline.Instance, error) {
 	})
 }
 
-func newChatState(catalog *provider.Catalog, mock bool, paths runtimePaths, scenarioName string) (*chatState, error) {
-	sc, err := scenario.LoadByName(paths.scenariosDir, httpapi.NormalizeScenarioName(scenarioName))
+func newChatState(catalog *provider.Catalog, mock bool, paths runtimePaths, agentName string) (*chatState, error) {
+	a, err := agent.LoadByName(paths.agentsDir, httpapi.NormalizeAgentName(agentName))
 	if err != nil {
 		return nil, err
 	}
-	p, err := resolveProvider(catalog, mock)(sc)
+	p, err := resolveProvider(catalog, mock)(a)
 	if err != nil {
 		return nil, err
 	}
+
+	var store session.Store
+	if !mock {
+		store, err = session.NewFileStore(config.SessionsDir(paths.home))
+		if err != nil {
+			return nil, fmt.Errorf("open session store: %w", err)
+		}
+	}
+
 	return &chatState{
 		catalog:  catalog,
 		mock:     mock,
 		paths:    paths,
-		sc:       sc,
+		agent:    a,
 		provider: p,
-		sess:     session.New(sc.Name),
+		sess:     session.New(a.Name),
 		reg:      newRegistry(),
+		store:    store,
 	}, nil
 }
 
@@ -146,31 +169,38 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 		tui.PrintHelp()
 		return false
 	case "/clear":
-		state.sess.Clear()
+		if state.store != nil {
+			if err := state.store.Save(state.sess); err != nil {
+				fmt.Println(tui.Error(fmt.Sprintf("保存会话失败: %v", err)))
+			} else {
+				fmt.Println(tui.Muted(fmt.Sprintf("会话 %s 已保存", state.sess.ID)))
+			}
+		}
+		state.sess = session.New(state.agent.Name)
 		fmt.Println(tui.Success("会话已清空"))
 		return false
-	case "/scenario":
+	case "/agent":
 		if len(parts) < 2 {
-			names, err := scenario.ListAvailable(state.paths.scenariosDir)
+			names, err := agent.ListAvailable(state.paths.agentsDir)
 			if err != nil {
 				fmt.Println(tui.Error(err.Error()))
 				return false
 			}
 			if len(names) == 0 {
-				fmt.Println(tui.Muted("没有可用的 scenario"))
+				fmt.Println(tui.Muted("没有可用的 agent"))
 				return false
 			}
-			fmt.Println(tui.Muted("可用 scenario:"))
+			fmt.Println(tui.Muted("可用 agent:"))
 			for _, n := range names {
 				marker := " "
-				if n == state.sc.Name {
+				if n == state.agent.Name {
 					marker = tui.Success("●")
 				}
 				fmt.Printf("  %s %s\n", marker, n)
 			}
 			return false
 		}
-		loaded, err := scenario.LoadByName(state.paths.scenariosDir, parts[1])
+		loaded, err := agent.LoadByName(state.paths.agentsDir, parts[1])
 		if err != nil {
 			fmt.Println(tui.Error(err.Error()))
 			return false
@@ -180,19 +210,19 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 			fmt.Println(tui.Error(err.Error()))
 			return false
 		}
-		state.sc = loaded
+		state.agent = loaded
 		state.provider = p
 		state.sess = session.New(loaded.Name)
 		fmt.Println(tui.Success(fmt.Sprintf("已切换 %s · %s · %s", loaded.Name, loaded.Provider, loaded.Model)))
 		return false
 	case "/tools":
 		if len(parts) >= 2 {
-			sc, err := scenario.LoadByNameAndValidate(state.paths.scenariosDir, parts[1], state.reg.Names())
+			a, err := agent.LoadByNameAndValidate(state.paths.agentsDir, parts[1], state.reg.Names())
 			if err != nil {
 				fmt.Println(tui.Error(err.Error()))
 				return false
 			}
-			fmt.Println(tui.Success(fmt.Sprintf("%s 工具验证通过: %v", sc.Name, sc.Tools)))
+			fmt.Println(tui.Success(fmt.Sprintf("%s 工具验证通过: %v", a.Name, a.Tools)))
 			return false
 		}
 		names := state.reg.Names()

@@ -13,8 +13,8 @@ func TestNewSession(t *testing.T) {
 	if s.ID == "" {
 		t.Fatal("expected non-empty session ID")
 	}
-	if s.Scenario != "demo" {
-		t.Fatalf("scenario = %q, want demo", s.Scenario)
+	if s.Agent != "demo" {
+		t.Fatalf("agent = %q, want demo", s.Agent)
 	}
 	if s.GetMessages() == nil {
 		t.Fatal("expected non-nil messages slice")

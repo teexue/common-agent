@@ -14,6 +14,22 @@ export default defineConfig({
   build: {
     outDir: "../cmd/dist",
     emptyOutDir: true,
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("react-markdown") || id.includes("remark-")) {
+              return "markdown"
+            }
+            if (id.includes("react") || id.includes("react-dom")) {
+              return "vendor-react"
+            }
+            return "vendor"
+          }
+        },
+      },
+    },
   },
   server: {
     proxy: {

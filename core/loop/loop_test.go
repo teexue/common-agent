@@ -6,10 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/loop"
+	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
-	"github.com/teexue/common-agent/core/scenario"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/tools/builtin"
 	"github.com/teexue/common-agent/tools/registry"
@@ -19,7 +20,7 @@ func TestRunWithMockProvider(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg)
 
-	sc := &scenario.Scenario{
+	sc := &agent.Agent{
 		Name:         "test",
 		Provider:     "mock",
 		SystemPrompt: "You are a test assistant.",
@@ -31,7 +32,7 @@ func TestRunWithMockProvider(t *testing.T) {
 	events, err := loop.Run(context.Background(), loop.Config{
 		Provider: provider.EchoThenReply("hello"),
 		Registry: reg,
-		Scenario: sc,
+		Agent:    sc,
 		Session:  session.New(sc.Name),
 		Prompt:   "echo hello",
 	})
@@ -74,7 +75,7 @@ func TestRunUnknownTool(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg)
 
-	sc := &scenario.Scenario{
+	sc := &agent.Agent{
 		Name:         "test",
 		Provider:     "mock",
 		SystemPrompt: "test",
@@ -96,7 +97,7 @@ func TestRunUnknownTool(t *testing.T) {
 	events, err := loop.Run(context.Background(), loop.Config{
 		Provider: mock,
 		Registry: reg,
-		Scenario: sc,
+		Agent:    sc,
 		Session:  session.New(sc.Name),
 		Prompt:   "test",
 	})
@@ -120,14 +121,14 @@ func TestRunSerialMode(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg)
 
-	sc := &scenario.Scenario{
+	sc := &agent.Agent{
 		Name:         "test",
 		Provider:     "mock",
 		SystemPrompt: "test",
 		Tools:        []string{"echo"},
 		Model:        "mock",
 		MaxTurns:     5,
-		ToolExecution: &scenario.ToolExecution{Mode: "serial", MaxParallel: 1},
+		ToolExecution: &agent.ToolExecution{Mode: "serial", MaxParallel: 1},
 	}
 
 	args, _ := json.Marshal(map[string]string{"message": "hi"})
@@ -146,7 +147,7 @@ func TestRunSerialMode(t *testing.T) {
 	events, err := loop.Run(context.Background(), loop.Config{
 		Provider: mock,
 		Registry: reg,
-		Scenario: sc,
+		Agent:    sc,
 		Session:  session.New(sc.Name),
 		Prompt:   "test",
 	})
@@ -169,7 +170,7 @@ func TestRunMaxTurnsExceeded(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg)
 
-	sc := &scenario.Scenario{
+	sc := &agent.Agent{
 		Name:         "test",
 		Provider:     "mock",
 		SystemPrompt: "test",
@@ -188,7 +189,7 @@ func TestRunMaxTurnsExceeded(t *testing.T) {
 	events, err := loop.Run(context.Background(), loop.Config{
 		Provider: mock,
 		Registry: reg,
-		Scenario: sc,
+		Agent:    sc,
 		Session:  session.New(sc.Name),
 		Prompt:   "x",
 	})
@@ -211,7 +212,7 @@ func TestRunContextCancellation(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg)
 
-	sc := &scenario.Scenario{
+	sc := &agent.Agent{
 		Name:         "test",
 		Provider:     "mock",
 		SystemPrompt: "test",
@@ -234,7 +235,7 @@ func TestRunContextCancellation(t *testing.T) {
 	events, err := loop.Run(ctx, loop.Config{
 		Provider: mock,
 		Registry: reg,
-		Scenario: sc,
+		Agent:    sc,
 		Session:  session.New(sc.Name),
 		Prompt:   "x",
 	})
@@ -283,7 +284,7 @@ func TestRunTextOnlyResponse(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg)
 
-	sc := &scenario.Scenario{
+	sc := &agent.Agent{
 		Name:         "test",
 		Provider:     "mock",
 		SystemPrompt: "test",
@@ -301,7 +302,7 @@ func TestRunTextOnlyResponse(t *testing.T) {
 	events, err := loop.Run(context.Background(), loop.Config{
 		Provider: mock,
 		Registry: reg,
-		Scenario: sc,
+		Agent:    sc,
 		Session:  session.New(sc.Name),
 		Prompt:   "hello",
 	})
@@ -324,7 +325,7 @@ func TestRunReasoningDeltaEvents(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg)
 
-	sc := &scenario.Scenario{
+	sc := &agent.Agent{
 		Name:         "test",
 		Provider:     "mock",
 		SystemPrompt: "test",
@@ -347,7 +348,7 @@ func TestRunReasoningDeltaEvents(t *testing.T) {
 	events, err := loop.Run(context.Background(), loop.Config{
 		Provider: mock,
 		Registry: reg,
-		Scenario: sc,
+		Agent:    sc,
 		Session:  session.New(sc.Name),
 		Prompt:   "test",
 	})
@@ -364,4 +365,141 @@ func TestRunReasoningDeltaEvents(t *testing.T) {
 	if !sawReasoning {
 		t.Fatal("expected reasoning_delta events")
 	}
+}
+func TestRunApproval_Approved(t *testing.T) {
+	reg := registry.New()
+	builtin.RegisterAll(reg)
+
+	sc := &agent.Agent{
+		Name:         "test",
+		Provider:     "mock",
+		SystemPrompt: "test",
+		Tools:        []string{"echo"},
+		Model:        "mock",
+		MaxTurns:     5,
+	}
+
+	args, _ := json.Marshal(map[string]string{"message": "hi"})
+	mock := &provider.MockProvider{
+		Calls: [][]provider.MockStep{
+			{{ToolCalls: []provider.ToolCall{{ID: "tc-1", Name: "echo", Arguments: args}}}},
+			{{Text: "done"}},
+		},
+	}
+
+	// Any tool not in auto_approve/always_deny returns Confirm.
+	pol := permission.NewAgentPolicy(permission.Permissions{})
+
+	events, err := loop.Run(context.Background(), loop.Config{
+		Provider: mock,
+		Registry: reg,
+		Agent:    sc,
+		Session:  session.New(sc.Name),
+		Prompt:   "test",
+		Policy:   pol,
+		Approver: staticApprover{approve: true},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	var sawApprovalEvent, sawResult bool
+	for ev := range events {
+		switch ev.Type {
+		case event.TypeToolApproval:
+			if ev.Tool != "echo" {
+				t.Fatalf("unexpected approval tool: %q", ev.Tool)
+			}
+			if ev.ApprovalID != "tc-1" {
+				t.Fatalf("expected approval_id tc-1, got %q", ev.ApprovalID)
+			}
+			if ev.ToolCallID != "tc-1" {
+				t.Fatalf("expected tool_call_id tc-1, got %q", ev.ToolCallID)
+			}
+			sawApprovalEvent = true
+		case event.TypeToolResult:
+			out := string(ev.Output)
+			if !strings.Contains(out, "hi") {
+				t.Fatalf("expected echoed output, got %s", out)
+			}
+			if ev.ToolCallID != "tc-1" {
+				t.Fatalf("expected tool_call_id tc-1 on result, got %q", ev.ToolCallID)
+			}
+			sawResult = true
+		}
+	}
+
+	if !sawApprovalEvent {
+		t.Fatal("expected tool_approval_required event")
+	}
+	if !sawResult {
+		t.Fatal("expected tool result after approval")
+	}
+}
+
+func TestRunApproval_Denied(t *testing.T) {
+	reg := registry.New()
+	builtin.RegisterAll(reg)
+
+	sc := &agent.Agent{
+		Name:         "test",
+		Provider:     "mock",
+		SystemPrompt: "test",
+		Tools:        []string{"echo"},
+		Model:        "mock",
+		MaxTurns:     5,
+	}
+
+	args, _ := json.Marshal(map[string]string{"message": "hi"})
+	mock := &provider.MockProvider{
+		Calls: [][]provider.MockStep{
+			{{ToolCalls: []provider.ToolCall{{ID: "tc-1", Name: "echo", Arguments: args}}}},
+			{{Text: "done"}},
+		},
+	}
+
+	pol := permission.NewAgentPolicy(permission.Permissions{})
+
+	events, err := loop.Run(context.Background(), loop.Config{
+		Provider: mock,
+		Registry: reg,
+		Agent:    sc,
+		Session:  session.New(sc.Name),
+		Prompt:   "test",
+		Policy:   pol,
+		Approver: staticApprover{approve: false},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	var sawApprovalEvent, sawDeniedResult bool
+	for ev := range events {
+		switch ev.Type {
+		case event.TypeToolApproval:
+			sawApprovalEvent = true
+		case event.TypeToolResult:
+			out := make(map[string]string)
+			_ = json.Unmarshal(ev.Output, &out)
+			if out["error"] != "tool approval denied" {
+				t.Fatalf("expected denial error, got %s", ev.Output)
+			}
+			sawDeniedResult = true
+		}
+	}
+
+	if !sawApprovalEvent {
+		t.Fatal("expected tool_approval_required event")
+	}
+	if !sawDeniedResult {
+		t.Fatal("expected denied tool result")
+	}
+}
+
+type staticApprover struct {
+	approve bool
+}
+
+func (a staticApprover) Approve(_ context.Context, _ loop.ApprovalRequest) bool {
+	return a.approve
 }

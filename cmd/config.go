@@ -38,7 +38,7 @@ func configUsage() {
   agent-server config show [--home ~/.common-agent]
   agent-server config path
   agent-server config set-key MOONSHOT_API_KEY sk-...
-  agent-server config set default-scenario demo [--home ...]
+  agent-server config set default-agent demo [--home ...]
   agent-server config set provider moonshot \
     --type openai --base-url https://api.moonshot.cn/v1 \
     --api-key-env MOONSHOT_API_KEY --model kimi-k2.6 [--thinking disabled]
@@ -86,7 +86,7 @@ func runConfigShow(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Printf("\ndefault_scenario: %s\n", settings.DefaultScenario)
+	fmt.Printf("\ndefault_agent: %s\n", settings.DefaultAgent)
 
 	creds, err := config.NewCredentialStore(paths.home)
 	if err != nil {
@@ -151,12 +151,12 @@ func runConfigSetKey(args []string) {
 
 func runConfigSet(args []string) {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: agent-server config set default-scenario NAME | provider NAME ...")
+		fmt.Fprintln(os.Stderr, "usage: agent-server config set default-agent NAME | provider NAME ...")
 		os.Exit(1)
 	}
 	switch args[0] {
-	case "default-scenario":
-		runConfigSetDefaultScenario(args[1:])
+	case "default-agent":
+		runConfigSetDefaultAgent(args[1:])
 	case "provider":
 		runConfigSetProvider(args[1:])
 	default:
@@ -165,12 +165,12 @@ func runConfigSet(args []string) {
 	}
 }
 
-func runConfigSetDefaultScenario(args []string) {
-	fs := flag.NewFlagSet("config set default-scenario", flag.ExitOnError)
+func runConfigSetDefaultAgent(args []string) {
+	fs := flag.NewFlagSet("config set default-agent", flag.ExitOnError)
 	homeFlag := fs.String("home", "", "config home")
 	_ = fs.Parse(args)
 	if len(fs.Args()) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: agent-server config set default-scenario NAME")
+		fmt.Fprintln(os.Stderr, "usage: agent-server config set default-agent NAME")
 		os.Exit(1)
 	}
 	paths, err := resolvePaths(*homeFlag)
@@ -178,11 +178,11 @@ func runConfigSetDefaultScenario(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	if err := config.SaveSettings(paths.home, config.Settings{DefaultScenario: fs.Args()[0]}); err != nil {
+	if err := config.SaveSettings(paths.home, config.Settings{DefaultAgent: fs.Args()[0]}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println("default scenario updated")
+	fmt.Println("default agent updated")
 }
 
 func runConfigSetProvider(args []string) {

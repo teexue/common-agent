@@ -36,7 +36,7 @@ This is a Go agent runtime (`common-agent`). The project is in **Phase 1** (prod
 | Core | `core/event/` | Unified event types: `text_delta`, `reasoning_delta`, `tool_start`, `tool_result`, `error`, `done` + `PrintEvents`, `StreamEvents` |
 | Core | `core/provider/` | LLM provider interface (`Stream`) + OpenAI/Anthropic implementations + mock + catalog |
 | Core | `core/tool/` | Tool interface (`Name/Description/InputSchema/Execute`) — `Result.Output` is `json.RawMessage` |
-| Core | `core/scenario/` | YAML scenario loading (prompt, tools, model, max turns, max tokens, tool_execution) |
+| Core | `core/agent/` | YAML agent loading (prompt, tools, model, max turns, max tokens, tool_execution) |
 | Core | `core/session/` | Thread-safe conversation session with `AddMessages`/`GetMessages`/`Clear` API |
 | Core | `core/config/` | User config in `~/.common-agent/` (settings, providers, `CredentialStore`, wizard) |
 | Extension | `tools/registry/` | Tool registry (register by name, resolve definitions for LLM) |
@@ -46,10 +46,10 @@ This is a Go agent runtime (`common-agent`). The project is in **Phase 1** (prod
 
 - **Single loop entry**: Every interface (CLI, HTTP, future gRPC) wires up a `loop.Run` call — don't duplicate loop logic in handlers.
 - **Tool as the only abstraction**: All capabilities go through the `Tool` interface. The loop does NOT hardcode tool behavior.
-- **Scenario drives everything**: Prompt, tool whitelist, model, provider, max turns, max tokens, and tool execution strategy come from a scenario YAML file. Core has no `switch scenario` branches.
-- **Tool execution modes**: Scenario `tool_execution.mode` controls whether tools execute in parallel (streaming, default) or serial. `tool_execution.max_parallel` limits concurrency (default 4).
+- **Agent drives everything**: Prompt, tool whitelist, model, provider, max turns, max tokens, and tool execution strategy come from an agent YAML file. Core has no `switch agent` branches.
+- **Tool execution modes**: Agent `tool_execution.mode` controls whether tools execute in parallel (streaming, default) or serial. `tool_execution.max_parallel` limits concurrency (default 4).
 - **Mocks for testing**: Use `provider.MockProvider` (which supports `Text`, `Reasoning`, and `ToolCalls` per step) and `provider.EchoThenReply()` to test the loop without real LLM calls.
-- **Config lives in `~/.common-agent/`**: `config.yaml` (settings), `providers.yaml` (LLM providers), `credentials.yaml` (API keys), `scenarios/*.yaml` (scenario definitions). Never commit credentials or `.env` files.
+- **Config lives in `~/.common-agent/`**: `config.yaml` (settings), `providers.yaml` (LLM providers), `credentials.yaml` (API keys), `agents/*.yaml` (agent definitions). Never commit credentials or `.env` files.
 - **Credentials**: Use `config.NewCredentialStore(home)` to create a thread-safe store; pass its `Lookup` method to `provider.LoadCatalog`. Legacy package-level functions are deprecated.
 - **Tool naming**: snake_case, globally unique (e.g., `read_file`). Register explicitly via `registry.Register()`, not `init()` magic.
 - **Provider resolution**: The `cmd` layer resolves provider by name from catalog → creates concrete `provider.Provider`. Core only sees the interface.
@@ -71,7 +71,7 @@ This is a Go agent runtime (`common-agent`). The project is in **Phase 1** (prod
 - **CLAUDE.md** records project-level instructions for AI assistants (build commands, architecture, patterns).
 - **AGENTS.md** records coding conventions and development discipline rules.
 
-## Scenario YAML reference
+## Agent YAML reference
 
 ```yaml
 name: demo

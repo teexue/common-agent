@@ -143,7 +143,7 @@ func wrapToolResult(s string) []string {
 }
 
 // PrintWelcome shows a compact session header.
-func PrintWelcome(scenario, providerName, model string) {
+func PrintWelcome(agentName, providerName, model string) {
 	border := borderStyle
 	title := titleStyle.Render(" common-agent ")
 	line := strings.Repeat("─", 42)
@@ -151,7 +151,7 @@ func PrintWelcome(scenario, providerName, model string) {
 	top := border.Render("╭" + line + "╮")
 	fmt.Println(top)
 	fmt.Println(border.Render("│") + title + strings.Repeat(" ", 42-len(" common-agent ")) + border.Render("│"))
-	fmt.Println(border.Render("│") + mutedStyle.Render(fmt.Sprintf(" scenario %-28s", scenario)) + border.Render("│"))
+	fmt.Println(border.Render("│") + mutedStyle.Render(fmt.Sprintf(" agent    %-28s", agentName)) + border.Render("│"))
 	fmt.Println(border.Render("│") + mutedStyle.Render(fmt.Sprintf(" provider %-28s", providerName)) + border.Render("│"))
 	fmt.Println(border.Render("│") + mutedStyle.Render(fmt.Sprintf(" model    %-28s", model)) + border.Render("│"))
 	fmt.Println(border.Render("╰" + line + "╯"))
@@ -166,8 +166,8 @@ func PrintHelp() {
 		{"/help", "显示帮助"},
 		{"/exit", "退出"},
 		{"/clear", "清空会话"},
-		{"/scenario [name]", "切换或列出 scenario"},
-		{"/tools [scenario]", "列出或验证工具"},
+		{"/agent [name]", "切换或列出 agent"},
+		{"/tools [agent]", "列出或验证工具"},
 	}
 	for _, row := range rows {
 		fmt.Printf("  %-22s %s\n", toolStyle.Render(row.cmd), mutedStyle.Render(row.desc))

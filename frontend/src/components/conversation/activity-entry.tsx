@@ -11,12 +11,16 @@ interface ActivityEntryProps {
   entry: ConversationEntry
   selectedToolCallId: string | null
   onSelectToolCall: (id: string) => void
+  onApproveTool?: (approvalId: string) => void
+  onDenyTool?: (approvalId: string) => void
 }
 
 export function ActivityEntry({
   entry,
   selectedToolCallId,
   onSelectToolCall,
+  onApproveTool,
+  onDenyTool,
 }: ActivityEntryProps) {
   const [thinkingExpanded, setThinkingExpanded] = useState(false)
   const isUser = entry.role === "user"
@@ -96,6 +100,8 @@ export function ActivityEntry({
                 toolCall={tc}
                 isSelected={selectedToolCallId === tc.id}
                 onSelect={() => onSelectToolCall(tc.id)}
+                onApprove={onApproveTool}
+                onDeny={onDenyTool}
               />
             ))}
           </div>

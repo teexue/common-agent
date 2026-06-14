@@ -170,8 +170,8 @@ func NewProvider(profile Profile) (Provider, error) {
 	}
 }
 
-// ResolveForScenario returns a provider for the scenario's provider name.
-func (c *Catalog) ResolveForScenario(providerName string) (Provider, error) {
+// ResolveForAgent returns a provider for the agent's provider name.
+func (c *Catalog) ResolveForAgent(providerName string) (Provider, error) {
 	profile, err := c.Get(providerName)
 	if err != nil {
 		return nil, err

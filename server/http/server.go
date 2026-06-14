@@ -2,49 +2,58 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/loop"
+	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
-	"github.com/teexue/common-agent/core/scenario"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/tools/registry"
 )
 
 // RunRequest is the HTTP DTO for POST /v1/agents/run.
 type RunRequest struct {
-	Scenario string            `json:"scenario"`
-	Prompt   string            `json:"prompt"`
-	Messages []provider.Message `json:"messages,omitempty"`
+	Agent     string            `json:"agent"`
+	Prompt    string            `json:"prompt"`
+	SessionID string            `json:"session_id,omitempty"`
+	Messages  []provider.Message `json:"messages,omitempty"`
 }
 
 // Server exposes agent HTTP endpoints via Gin.
 type Server struct {
-	scenarioDir string
+	agentsDir   string
 	registry    *registry.Registry
-	newProvider func(sc *scenario.Scenario) (provider.Provider, error)
+	newProvider func(a *agent.Agent) (provider.Provider, error)
 	staticFS    fs.FS // optional embedded frontend; nil disables static serving
 	logger      *slog.Logger
+	store       session.Store   // optional session persistence; nil disables session endpoints
+	approver    *HTTPApprover   // handles tool approval flow
 }
 
 // NewServer creates an HTTP server wiring.
 // If staticFS is non-nil, the server also serves the embedded frontend SPA.
-func NewServer(scenarioDir string, reg *registry.Registry, newProvider func(sc *scenario.Scenario) (provider.Provider, error), staticFS fs.FS, logger *slog.Logger) *Server {
+// If store is non-nil, session endpoints are enabled.
+func NewServer(agentsDir string, reg *registry.Registry, newProvider func(a *agent.Agent) (provider.Provider, error), staticFS fs.FS, logger *slog.Logger, store session.Store) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &Server{
-		scenarioDir: scenarioDir,
+		agentsDir:   agentsDir,
 		registry:    reg,
 		newProvider: newProvider,
 		staticFS:    staticFS,
 		logger:      logger,
+		store:       store,
+		approver:    NewHTTPApprover(),
 	}
 }
 
@@ -57,8 +66,17 @@ func (s *Server) Handler() *gin.Engine {
 	// API routes.
 	r.GET("/healthz", s.handleHealth)
 	r.POST("/v1/agents/run", s.handleRun)
+	r.POST("/v1/agents/approve", s.handleApprove)
 	r.GET("/v1/tools", s.handleTools)
-	r.GET("/v1/scenarios", s.handleScenarios)
+	r.GET("/v1/agents", s.handleAgents)
+	r.GET("/v1/agents/:name", s.handleAgentGet)
+
+	// Session endpoints (only when store is configured).
+	if s.store != nil {
+		r.GET("/v1/sessions", s.handleSessionsList)
+		r.GET("/v1/sessions/:id", s.handleSessionsGet)
+		r.DELETE("/v1/sessions/:id", s.handleSessionsDelete)
+	}
 
 	// Static frontend serving (only when embedded).
 	if s.staticFS != nil {
@@ -101,35 +119,66 @@ func (s *Server) handleRun(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_json", "message": err.Error()})
 		return
 	}
-	if req.Scenario == "" || req.Prompt == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "scenario and prompt are required"})
+	if req.Agent == "" || req.Prompt == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "agent and prompt are required"})
 		return
 	}
 
-	sc, err := scenario.LoadByName(s.scenarioDir, req.Scenario)
+	a, err := agent.LoadByName(s.agentsDir, req.Agent)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "scenario_error", "message": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"code": "agent_error", "message": err.Error()})
 		return
 	}
 
-	p, err := s.newProvider(sc)
+	p, err := s.newProvider(a)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "provider_error", "message": err.Error()})
 		return
 	}
 
-	sess := session.New(sc.Name)
+	sess := session.New(a.Name)
 	if len(req.Messages) > 0 {
 		sess.SetMessages(req.Messages)
 	}
-	events, err := loop.Run(c.Request.Context(), loop.Config{
+
+	// Create policy from agent permissions.
+	var pol permission.Policy
+	if a.Permissions != nil {
+		pol = permission.NewAgentPolicy(*a.Permissions)
+	} else {
+		pol = permission.AllowAllPolicy{}
+	}
+
+	loopCfg := loop.Config{
 		Provider: p,
 		Registry: s.registry,
-		Scenario: sc,
+		Agent:    a,
 		Session:  sess,
 		Prompt:   req.Prompt,
 		Logger:   s.logger,
-	})
+		Store:    s.store,
+		Policy:   pol,
+		Approver: s.approver,
+	}
+
+	// Support session resume.
+	if req.SessionID != "" {
+		if s.store == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"code": "session_error", "message": "session persistence not configured"})
+			return
+		}
+		if _, err := s.store.Load(req.SessionID); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				c.JSON(http.StatusBadRequest, gin.H{"code": "session_error", "message": "session not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"code": "session_error", "message": err.Error()})
+			return
+		}
+		loopCfg.SessionID = req.SessionID
+	}
+
+	events, err := loop.Run(c.Request.Context(), loopCfg)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "run_error", "message": err.Error()})
 		return
@@ -145,7 +194,7 @@ func (s *Server) handleRun(c *gin.Context) {
 		return
 	}
 
-	s.logger.Info("agent run started", "session_id", sess.ID, "scenario", sc.Name, "provider", sc.Provider, "model", sc.Model)
+	s.logger.Info("agent run started", "session_id", sess.ID, "agent", a.Name, "provider", a.Provider, "model", a.Model)
 	for ev := range events {
 		data, _ := json.Marshal(ev)
 		if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", data); err != nil {
@@ -162,6 +211,28 @@ type ToolInfo struct {
 	Parameters  map[string]any `json:"parameters"`
 }
 
+// AgentListItem is the HTTP DTO for GET /v1/agents.
+type AgentListItem struct {
+	Name     string   `json:"name"`
+	Provider string   `json:"provider"`
+	Model    string   `json:"model"`
+	Tools    []string `json:"tools"`
+	MaxTurns int      `json:"max_turns"`
+}
+
+// AgentDetail is the HTTP DTO for GET /v1/agents/:name.
+type AgentDetail struct {
+	Name          string                  `json:"name"`
+	Provider      string                  `json:"provider"`
+	Model         string                  `json:"model"`
+	SystemPrompt  string                  `json:"system_prompt"`
+	Tools         []string                `json:"tools"`
+	MaxTurns      int                     `json:"max_turns"`
+	MaxTokens     int                     `json:"max_tokens"`
+	ToolExecution *agent.ToolExecution    `json:"tool_execution,omitempty"`
+	Permissions   *permission.Permissions `json:"permissions,omitempty"`
+}
+
 func (s *Server) handleTools(c *gin.Context) {
 	tools := s.registry.List()
 	result := make([]ToolInfo, len(tools))
@@ -175,19 +246,144 @@ func (s *Server) handleTools(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-func (s *Server) handleScenarios(c *gin.Context) {
-	names, err := scenario.ListAvailable(s.scenarioDir)
+func (s *Server) handleAgents(c *gin.Context) {
+	result, err := agent.LoadAll(s.agentsDir)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "scenario_error", "message": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "agent_error", "message": err.Error()})
 		return
 	}
-	if names == nil {
-		names = []string{}
+	for _, e := range result.Errors {
+		s.logger.Warn("failed to load agent", "name", e.Name, "error", e.Err)
 	}
-	c.JSON(http.StatusOK, names)
+
+	items := make([]AgentListItem, len(result.Agents))
+	for i, a := range result.Agents {
+		items[i] = AgentListItem{
+			Name:     a.Name,
+			Provider: a.Provider,
+			Model:    a.Model,
+			Tools:    a.Tools,
+			MaxTurns: a.MaxTurns,
+		}
+	}
+	c.JSON(http.StatusOK, items)
 }
 
-// NormalizeScenarioName strips optional .yaml suffix.
-func NormalizeScenarioName(name string) string {
+func (s *Server) handleAgentGet(c *gin.Context) {
+	name := c.Param("name")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "agent name is required"})
+		return
+	}
+
+	a, err := agent.LoadByName(s.agentsDir, NormalizeAgentName(name))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "agent not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "agent_error", "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, AgentDetail{
+		Name:          a.Name,
+		Provider:      a.Provider,
+		Model:         a.Model,
+		SystemPrompt:  a.SystemPrompt,
+		Tools:         a.Tools,
+		MaxTurns:      a.MaxTurns,
+		MaxTokens:     a.MaxTokens,
+		ToolExecution: a.ToolExecution,
+		Permissions:   a.Permissions,
+	})
+}
+
+// ApproveRequest is the HTTP DTO for POST /v1/agents/approve.
+type ApproveRequest struct {
+	ApprovalID string `json:"approval_id"`
+	Approved   bool   `json:"approved"`
+}
+
+func (s *Server) handleApprove(c *gin.Context) {
+	var req ApproveRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_json", "message": err.Error()})
+		return
+	}
+	if req.ApprovalID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "approval_id is required"})
+		return
+	}
+
+	resolved := s.approver.ResolveApproval(req.ApprovalID, req.Approved)
+	if !resolved {
+		c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "no pending approval for approval_id"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"resolved": true, "approval_id": req.ApprovalID, "approved": req.Approved})
+}
+
+// NormalizeAgentName strips optional .yaml suffix.
+func NormalizeAgentName(name string) string {
 	return strings.TrimSuffix(name, ".yaml")
+}
+
+func (s *Server) handleSessionsList(c *gin.Context) {
+	metas, err := s.store.List()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "session_error", "message": err.Error()})
+		return
+	}
+	if metas == nil {
+		metas = []session.SessionMeta{}
+	}
+	c.JSON(http.StatusOK, metas)
+}
+
+func (s *Server) handleSessionsGet(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "session id is required"})
+		return
+	}
+
+	sess, err := s.store.Load(id)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "session not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "session_error", "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":         sess.ID,
+		"agent":      sess.Agent,
+		"messages":   sess.GetMessages(),
+		"metadata":   sess.GetMetadata(),
+		"created_at": sess.CreatedAt,
+		"updated_at": sess.UpdatedAt,
+	})
+}
+
+func (s *Server) handleSessionsDelete(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "session id is required"})
+		return
+	}
+
+	if err := s.store.Delete(id); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "session not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "session_error", "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"deleted": id})
 }

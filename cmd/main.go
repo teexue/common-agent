@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/loop"
-	"github.com/teexue/common-agent/core/scenario"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/tui"
 	httpapi "github.com/teexue/common-agent/server/http"
@@ -35,6 +35,8 @@ func main() {
 		runCLI(os.Args[2:], logger)
 	case "chat":
 		runChat(os.Args[2:], logger)
+	case "sessions":
+		runSessions(os.Args[2:], logger)
 	case "tools":
 		runTools(os.Args[2:], logger)
 	case "config":
@@ -56,6 +58,9 @@ func usage() {
   agent-server run --prompt "hello"     单次对话（默认终端可读输出）
   agent-server run --prompt "hello" --format json  NDJSON 事件流（便于脚本解析）
   agent-server serve                    启动 HTTP SSE 服务
+  agent-server sessions list            列出所有会话
+  agent-server sessions resume --id ID  恢复指定会话
+  agent-server sessions delete --id ID  删除指定会话
   agent-server tools                    列出已注册工具
 
   默认配置目录: ~/.common-agent
@@ -84,7 +89,17 @@ func runServe(args []string, logger *slog.Logger) {
 	}
 
 	reg := newRegistry()
-	srv := httpapi.NewServer(paths.scenariosDir, reg, resolveProvider(catalog, *mock), distFS(), logger)
+
+	var sessStore session.Store
+	if !*mock {
+		sessStore, err = session.NewFileStore(config.SessionsDir(paths.home))
+		if err != nil {
+			logger.Error("open session store", "error", err)
+			os.Exit(1)
+		}
+	}
+
+	srv := httpapi.NewServer(paths.agentsDir, reg, resolveProvider(catalog, *mock), distFS(), logger, sessStore)
 
 	httpServer := &http.Server{
 		Addr:              *addr,
@@ -111,7 +126,7 @@ func runServe(args []string, logger *slog.Logger) {
 
 func runCLI(args []string, logger *slog.Logger) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	scenarioName := fs.String("scenario", "", "scenario name (default from config)")
+	agentName := fs.String("agent", "", "agent name (default from config)")
 	prompt := fs.String("prompt", "", "user prompt")
 	format := fs.String("format", "text", "output format: text (TUI) or json (NDJSON events)")
 	homeFlag := fs.String("home", "", "config home")
@@ -144,29 +159,29 @@ func runCLI(args []string, logger *slog.Logger) {
 		logger.Error("load settings", "error", err)
 		os.Exit(1)
 	}
-	name := *scenarioName
+	name := *agentName
 	if name == "" {
-		name = settings.DefaultScenario
+		name = settings.DefaultAgent
 	}
 
-	sc, err := scenario.LoadByName(paths.scenariosDir, httpapi.NormalizeScenarioName(name))
+	a, err := agent.LoadByName(paths.agentsDir, httpapi.NormalizeAgentName(name))
 	if err != nil {
-		logger.Error("load scenario", "error", err)
+		logger.Error("load agent", "error", err)
 		os.Exit(1)
 	}
 
-	p, err := resolveProvider(catalog, *mock)(sc)
+	p, err := resolveProvider(catalog, *mock)(a)
 	if err != nil {
 		logger.Error("create provider", "error", err)
 		os.Exit(1)
 	}
 
 	reg := newRegistry()
-	sess := session.New(sc.Name)
+	sess := session.New(a.Name)
 	events, err := loop.Run(context.Background(), loop.Config{
 		Provider: p,
 		Registry: reg,
-		Scenario: sc,
+		Agent:    a,
 		Session:  sess,
 		Prompt:   *prompt,
 	})
@@ -185,9 +200,9 @@ func runCLI(args []string, logger *slog.Logger) {
 
 	logger.Info("agent run started",
 		"session_id", sess.ID,
-		"scenario", sc.Name,
-		"provider", sc.Provider,
-		"model", sc.Model,
+		"agent", a.Name,
+		"provider", a.Provider,
+		"model", a.Model,
 		"home", paths.home,
 	)
 	tui.PrintEvents(events)
@@ -195,24 +210,24 @@ func runCLI(args []string, logger *slog.Logger) {
 
 func runTools(args []string, _ *slog.Logger) {
 	fs := flag.NewFlagSet("tools", flag.ExitOnError)
-	scenarioName := fs.String("scenario", "", "validate tools for a scenario")
+	agentName := fs.String("agent", "", "validate tools for an agent")
 	_ = fs.Parse(args)
 
 	reg := newRegistry()
 
-	if *scenarioName != "" {
-		// Validate scenario tools against registry.
+	if *agentName != "" {
+		// Validate agent tools against registry.
 		home, err := config.Home(false)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
-		sc, err := scenario.LoadByNameAndValidate(config.ScenariosDir(home), *scenarioName, reg.Names())
+		a, err := agent.LoadByNameAndValidate(config.AgentsDir(home), *agentName, reg.Names())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("scenario %q tools validated OK: %v\n", sc.Name, sc.Tools)
+		fmt.Printf("agent %q tools validated OK: %v\n", a.Name, a.Tools)
 		return
 	}
 

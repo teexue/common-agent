@@ -71,7 +71,7 @@ func InitInteractive(home string) error {
 	tui.PrintWelcome("setup", "config", "wizard")
 	fmt.Println(tui.Muted("配置目录: " + home))
 
-	spec, scenarioName, apiKeyEnv, err := runProviderWizard()
+	spec, agentName, apiKeyEnv, err := runProviderWizard()
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func InitInteractive(home string) error {
 		return err
 	}
 
-	scPath := fmt.Sprintf("%s/%s.yaml", ScenariosDir(home), scenarioName)
+	scPath := fmt.Sprintf("%s/%s.yaml", AgentsDir(home), agentName)
 	scContent := fmt.Sprintf(`name: %s
 version: 1
 provider: %s
@@ -110,12 +110,12 @@ max_tokens: 4096
 tool_execution:
   mode: parallel
   max_parallel: 4
-`, scenarioName, spec.Name, spec.DefaultModel)
+`, agentName, spec.Name, spec.DefaultModel)
 	if err := os.WriteFile(scPath, []byte(scContent), 0o644); err != nil {
-		return fmt.Errorf("write scenario: %w", err)
+		return fmt.Errorf("write agent: %w", err)
 	}
 
-	if err := SaveSettings(home, Settings{DefaultScenario: scenarioName}); err != nil {
+	if err := SaveSettings(home, Settings{DefaultAgent: agentName}); err != nil {
 		return err
 	}
 
@@ -156,12 +156,12 @@ func runProviderWizard() (ProviderSpec, string, string, error) {
 		return ProviderSpec{}, "", "", err
 	}
 
-	scenarioName, err := selectOrInput("默认 Scenario", []string{"demo"}, 0, "Scenario 名称")
+	agentName, err := selectOrInput("默认 Agent", []string{"demo"}, 0, "Agent 名称")
 	if err != nil {
 		return ProviderSpec{}, "", "", err
 	}
 
-	return spec, scenarioName, apiKeyEnv, nil
+	return spec, agentName, apiKeyEnv, nil
 }
 
 func presetProviderWizard(p providerPreset) (ProviderSpec, string, error) {
@@ -331,7 +331,7 @@ func InstallDefaults(home string) error {
 			return err
 		}
 	}
-	scPath := fmt.Sprintf("%s/demo.yaml", ScenariosDir(home))
+	scPath := fmt.Sprintf("%s/demo.yaml", AgentsDir(home))
 	if _, err := os.Stat(scPath); os.IsNotExist(err) {
 		content := `name: demo
 version: 1
@@ -358,7 +358,7 @@ tool_execution:
 	}
 	settingsPath := SettingsFile(home)
 	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
-		return SaveSettings(home, Settings{DefaultScenario: "demo"})
+		return SaveSettings(home, Settings{DefaultAgent: "demo"})
 	}
 	return nil
 }

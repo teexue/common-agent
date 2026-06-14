@@ -9,7 +9,7 @@ import (
 
 // Settings holds user-level defaults.
 type Settings struct {
-	DefaultScenario string `yaml:"default_scenario"`
+	DefaultAgent string `yaml:"default_agent"`
 }
 
 // LoadSettings reads config.yaml from home. Missing file returns defaults.
@@ -18,7 +18,7 @@ func LoadSettings(home string) (Settings, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return Settings{DefaultScenario: "demo"}, nil
+			return Settings{DefaultAgent: "demo"}, nil
 		}
 		return Settings{}, fmt.Errorf("read settings: %w", err)
 	}
@@ -26,8 +26,8 @@ func LoadSettings(home string) (Settings, error) {
 	if err := yaml.Unmarshal(data, &s); err != nil {
 		return Settings{}, fmt.Errorf("parse settings: %w", err)
 	}
-	if s.DefaultScenario == "" {
-		s.DefaultScenario = "demo"
+	if s.DefaultAgent == "" {
+		s.DefaultAgent = "demo"
 	}
 	return s, nil
 }
@@ -48,5 +48,5 @@ func ensureHome(home string) error {
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		return err
 	}
-	return os.MkdirAll(ScenariosDir(home), 0o755)
+	return os.MkdirAll(AgentsDir(home), 0o755)
 }

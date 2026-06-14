@@ -6,6 +6,7 @@ export type EventType =
   | "reasoning_delta"
   | "tool_start"
   | "tool_result"
+  | "tool_approval_required"
   | "error"
   | "done"
 
@@ -15,6 +16,8 @@ export interface AgentEvent {
   tool?: string // tool_start, tool_result
   input?: unknown // tool_start (json.RawMessage)
   output?: unknown // tool_result (json.RawMessage)
+  tool_call_id?: string // tool_start, tool_result, tool_approval_required
+  approval_id?: string // tool_approval_required
   code?: string // error
   message?: string // error
   status?: string // done: "completed" | "failed" | "cancelled"
@@ -27,7 +30,7 @@ export interface ToolInfo {
   parameters: Record<string, unknown>
 }
 
-export interface ScenarioInfo {
+export interface AgentInfo {
   name: string
   provider: string
   model: string
@@ -50,12 +53,24 @@ export interface ConversationEntry {
 
 export interface ToolCallEntry {
   id: string
+  toolCallId?: string // backend tool call ID (correlates events across the stream)
+  approvalId?: string // approval ID used for interactive approval
   name: string
   input: unknown
   output?: unknown
-  status: "pending" | "running" | "completed" | "error"
+  status: "pending" | "running" | "completed" | "error" | "denied" | "pending_approval"
   startTime?: number
   endTime?: number
 }
 
 export type StreamStatus = "idle" | "streaming" | "error" | "done"
+
+// Session persistence types (mirrors Go session.SessionMeta)
+
+export interface SessionMeta {
+  id: string
+  agent: string
+  metadata?: Record<string, string>
+  created_at: string
+  updated_at: string
+}

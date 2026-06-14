@@ -9,9 +9,9 @@ import (
 )
 
 type runtimePaths struct {
-	home         string
-	providers    string
-	scenariosDir string
+	home      string
+	providers string
+	agentsDir string
 }
 
 func defaultPaths() (runtimePaths, error) {
@@ -20,18 +20,18 @@ func defaultPaths() (runtimePaths, error) {
 		return runtimePaths{}, err
 	}
 	return runtimePaths{
-		home:         home,
-		providers:    config.ProvidersFile(home),
-		scenariosDir: config.ScenariosDir(home),
+		home:      home,
+		providers: config.ProvidersFile(home),
+		agentsDir: config.AgentsDir(home),
 	}, nil
 }
 
 func resolvePaths(homeFlag string) (runtimePaths, error) {
 	if homeFlag != "" {
 		return runtimePaths{
-			home:         homeFlag,
-			providers:    config.ProvidersFile(homeFlag),
-			scenariosDir: config.ScenariosDir(homeFlag),
+			home:      homeFlag,
+			providers: config.ProvidersFile(homeFlag),
+			agentsDir: config.AgentsDir(homeFlag),
 		}, nil
 	}
 	return defaultPaths()
@@ -61,7 +61,7 @@ func bootstrapRuntime(paths runtimePaths, useMock bool, logger *slog.Logger) (*p
 func printPaths(paths runtimePaths) {
 	fmt.Printf("home:       %s\n", paths.home)
 	fmt.Printf("providers:  %s\n", paths.providers)
-	fmt.Printf("scenarios: %s\n", paths.scenariosDir)
+	fmt.Printf("agents:     %s\n", paths.agentsDir)
 	fmt.Printf("settings:   %s\n", config.SettingsFile(paths.home))
 	fmt.Printf("credentials:%s\n", config.CredentialsFile(paths.home))
 }

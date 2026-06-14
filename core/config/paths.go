@@ -19,8 +19,11 @@ func Home(ensure bool) (string, error) {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return "", fmt.Errorf("create config dir: %w", err)
 		}
-		if err := os.MkdirAll(ScenariosDir(dir), 0o755); err != nil {
-			return "", fmt.Errorf("create scenarios dir: %w", err)
+		if err := os.MkdirAll(AgentsDir(dir), 0o755); err != nil {
+			return "", fmt.Errorf("create agents dir: %w", err)
+		}
+		if err := os.MkdirAll(SessionsDir(dir), 0o755); err != nil {
+			return "", fmt.Errorf("create sessions dir: %w", err)
 		}
 	}
 	return dir, nil
@@ -41,7 +44,12 @@ func CredentialsFile(home string) string {
 	return filepath.Join(home, "credentials.yaml")
 }
 
-// ScenariosDir returns the scenarios directory under home.
-func ScenariosDir(home string) string {
-	return filepath.Join(home, "scenarios")
+// AgentsDir returns the agents directory under home.
+func AgentsDir(home string) string {
+	return filepath.Join(home, "agents")
+}
+
+// SessionsDir returns the sessions directory under home.
+func SessionsDir(home string) string {
+	return filepath.Join(home, "sessions")
 }

@@ -15,6 +15,7 @@ const (
 	TypeReasoningDelta Type = "reasoning_delta"
 	TypeToolStart      Type = "tool_start"
 	TypeToolResult     Type = "tool_result"
+	TypeToolApproval   Type = "tool_approval_required"
 	TypeError          Type = "error"
 	TypeDone           Type = "done"
 )
@@ -26,9 +27,13 @@ type Event struct {
 	// text_delta / reasoning_delta
 	Content string `json:"content,omitempty"`
 
-	// tool_start / tool_result
-	Tool  string          `json:"tool,omitempty"`
-	Input json.RawMessage `json:"input,omitempty"`
+	// tool_start / tool_result / tool_approval_required
+	Tool      string          `json:"tool,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
+	ToolCallID string         `json:"tool_call_id,omitempty"`
+
+	// tool_approval_required
+	ApprovalID string `json:"approval_id,omitempty"`
 
 	// tool_result
 	Output json.RawMessage `json:"output,omitempty"`
