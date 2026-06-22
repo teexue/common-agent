@@ -105,6 +105,21 @@ message GetAgentResponse {
   int32 max_tokens = 7;
 }
 
+message UpdateAgentRequest {
+  string name = 1;
+  bytes yaml_content = 2;
+}
+
+message UpdateAgentResponse {
+  string name = 1;
+}
+
+message DeleteAgentRequest {
+  string name = 1;
+}
+
+message DeleteAgentResponse {}
+
 // --- Sessions ---
 
 message ListSessionsRequest {}
@@ -152,6 +167,12 @@ service AgentService {
 
   // GetAgent returns details for a specific agent.
   rpc GetAgent(GetAgentRequest) returns (GetAgentResponse);
+
+  // UpdateAgent creates or updates an agent YAML.
+  rpc UpdateAgent(UpdateAgentRequest) returns (UpdateAgentResponse);
+
+  // DeleteAgent deletes an agent YAML.
+  rpc DeleteAgent(DeleteAgentRequest) returns (DeleteAgentResponse);
 
   // ListSessions returns all persisted sessions.
   rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);

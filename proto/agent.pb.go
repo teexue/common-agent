@@ -884,6 +884,182 @@ func (x *GetAgentResponse) GetMaxTokens() int32 {
 	return 0
 }
 
+type UpdateAgentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	YamlContent   []byte                 `protobuf:"bytes,2,opt,name=yaml_content,json=yamlContent,proto3" json:"yaml_content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateAgentRequest) Reset() {
+	*x = UpdateAgentRequest{}
+	mi := &file_proto_agent_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateAgentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateAgentRequest) ProtoMessage() {}
+
+func (x *UpdateAgentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateAgentRequest.ProtoReflect.Descriptor instead.
+func (*UpdateAgentRequest) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *UpdateAgentRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateAgentRequest) GetYamlContent() []byte {
+	if x != nil {
+		return x.YamlContent
+	}
+	return nil
+}
+
+type UpdateAgentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateAgentResponse) Reset() {
+	*x = UpdateAgentResponse{}
+	mi := &file_proto_agent_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateAgentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateAgentResponse) ProtoMessage() {}
+
+func (x *UpdateAgentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateAgentResponse.ProtoReflect.Descriptor instead.
+func (*UpdateAgentResponse) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *UpdateAgentResponse) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type DeleteAgentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteAgentRequest) Reset() {
+	*x = DeleteAgentRequest{}
+	mi := &file_proto_agent_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteAgentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteAgentRequest) ProtoMessage() {}
+
+func (x *DeleteAgentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteAgentRequest.ProtoReflect.Descriptor instead.
+func (*DeleteAgentRequest) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *DeleteAgentRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type DeleteAgentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteAgentResponse) Reset() {
+	*x = DeleteAgentResponse{}
+	mi := &file_proto_agent_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteAgentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteAgentResponse) ProtoMessage() {}
+
+func (x *DeleteAgentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteAgentResponse.ProtoReflect.Descriptor instead.
+func (*DeleteAgentResponse) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{16}
+}
+
 type ListSessionsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -892,7 +1068,7 @@ type ListSessionsRequest struct {
 
 func (x *ListSessionsRequest) Reset() {
 	*x = ListSessionsRequest{}
-	mi := &file_proto_agent_proto_msgTypes[13]
+	mi := &file_proto_agent_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -904,7 +1080,7 @@ func (x *ListSessionsRequest) String() string {
 func (*ListSessionsRequest) ProtoMessage() {}
 
 func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[13]
+	mi := &file_proto_agent_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -917,7 +1093,7 @@ func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{13}
+	return file_proto_agent_proto_rawDescGZIP(), []int{17}
 }
 
 type SessionMeta struct {
@@ -931,7 +1107,7 @@ type SessionMeta struct {
 
 func (x *SessionMeta) Reset() {
 	*x = SessionMeta{}
-	mi := &file_proto_agent_proto_msgTypes[14]
+	mi := &file_proto_agent_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -943,7 +1119,7 @@ func (x *SessionMeta) String() string {
 func (*SessionMeta) ProtoMessage() {}
 
 func (x *SessionMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[14]
+	mi := &file_proto_agent_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -956,7 +1132,7 @@ func (x *SessionMeta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionMeta.ProtoReflect.Descriptor instead.
 func (*SessionMeta) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{14}
+	return file_proto_agent_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *SessionMeta) GetId() string {
@@ -989,7 +1165,7 @@ type ListSessionsResponse struct {
 
 func (x *ListSessionsResponse) Reset() {
 	*x = ListSessionsResponse{}
-	mi := &file_proto_agent_proto_msgTypes[15]
+	mi := &file_proto_agent_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1001,7 +1177,7 @@ func (x *ListSessionsResponse) String() string {
 func (*ListSessionsResponse) ProtoMessage() {}
 
 func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[15]
+	mi := &file_proto_agent_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1014,7 +1190,7 @@ func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{15}
+	return file_proto_agent_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ListSessionsResponse) GetSessions() []*SessionMeta {
@@ -1033,7 +1209,7 @@ type GetSessionRequest struct {
 
 func (x *GetSessionRequest) Reset() {
 	*x = GetSessionRequest{}
-	mi := &file_proto_agent_proto_msgTypes[16]
+	mi := &file_proto_agent_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1045,7 +1221,7 @@ func (x *GetSessionRequest) String() string {
 func (*GetSessionRequest) ProtoMessage() {}
 
 func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[16]
+	mi := &file_proto_agent_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1058,7 +1234,7 @@ func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionRequest.ProtoReflect.Descriptor instead.
 func (*GetSessionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{16}
+	return file_proto_agent_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetSessionRequest) GetId() string {
@@ -1079,7 +1255,7 @@ type GetSessionResponse struct {
 
 func (x *GetSessionResponse) Reset() {
 	*x = GetSessionResponse{}
-	mi := &file_proto_agent_proto_msgTypes[17]
+	mi := &file_proto_agent_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1091,7 +1267,7 @@ func (x *GetSessionResponse) String() string {
 func (*GetSessionResponse) ProtoMessage() {}
 
 func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[17]
+	mi := &file_proto_agent_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1104,7 +1280,7 @@ func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionResponse.ProtoReflect.Descriptor instead.
 func (*GetSessionResponse) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{17}
+	return file_proto_agent_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GetSessionResponse) GetId() string {
@@ -1137,7 +1313,7 @@ type DeleteSessionRequest struct {
 
 func (x *DeleteSessionRequest) Reset() {
 	*x = DeleteSessionRequest{}
-	mi := &file_proto_agent_proto_msgTypes[18]
+	mi := &file_proto_agent_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1149,7 +1325,7 @@ func (x *DeleteSessionRequest) String() string {
 func (*DeleteSessionRequest) ProtoMessage() {}
 
 func (x *DeleteSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[18]
+	mi := &file_proto_agent_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1162,7 +1338,7 @@ func (x *DeleteSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSessionRequest.ProtoReflect.Descriptor instead.
 func (*DeleteSessionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{18}
+	return file_proto_agent_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *DeleteSessionRequest) GetId() string {
@@ -1180,7 +1356,7 @@ type DeleteSessionResponse struct {
 
 func (x *DeleteSessionResponse) Reset() {
 	*x = DeleteSessionResponse{}
-	mi := &file_proto_agent_proto_msgTypes[19]
+	mi := &file_proto_agent_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1192,7 +1368,7 @@ func (x *DeleteSessionResponse) String() string {
 func (*DeleteSessionResponse) ProtoMessage() {}
 
 func (x *DeleteSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[19]
+	mi := &file_proto_agent_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1205,7 +1381,7 @@ func (x *DeleteSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSessionResponse.ProtoReflect.Descriptor instead.
 func (*DeleteSessionResponse) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{19}
+	return file_proto_agent_proto_rawDescGZIP(), []int{23}
 }
 
 var File_proto_agent_proto protoreflect.FileDescriptor
@@ -1276,7 +1452,15 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x05tools\x18\x05 \x03(\tR\x05tools\x12\x1b\n" +
 	"\tmax_turns\x18\x06 \x01(\x05R\bmaxTurns\x12\x1d\n" +
 	"\n" +
-	"max_tokens\x18\a \x01(\x05R\tmaxTokens\"\x15\n" +
+	"max_tokens\x18\a \x01(\x05R\tmaxTokens\"K\n" +
+	"\x12UpdateAgentRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12!\n" +
+	"\fyaml_content\x18\x02 \x01(\fR\vyamlContent\")\n" +
+	"\x13UpdateAgentResponse\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"(\n" +
+	"\x12DeleteAgentRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"\x15\n" +
+	"\x13DeleteAgentResponse\"\x15\n" +
 	"\x13ListSessionsRequest\"[\n" +
 	"\vSessionMeta\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
@@ -1308,14 +1492,16 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x18EVENT_TYPE_SUB_AGENT_END\x10\b\x12\x14\n" +
 	"\x10EVENT_TYPE_ERROR\x10\t\x12\x13\n" +
 	"\x0fEVENT_TYPE_DONE\x10\n" +
-	"2\x9f\x05\n" +
+	"2\xcf\x06\n" +
 	"\fAgentService\x12?\n" +
 	"\x03Run\x12\x1a.commonagent.v1.RunRequest\x1a\x1a.commonagent.v1.AgentEvent0\x01\x12J\n" +
 	"\aApprove\x12\x1e.commonagent.v1.ApproveRequest\x1a\x1f.commonagent.v1.ApproveResponse\x12P\n" +
 	"\tListTools\x12 .commonagent.v1.ListToolsRequest\x1a!.commonagent.v1.ListToolsResponse\x12S\n" +
 	"\n" +
 	"ListAgents\x12!.commonagent.v1.ListAgentsRequest\x1a\".commonagent.v1.ListAgentsResponse\x12M\n" +
-	"\bGetAgent\x12\x1f.commonagent.v1.GetAgentRequest\x1a .commonagent.v1.GetAgentResponse\x12Y\n" +
+	"\bGetAgent\x12\x1f.commonagent.v1.GetAgentRequest\x1a .commonagent.v1.GetAgentResponse\x12V\n" +
+	"\vUpdateAgent\x12\".commonagent.v1.UpdateAgentRequest\x1a#.commonagent.v1.UpdateAgentResponse\x12V\n" +
+	"\vDeleteAgent\x12\".commonagent.v1.DeleteAgentRequest\x1a#.commonagent.v1.DeleteAgentResponse\x12Y\n" +
 	"\fListSessions\x12#.commonagent.v1.ListSessionsRequest\x1a$.commonagent.v1.ListSessionsResponse\x12S\n" +
 	"\n" +
 	"GetSession\x12!.commonagent.v1.GetSessionRequest\x1a\".commonagent.v1.GetSessionResponse\x12\\\n" +
@@ -1334,7 +1520,7 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_proto_agent_proto_goTypes = []any{
 	(EventType)(0),                // 0: commonagent.v1.EventType
 	(*AgentEvent)(nil),            // 1: commonagent.v1.AgentEvent
@@ -1350,39 +1536,47 @@ var file_proto_agent_proto_goTypes = []any{
 	(*ListAgentsResponse)(nil),    // 11: commonagent.v1.ListAgentsResponse
 	(*GetAgentRequest)(nil),       // 12: commonagent.v1.GetAgentRequest
 	(*GetAgentResponse)(nil),      // 13: commonagent.v1.GetAgentResponse
-	(*ListSessionsRequest)(nil),   // 14: commonagent.v1.ListSessionsRequest
-	(*SessionMeta)(nil),           // 15: commonagent.v1.SessionMeta
-	(*ListSessionsResponse)(nil),  // 16: commonagent.v1.ListSessionsResponse
-	(*GetSessionRequest)(nil),     // 17: commonagent.v1.GetSessionRequest
-	(*GetSessionResponse)(nil),    // 18: commonagent.v1.GetSessionResponse
-	(*DeleteSessionRequest)(nil),  // 19: commonagent.v1.DeleteSessionRequest
-	(*DeleteSessionResponse)(nil), // 20: commonagent.v1.DeleteSessionResponse
+	(*UpdateAgentRequest)(nil),    // 14: commonagent.v1.UpdateAgentRequest
+	(*UpdateAgentResponse)(nil),   // 15: commonagent.v1.UpdateAgentResponse
+	(*DeleteAgentRequest)(nil),    // 16: commonagent.v1.DeleteAgentRequest
+	(*DeleteAgentResponse)(nil),   // 17: commonagent.v1.DeleteAgentResponse
+	(*ListSessionsRequest)(nil),   // 18: commonagent.v1.ListSessionsRequest
+	(*SessionMeta)(nil),           // 19: commonagent.v1.SessionMeta
+	(*ListSessionsResponse)(nil),  // 20: commonagent.v1.ListSessionsResponse
+	(*GetSessionRequest)(nil),     // 21: commonagent.v1.GetSessionRequest
+	(*GetSessionResponse)(nil),    // 22: commonagent.v1.GetSessionResponse
+	(*DeleteSessionRequest)(nil),  // 23: commonagent.v1.DeleteSessionRequest
+	(*DeleteSessionResponse)(nil), // 24: commonagent.v1.DeleteSessionResponse
 }
 var file_proto_agent_proto_depIdxs = []int32{
 	0,  // 0: commonagent.v1.AgentEvent.type:type_name -> commonagent.v1.EventType
 	3,  // 1: commonagent.v1.RunRequest.messages:type_name -> commonagent.v1.Message
 	7,  // 2: commonagent.v1.ListToolsResponse.tools:type_name -> commonagent.v1.ToolInfo
 	10, // 3: commonagent.v1.ListAgentsResponse.agents:type_name -> commonagent.v1.AgentListItem
-	15, // 4: commonagent.v1.ListSessionsResponse.sessions:type_name -> commonagent.v1.SessionMeta
+	19, // 4: commonagent.v1.ListSessionsResponse.sessions:type_name -> commonagent.v1.SessionMeta
 	3,  // 5: commonagent.v1.GetSessionResponse.messages:type_name -> commonagent.v1.Message
 	2,  // 6: commonagent.v1.AgentService.Run:input_type -> commonagent.v1.RunRequest
 	4,  // 7: commonagent.v1.AgentService.Approve:input_type -> commonagent.v1.ApproveRequest
 	6,  // 8: commonagent.v1.AgentService.ListTools:input_type -> commonagent.v1.ListToolsRequest
 	9,  // 9: commonagent.v1.AgentService.ListAgents:input_type -> commonagent.v1.ListAgentsRequest
 	12, // 10: commonagent.v1.AgentService.GetAgent:input_type -> commonagent.v1.GetAgentRequest
-	14, // 11: commonagent.v1.AgentService.ListSessions:input_type -> commonagent.v1.ListSessionsRequest
-	17, // 12: commonagent.v1.AgentService.GetSession:input_type -> commonagent.v1.GetSessionRequest
-	19, // 13: commonagent.v1.AgentService.DeleteSession:input_type -> commonagent.v1.DeleteSessionRequest
-	1,  // 14: commonagent.v1.AgentService.Run:output_type -> commonagent.v1.AgentEvent
-	5,  // 15: commonagent.v1.AgentService.Approve:output_type -> commonagent.v1.ApproveResponse
-	8,  // 16: commonagent.v1.AgentService.ListTools:output_type -> commonagent.v1.ListToolsResponse
-	11, // 17: commonagent.v1.AgentService.ListAgents:output_type -> commonagent.v1.ListAgentsResponse
-	13, // 18: commonagent.v1.AgentService.GetAgent:output_type -> commonagent.v1.GetAgentResponse
-	16, // 19: commonagent.v1.AgentService.ListSessions:output_type -> commonagent.v1.ListSessionsResponse
-	18, // 20: commonagent.v1.AgentService.GetSession:output_type -> commonagent.v1.GetSessionResponse
-	20, // 21: commonagent.v1.AgentService.DeleteSession:output_type -> commonagent.v1.DeleteSessionResponse
-	14, // [14:22] is the sub-list for method output_type
-	6,  // [6:14] is the sub-list for method input_type
+	14, // 11: commonagent.v1.AgentService.UpdateAgent:input_type -> commonagent.v1.UpdateAgentRequest
+	16, // 12: commonagent.v1.AgentService.DeleteAgent:input_type -> commonagent.v1.DeleteAgentRequest
+	18, // 13: commonagent.v1.AgentService.ListSessions:input_type -> commonagent.v1.ListSessionsRequest
+	21, // 14: commonagent.v1.AgentService.GetSession:input_type -> commonagent.v1.GetSessionRequest
+	23, // 15: commonagent.v1.AgentService.DeleteSession:input_type -> commonagent.v1.DeleteSessionRequest
+	1,  // 16: commonagent.v1.AgentService.Run:output_type -> commonagent.v1.AgentEvent
+	5,  // 17: commonagent.v1.AgentService.Approve:output_type -> commonagent.v1.ApproveResponse
+	8,  // 18: commonagent.v1.AgentService.ListTools:output_type -> commonagent.v1.ListToolsResponse
+	11, // 19: commonagent.v1.AgentService.ListAgents:output_type -> commonagent.v1.ListAgentsResponse
+	13, // 20: commonagent.v1.AgentService.GetAgent:output_type -> commonagent.v1.GetAgentResponse
+	15, // 21: commonagent.v1.AgentService.UpdateAgent:output_type -> commonagent.v1.UpdateAgentResponse
+	17, // 22: commonagent.v1.AgentService.DeleteAgent:output_type -> commonagent.v1.DeleteAgentResponse
+	20, // 23: commonagent.v1.AgentService.ListSessions:output_type -> commonagent.v1.ListSessionsResponse
+	22, // 24: commonagent.v1.AgentService.GetSession:output_type -> commonagent.v1.GetSessionResponse
+	24, // 25: commonagent.v1.AgentService.DeleteSession:output_type -> commonagent.v1.DeleteSessionResponse
+	16, // [16:26] is the sub-list for method output_type
+	6,  // [6:16] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
 	6,  // [6:6] is the sub-list for extension extendee
 	0,  // [0:6] is the sub-list for field type_name
@@ -1399,7 +1593,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   20,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

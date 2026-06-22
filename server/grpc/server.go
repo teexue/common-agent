@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"google.golang.org/grpc"
@@ -208,6 +209,56 @@ func (s *GRPCServer) GetAgent(_ context.Context, req *commonagentv1.GetAgentRequ
 		MaxTurns:     int32(a.MaxTurns),
 		MaxTokens:    int32(a.MaxTokens),
 	}, nil
+}
+
+// UpdateAgent creates or updates an agent YAML.
+func (s *GRPCServer) UpdateAgent(_ context.Context, req *commonagentv1.UpdateAgentRequest) (*commonagentv1.UpdateAgentResponse, error) {
+	if req.Name == "" {
+		return nil, status.Error(codes.InvalidArgument, "agent name is required")
+	}
+	if len(req.YamlContent) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "yaml_content is required")
+	}
+
+	name := strings.TrimSuffix(req.Name, ".yaml")
+
+	// Validate the YAML.
+	a, err := agent.LoadFromBytes(req.YamlContent)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid agent YAML: %v", err)
+	}
+	if a.Name != name {
+		return nil, status.Errorf(codes.InvalidArgument, "URL name %q does not match YAML name %q", name, a.Name)
+	}
+
+	// Write to disk.
+	path := filepath.Join(s.agentsDir, name+".yaml")
+	if err := os.WriteFile(path, req.YamlContent, 0o644); err != nil {
+		return nil, status.Errorf(codes.Internal, "write agent: %v", err)
+	}
+
+	s.logger.Info("agent saved", "name", name)
+	return &commonagentv1.UpdateAgentResponse{Name: name}, nil
+}
+
+// DeleteAgent deletes an agent YAML.
+func (s *GRPCServer) DeleteAgent(_ context.Context, req *commonagentv1.DeleteAgentRequest) (*commonagentv1.DeleteAgentResponse, error) {
+	if req.Name == "" {
+		return nil, status.Error(codes.InvalidArgument, "agent name is required")
+	}
+
+	name := strings.TrimSuffix(req.Name, ".yaml")
+	path := filepath.Join(s.agentsDir, name+".yaml")
+
+	if err := os.Remove(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, status.Errorf(codes.NotFound, "agent %q not found", name)
+		}
+		return nil, status.Errorf(codes.Internal, "delete agent: %v", err)
+	}
+
+	s.logger.Info("agent deleted", "name", name)
+	return &commonagentv1.DeleteAgentResponse{}, nil
 }
 
 // ListSessions returns all persisted sessions.

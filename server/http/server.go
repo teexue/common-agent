@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -70,6 +71,8 @@ func (s *Server) Handler() *gin.Engine {
 	r.GET("/v1/tools", s.handleTools)
 	r.GET("/v1/agents", s.handleAgents)
 	r.GET("/v1/agents/:name", s.handleAgentGet)
+	r.PUT("/v1/agents/:name", s.handleAgentPut)
+	r.DELETE("/v1/agents/:name", s.handleAgentDelete)
 
 	// Session endpoints (only when store is configured).
 	if s.store != nil {
@@ -297,6 +300,65 @@ func (s *Server) handleAgentGet(c *gin.Context) {
 		ToolExecution: a.ToolExecution,
 		Permissions:   a.Permissions,
 	})
+}
+
+func (s *Server) handleAgentPut(c *gin.Context) {
+	name := NormalizeAgentName(c.Param("name"))
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "agent name is required"})
+		return
+	}
+
+	// Read raw YAML body.
+	body, err := c.GetRawData()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": err.Error()})
+		return
+	}
+
+	// Validate by parsing the YAML.
+	a, err := agent.LoadFromBytes(body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_yaml", "message": err.Error()})
+		return
+	}
+
+	// Ensure the name in the URL matches the name in the YAML.
+	if a.Name != name {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "name_mismatch", "message": "URL name does not match YAML name"})
+		return
+	}
+
+	// Write to disk.
+	path := filepath.Join(s.agentsDir, name+".yaml")
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "write_error", "message": err.Error()})
+		return
+	}
+
+	s.logger.Info("agent saved", "name", name)
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "name": name})
+}
+
+func (s *Server) handleAgentDelete(c *gin.Context) {
+	name := NormalizeAgentName(c.Param("name"))
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "agent name is required"})
+		return
+	}
+
+	path := filepath.Join(s.agentsDir, name+".yaml")
+	if err := os.Remove(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "agent not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "delete_error", "message": err.Error()})
+		return
+	}
+
+	s.logger.Info("agent deleted", "name", name)
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "name": name})
 }
 
 // ApproveRequest is the HTTP DTO for POST /v1/agents/approve.

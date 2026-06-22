@@ -80,12 +80,17 @@ func Load(path string) (*Agent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read agent %q: %w", path, err)
 	}
+	return LoadFromBytes(data)
+}
+
+// LoadFromBytes parses and validates an agent from raw YAML bytes.
+func LoadFromBytes(data []byte) (*Agent, error) {
 	var a Agent
 	if err := yaml.Unmarshal(data, &a); err != nil {
-		return nil, fmt.Errorf("parse agent %q: %w", path, err)
+		return nil, fmt.Errorf("parse agent: %w", err)
 	}
 	if err := a.validate(); err != nil {
-		return nil, fmt.Errorf("validate agent %q: %w", path, err)
+		return nil, fmt.Errorf("validate agent: %w", err)
 	}
 	return &a, nil
 }

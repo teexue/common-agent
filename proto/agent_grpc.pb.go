@@ -24,6 +24,8 @@ const (
 	AgentService_ListTools_FullMethodName     = "/commonagent.v1.AgentService/ListTools"
 	AgentService_ListAgents_FullMethodName    = "/commonagent.v1.AgentService/ListAgents"
 	AgentService_GetAgent_FullMethodName      = "/commonagent.v1.AgentService/GetAgent"
+	AgentService_UpdateAgent_FullMethodName   = "/commonagent.v1.AgentService/UpdateAgent"
+	AgentService_DeleteAgent_FullMethodName   = "/commonagent.v1.AgentService/DeleteAgent"
 	AgentService_ListSessions_FullMethodName  = "/commonagent.v1.AgentService/ListSessions"
 	AgentService_GetSession_FullMethodName    = "/commonagent.v1.AgentService/GetSession"
 	AgentService_DeleteSession_FullMethodName = "/commonagent.v1.AgentService/DeleteSession"
@@ -43,6 +45,10 @@ type AgentServiceClient interface {
 	ListAgents(ctx context.Context, in *ListAgentsRequest, opts ...grpc.CallOption) (*ListAgentsResponse, error)
 	// GetAgent returns details for a specific agent.
 	GetAgent(ctx context.Context, in *GetAgentRequest, opts ...grpc.CallOption) (*GetAgentResponse, error)
+	// UpdateAgent creates or updates an agent YAML.
+	UpdateAgent(ctx context.Context, in *UpdateAgentRequest, opts ...grpc.CallOption) (*UpdateAgentResponse, error)
+	// DeleteAgent deletes an agent YAML.
+	DeleteAgent(ctx context.Context, in *DeleteAgentRequest, opts ...grpc.CallOption) (*DeleteAgentResponse, error)
 	// ListSessions returns all persisted sessions.
 	ListSessions(ctx context.Context, in *ListSessionsRequest, opts ...grpc.CallOption) (*ListSessionsResponse, error)
 	// GetSession returns a specific session with its messages.
@@ -118,6 +124,26 @@ func (c *agentServiceClient) GetAgent(ctx context.Context, in *GetAgentRequest, 
 	return out, nil
 }
 
+func (c *agentServiceClient) UpdateAgent(ctx context.Context, in *UpdateAgentRequest, opts ...grpc.CallOption) (*UpdateAgentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateAgentResponse)
+	err := c.cc.Invoke(ctx, AgentService_UpdateAgent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) DeleteAgent(ctx context.Context, in *DeleteAgentRequest, opts ...grpc.CallOption) (*DeleteAgentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteAgentResponse)
+	err := c.cc.Invoke(ctx, AgentService_DeleteAgent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) ListSessions(ctx context.Context, in *ListSessionsRequest, opts ...grpc.CallOption) (*ListSessionsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSessionsResponse)
@@ -162,6 +188,10 @@ type AgentServiceServer interface {
 	ListAgents(context.Context, *ListAgentsRequest) (*ListAgentsResponse, error)
 	// GetAgent returns details for a specific agent.
 	GetAgent(context.Context, *GetAgentRequest) (*GetAgentResponse, error)
+	// UpdateAgent creates or updates an agent YAML.
+	UpdateAgent(context.Context, *UpdateAgentRequest) (*UpdateAgentResponse, error)
+	// DeleteAgent deletes an agent YAML.
+	DeleteAgent(context.Context, *DeleteAgentRequest) (*DeleteAgentResponse, error)
 	// ListSessions returns all persisted sessions.
 	ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error)
 	// GetSession returns a specific session with its messages.
@@ -192,6 +222,12 @@ func (UnimplementedAgentServiceServer) ListAgents(context.Context, *ListAgentsRe
 }
 func (UnimplementedAgentServiceServer) GetAgent(context.Context, *GetAgentRequest) (*GetAgentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAgent not implemented")
+}
+func (UnimplementedAgentServiceServer) UpdateAgent(context.Context, *UpdateAgentRequest) (*UpdateAgentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateAgent not implemented")
+}
+func (UnimplementedAgentServiceServer) DeleteAgent(context.Context, *DeleteAgentRequest) (*DeleteAgentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteAgent not implemented")
 }
 func (UnimplementedAgentServiceServer) ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSessions not implemented")
@@ -306,6 +342,42 @@ func _AgentService_GetAgent_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_UpdateAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateAgentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).UpdateAgent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_UpdateAgent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).UpdateAgent(ctx, req.(*UpdateAgentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_DeleteAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteAgentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).DeleteAgent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_DeleteAgent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).DeleteAgent(ctx, req.(*DeleteAgentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_ListSessions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListSessionsRequest)
 	if err := dec(in); err != nil {
@@ -382,6 +454,14 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAgent",
 			Handler:    _AgentService_GetAgent_Handler,
+		},
+		{
+			MethodName: "UpdateAgent",
+			Handler:    _AgentService_UpdateAgent_Handler,
+		},
+		{
+			MethodName: "DeleteAgent",
+			Handler:    _AgentService_DeleteAgent_Handler,
 		},
 		{
 			MethodName: "ListSessions",
