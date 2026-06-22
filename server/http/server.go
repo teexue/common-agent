@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/teexue/common-agent/core/agent"
+	"github.com/teexue/common-agent/core/audit"
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
@@ -38,6 +39,7 @@ type Server struct {
 	logger      *slog.Logger
 	store       session.Store   // optional session persistence; nil disables session endpoints
 	approver    *HTTPApprover   // handles tool approval flow
+	eventLogger *audit.EventLogger // optional event logging; nil disables replay
 }
 
 // NewServer creates an HTTP server wiring.
@@ -56,6 +58,11 @@ func NewServer(agentsDir string, reg *registry.Registry, newProvider func(a *age
 		store:       store,
 		approver:    NewHTTPApprover(),
 	}
+}
+
+// SetEventLogger sets the event logger for session replay.
+func (s *Server) SetEventLogger(el *audit.EventLogger) {
+	s.eventLogger = el
 }
 
 // Handler returns the root Gin engine.
@@ -79,6 +86,11 @@ func (s *Server) Handler() *gin.Engine {
 		r.GET("/v1/sessions", s.handleSessionsList)
 		r.GET("/v1/sessions/:id", s.handleSessionsGet)
 		r.DELETE("/v1/sessions/:id", s.handleSessionsDelete)
+	}
+
+	// Replay endpoint (only when event logger is configured).
+	if s.eventLogger != nil {
+		r.GET("/v1/sessions/:id/replay", s.handleSessionReplay)
 	}
 
 	// Static frontend serving (only when embedded).
@@ -448,4 +460,40 @@ func (s *Server) handleSessionsDelete(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"deleted": id})
+}
+
+func (s *Server) handleSessionReplay(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "session id is required"})
+		return
+	}
+
+	// Parse optional turn filter.
+	fromTurn := 0
+	toTurn := 0
+	if v := c.Query("from_turn"); v != "" {
+		fmt.Sscanf(v, "%d", &fromTurn)
+	}
+	if v := c.Query("to_turn"); v != "" {
+		fmt.Sscanf(v, "%d", &toTurn)
+	}
+
+	records, err := s.eventLogger.Replay(id, fromTurn, toTurn)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "replay_error", "message": err.Error()})
+		return
+	}
+
+	if records == nil {
+		records = []audit.EventRecord{}
+	}
+
+	// Stream as NDJSON.
+	c.Header("Content-Type", "application/x-ndjson")
+	for _, rec := range records {
+		data, _ := json.Marshal(rec)
+		c.Writer.Write(data)
+		c.Writer.Write([]byte("\n"))
+	}
 }
