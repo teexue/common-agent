@@ -83,6 +83,36 @@ func (r *Registry) List() []tool.Tool {
 	return tools
 }
 
+// Unregister removes a tool by name. Returns true if the tool was found and removed.
+func (r *Registry) Unregister(name string) bool {
+	if _, ok := r.tools[name]; !ok {
+		return false
+	}
+	delete(r.tools, name)
+	return true
+}
+
+// UnregisterBatch removes multiple tools by name. Returns the count of removed tools.
+func (r *Registry) UnregisterBatch(names []string) int {
+	count := 0
+	for _, name := range names {
+		if r.Unregister(name) {
+			count++
+		}
+	}
+	return count
+}
+
+// RegisterBatch registers multiple tools. Stops on first error.
+func (r *Registry) RegisterBatch(tools []tool.Tool) error {
+	for _, t := range tools {
+		if err := r.Register(t); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ValidateTools checks that all given tool names are registered.
 // Returns an error listing missing tools if any are not found.
 func (r *Registry) ValidateTools(names []string) error {

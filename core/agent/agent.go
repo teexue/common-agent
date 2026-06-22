@@ -17,6 +17,23 @@ type ToolExecution struct {
 	MaxParallel int    `yaml:"max_parallel"` // max concurrent tools, default 4
 }
 
+// MCPServerConfig describes an MCP server connection in agent YAML.
+type MCPServerConfig struct {
+	Name    string            `yaml:"name"`
+	Type    string            `yaml:"type"` // "stdio" | "sse"
+	Command string            `yaml:"command,omitempty"`
+	Args    []string          `yaml:"args,omitempty"`
+	Env     map[string]string `yaml:"env,omitempty"`
+	URL     string            `yaml:"url,omitempty"`
+}
+
+// CompactionConfig configures context window compaction.
+type CompactionConfig struct {
+	Strategy    string `yaml:"strategy"`     // "truncation" (default) | "sliding_window"
+	MaxMessages int    `yaml:"max_messages"` // trigger when messages exceed this (0 = disabled)
+	KeepRecent  int    `yaml:"keep_recent"`  // number of recent messages to preserve
+}
+
 // Agent configures agent behavior for a production use case.
 type Agent struct {
 	Version       int                     `yaml:"version"`
@@ -24,11 +41,14 @@ type Agent struct {
 	Provider      string                  `yaml:"provider"`
 	SystemPrompt  string                  `yaml:"system_prompt"`
 	Tools         []string                `yaml:"tools"`
+	Skills        []string                `yaml:"skills,omitempty"`
 	Model         string                  `yaml:"model"`
 	MaxTurns      int                     `yaml:"max_turns"`
 	MaxTokens     int                     `yaml:"max_tokens"`
 	ToolExecution *ToolExecution          `yaml:"tool_execution,omitempty"`
 	Permissions   *permission.Permissions `yaml:"permissions,omitempty"`
+	MCPServers    []MCPServerConfig       `yaml:"mcp_servers,omitempty"`
+	Compaction    *CompactionConfig       `yaml:"compaction,omitempty"`
 }
 
 const (
@@ -117,6 +137,35 @@ func (a *Agent) validate() error {
 		}
 	} else {
 		a.ToolExecution = &ToolExecution{Mode: "parallel", MaxParallel: 4}
+	}
+	for i, mcp := range a.MCPServers {
+		if mcp.Name == "" {
+			return fmt.Errorf("mcp_servers[%d]: name is required", i)
+		}
+		switch mcp.Type {
+		case "stdio":
+			if mcp.Command == "" {
+				return fmt.Errorf("mcp_servers[%d] (%s): command is required for stdio type", i, mcp.Name)
+			}
+		case "sse":
+			if mcp.URL == "" {
+				return fmt.Errorf("mcp_servers[%d] (%s): url is required for sse type", i, mcp.Name)
+			}
+		default:
+			return fmt.Errorf("mcp_servers[%d] (%s): type must be 'stdio' or 'sse', got %q", i, mcp.Name, mcp.Type)
+		}
+	}
+	if a.Compaction != nil {
+		switch a.Compaction.Strategy {
+		case "", "truncation":
+			a.Compaction.Strategy = "truncation"
+		case "sliding_window":
+		default:
+			return fmt.Errorf("compaction.strategy must be 'truncation' or 'sliding_window', got %q", a.Compaction.Strategy)
+		}
+		if a.Compaction.KeepRecent <= 0 {
+			a.Compaction.KeepRecent = 20
+		}
 	}
 	return nil
 }

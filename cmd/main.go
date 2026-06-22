@@ -5,11 +5,14 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"google.golang.org/grpc"
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/config"
@@ -17,6 +20,7 @@ import (
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/tui"
+	grpcapi "github.com/teexue/common-agent/server/grpc"
 	httpapi "github.com/teexue/common-agent/server/http"
 )
 
@@ -72,7 +76,8 @@ func usage() {
 
 func runServe(args []string, logger *slog.Logger) {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	addr := fs.String("addr", ":8080", "listen address")
+	addr := fs.String("addr", ":8080", "HTTP listen address")
+	grpcAddr := fs.String("grpc-addr", "", "gRPC listen address (empty = disabled)")
 	homeFlag := fs.String("home", "", "config home (default ~/.common-agent)")
 	mock := fs.Bool("mock", false, "use mock provider")
 	_ = fs.Parse(args)
@@ -99,8 +104,8 @@ func runServe(args []string, logger *slog.Logger) {
 		}
 	}
 
+	// HTTP server.
 	srv := httpapi.NewServer(paths.agentsDir, reg, resolveProvider(catalog, *mock), distFS(), logger, sessStore)
-
 	httpServer := &http.Server{
 		Addr:              *addr,
 		Handler:           srv.Handler(),
@@ -109,6 +114,28 @@ func runServe(args []string, logger *slog.Logger) {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Start gRPC server if --grpc-addr is set.
+	var grpcServer *grpc.Server
+	if *grpcAddr != "" {
+		grpcSrv := grpcapi.NewGRPCServer(paths.agentsDir, reg, resolveProvider(catalog, *mock), logger, sessStore)
+		grpcServer = grpc.NewServer()
+		grpcSrv.RegisterServer(grpcServer)
+
+		lis, err := net.Listen("tcp", *grpcAddr)
+		if err != nil {
+			logger.Error("grpc listen", "error", err)
+			os.Exit(1)
+		}
+
+		go func() {
+			logger.Info("grpc server listening", "addr", *grpcAddr, "home", paths.home)
+			if err := grpcServer.Serve(lis); err != nil {
+				logger.Error("grpc server failed", "error", err)
+				os.Exit(1)
+			}
+		}()
+	}
 
 	go func() {
 		logger.Info("http server listening", "addr", *addr, "home", paths.home)
@@ -121,6 +148,9 @@ func runServe(args []string, logger *slog.Logger) {
 	<-ctx.Done()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if grpcServer != nil {
+		grpcServer.GracefulStop()
+	}
 	_ = httpServer.Shutdown(shutdownCtx)
 }
 

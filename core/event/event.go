@@ -16,6 +16,9 @@ const (
 	TypeToolStart      Type = "tool_start"
 	TypeToolResult     Type = "tool_result"
 	TypeToolApproval   Type = "tool_approval_required"
+	TypeCompaction     Type = "compaction"
+	TypeSubAgentStart  Type = "sub_agent_start"
+	TypeSubAgentEnd    Type = "sub_agent_end"
 	TypeError          Type = "error"
 	TypeDone           Type = "done"
 )
@@ -82,6 +85,12 @@ func PrintEvents(events <-chan Event) {
 			fmt.Printf("\n⏺ %s(%s)\n", ev.Tool, string(ev.Input))
 		case TypeToolResult:
 			fmt.Printf("  ⎿ %s\n", string(ev.Output))
+		case TypeCompaction:
+			fmt.Printf("\n⟳ %s\n", ev.Content)
+		case TypeSubAgentStart:
+			fmt.Printf("\n↳ Sub-agent %s: %s\n", ev.Tool, ev.Content)
+		case TypeSubAgentEnd:
+			fmt.Printf("↲ Sub-agent %s done\n", ev.Tool)
 		case TypeError:
 			fmt.Printf("\n✗ %s: %s\n", ev.Code, ev.Message)
 		case TypeDone:

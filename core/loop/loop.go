@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/teexue/common-agent/core/agent"
+	"github.com/teexue/common-agent/core/compaction"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/hook"
 	"github.com/teexue/common-agent/core/permission"
@@ -294,6 +295,27 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 				Content:    string(tr.output),
 			})
 		}
+
+		// Context compaction: if configured, compact the session when it grows too large.
+		if cfg.Agent.Compaction != nil {
+			msgs := cfg.Session.GetMessages()
+			cmp := compaction.NewCompactor(compaction.Config{
+				Strategy:    compaction.Strategy(cfg.Agent.Compaction.Strategy),
+				MaxMessages: cfg.Agent.Compaction.MaxMessages,
+				KeepRecent:  cfg.Agent.Compaction.KeepRecent,
+			})
+			result, err := cmp.Compact(msgs)
+			if err != nil {
+				log.Warn("compaction error", "turn", turn, "error", err)
+			} else if result != nil {
+				cfg.Session.SetMessages(result.Compacted)
+				emit(ctx, out, event.Event{
+					Type:    event.TypeCompaction,
+					Content: result.Summary,
+				})
+				log.Info("context compacted", "turn", turn, "old_messages", result.OldCount, "new_messages", result.NewCount)
+			}
+		}
 	}
 
 	forceEmit(out, event.Event{Type: event.TypeError, Code: "max_turns", Message: fmt.Sprintf("exceeded max turns %d", maxTurns)})
@@ -378,7 +400,9 @@ func executeOneTool(ctx context.Context, reg ToolRegistry, call provider.ToolCal
 		return json.RawMessage(errJSON)
 	}
 
-	res, execErr := t.Execute(ctx, call.Arguments)
+	// Inject parent event channel into context for sub-agent event bubbling.
+	toolCtx := context.WithValue(ctx, "parent_event_chan", out)
+	res, execErr := t.Execute(toolCtx, call.Arguments)
 	if execErr != nil {
 		outVal, _ := json.Marshal(map[string]string{"error": execErr.Error()})
 		if hooks != nil {

@@ -1,0 +1,164 @@
+syntax = "proto3";
+
+package commonagent.v1;
+
+option go_package = "github.com/teexue/common-agent/proto/commonagentv1";
+
+// EventType mirrors event.Type from core/event.
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  EVENT_TYPE_TEXT_DELTA = 1;
+  EVENT_TYPE_REASONING_DELTA = 2;
+  EVENT_TYPE_TOOL_START = 3;
+  EVENT_TYPE_TOOL_RESULT = 4;
+  EVENT_TYPE_TOOL_APPROVAL = 5;
+  EVENT_TYPE_COMPACTION = 6;
+  EVENT_TYPE_SUB_AGENT_START = 7;
+  EVENT_TYPE_SUB_AGENT_END = 8;
+  EVENT_TYPE_ERROR = 9;
+  EVENT_TYPE_DONE = 10;
+}
+
+// AgentEvent mirrors event.Event from core/event.
+message AgentEvent {
+  EventType type = 1;
+  string content = 2;           // text_delta / reasoning_delta
+  string tool = 3;              // tool_start / tool_result / tool_approval
+  bytes input = 4;              // tool_start / tool_approval (JSON)
+  string tool_call_id = 5;
+  string approval_id = 6;       // tool_approval
+  bytes output = 7;             // tool_result (JSON)
+  string code = 8;              // error
+  string message = 9;           // error
+  string status = 10;           // done
+  int32 turns = 11;             // done
+}
+
+// --- Run ---
+
+message RunRequest {
+  string agent = 1;
+  string prompt = 2;
+  string session_id = 3;
+  repeated Message messages = 4;
+}
+
+message Message {
+  string role = 1;
+  string content = 2;
+}
+
+// --- Approval ---
+
+message ApproveRequest {
+  string approval_id = 1;
+  bool approved = 2;
+}
+
+message ApproveResponse {
+  bool resolved = 1;
+  string approval_id = 2;
+  bool approved = 3;
+}
+
+// --- Tools ---
+
+message ListToolsRequest {}
+
+message ToolInfo {
+  string name = 1;
+  string description = 2;
+  bytes parameters = 3; // JSON schema
+}
+
+message ListToolsResponse {
+  repeated ToolInfo tools = 1;
+}
+
+// --- Agents ---
+
+message ListAgentsRequest {}
+
+message AgentListItem {
+  string name = 1;
+  string provider = 2;
+  string model = 3;
+  repeated string tools = 4;
+  int32 max_turns = 5;
+}
+
+message ListAgentsResponse {
+  repeated AgentListItem agents = 1;
+}
+
+message GetAgentRequest {
+  string name = 1;
+}
+
+message GetAgentResponse {
+  string name = 1;
+  string provider = 2;
+  string model = 3;
+  string system_prompt = 4;
+  repeated string tools = 5;
+  int32 max_turns = 6;
+  int32 max_tokens = 7;
+}
+
+// --- Sessions ---
+
+message ListSessionsRequest {}
+
+message SessionMeta {
+  string id = 1;
+  string agent_name = 2;
+  string updated_at = 3;
+}
+
+message ListSessionsResponse {
+  repeated SessionMeta sessions = 1;
+}
+
+message GetSessionRequest {
+  string id = 1;
+}
+
+message GetSessionResponse {
+  string id = 1;
+  string agent_name = 2;
+  repeated Message messages = 3;
+}
+
+message DeleteSessionRequest {
+  string id = 1;
+}
+
+message DeleteSessionResponse {}
+
+// --- Service ---
+
+service AgentService {
+  // Run executes an agent and streams events back.
+  rpc Run(RunRequest) returns (stream AgentEvent);
+
+  // Approve resolves a pending tool approval.
+  rpc Approve(ApproveRequest) returns (ApproveResponse);
+
+  // ListTools returns all registered tools.
+  rpc ListTools(ListToolsRequest) returns (ListToolsResponse);
+
+  // ListAgents returns all loaded agents.
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+
+  // GetAgent returns details for a specific agent.
+  rpc GetAgent(GetAgentRequest) returns (GetAgentResponse);
+
+  // ListSessions returns all persisted sessions.
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+
+  // GetSession returns a specific session with its messages.
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
+
+  // DeleteSession deletes a persisted session.
+  rpc DeleteSession(DeleteSessionRequest) returns (DeleteSessionResponse);
+}
