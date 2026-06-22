@@ -104,8 +104,11 @@ func TestHandleHealth(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", w.Code)
 	}
-	if w.Body.String() != "ok" {
-		t.Errorf("expected body 'ok', got %q", w.Body.String())
+
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["status"] != "up" {
+		t.Errorf("expected status 'up', got %q", resp["status"])
 	}
 }
 

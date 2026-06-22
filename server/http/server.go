@@ -19,6 +19,7 @@ import (
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/telemetry"
 	"github.com/teexue/common-agent/tools/registry"
 )
 
@@ -40,6 +41,7 @@ type Server struct {
 	store       session.Store   // optional session persistence; nil disables session endpoints
 	approver    *HTTPApprover   // handles tool approval flow
 	eventLogger *audit.EventLogger // optional event logging; nil disables replay
+	health      *telemetry.HealthServer
 }
 
 // NewServer creates an HTTP server wiring.
@@ -57,12 +59,18 @@ func NewServer(agentsDir string, reg *registry.Registry, newProvider func(a *age
 		logger:      logger,
 		store:       store,
 		approver:    NewHTTPApprover(),
+		health:      telemetry.NewHealthServer(),
 	}
 }
 
 // SetEventLogger sets the event logger for session replay.
 func (s *Server) SetEventLogger(el *audit.EventLogger) {
 	s.eventLogger = el
+}
+
+// Health returns the health server for adding custom checkers.
+func (s *Server) Health() *telemetry.HealthServer {
+	return s.health
 }
 
 // Handler returns the root Gin engine.
@@ -72,7 +80,9 @@ func (s *Server) Handler() *gin.Engine {
 	r.Use(gin.Recovery())
 
 	// API routes.
-	r.GET("/healthz", s.handleHealth)
+	r.GET("/healthz", gin.WrapF(s.health.HandleHealth))
+	r.GET("/readyz", gin.WrapF(s.health.HandleReady))
+	r.GET("/metrics", gin.WrapF(s.health.HandleMetrics))
 	r.POST("/v1/agents/run", s.handleRun)
 	r.POST("/v1/agents/approve", s.handleApprove)
 	r.GET("/v1/tools", s.handleTools)
@@ -122,10 +132,6 @@ func (s *Server) Handler() *gin.Engine {
 	}
 
 	return r
-}
-
-func (s *Server) handleHealth(c *gin.Context) {
-	c.String(http.StatusOK, "ok")
 }
 
 func (s *Server) handleRun(c *gin.Context) {
