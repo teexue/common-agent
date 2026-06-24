@@ -101,6 +101,12 @@ type anthropicStreamEvent struct {
 		PartialJSON  string `json:"partial_json"`
 		StopReason   string `json:"stop_reason"`
 	} `json:"delta"`
+	Usage *anthropicUsage `json:"usage,omitempty"`
+}
+
+type anthropicUsage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
 }
 
 // Stream implements Provider.
@@ -196,6 +202,22 @@ func convertMessages(msgs []Message) (string, []anthropicMessage) {
 			}
 			out = append(out, anthropicMessage{Role: "assistant", Content: blocks})
 		case RoleTool:
+			// Anthropic requires all tool_result blocks for a single
+			// assistant message to be in ONE user message. Merge
+			// consecutive tool results into the same message.
+			if len(out) > 0 && out[len(out)-1].Role == "user" {
+				// Check if the last user message contains tool_result blocks.
+				last := &out[len(out)-1]
+				isToolResult := len(last.Content) > 0 && last.Content[0].Type == "tool_result"
+				if isToolResult {
+					last.Content = append(last.Content, anthropicBlock{
+						Type:      "tool_result",
+						ToolUseID: m.ToolCallID,
+						Content:   m.Content,
+					})
+					continue
+				}
+			}
 			out = append(out, anthropicMessage{
 				Role: "user",
 				Content: []anthropicBlock{{
@@ -231,6 +253,8 @@ func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk
 		}
 	}
 
+	var inputTokens, outputTokens int
+
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
@@ -249,6 +273,10 @@ func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk
 		}
 
 		switch ev.Type {
+		case "message_start":
+			if ev.Usage != nil {
+				inputTokens = ev.Usage.InputTokens
+			}
 		case "content_block_start":
 			// A new content block means the previous one (if it was a tool_use) is complete.
 			flushLastTool()
@@ -277,6 +305,10 @@ func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk
 				}
 			}
 		case "message_delta":
+			// Capture output tokens from message_delta.
+			if ev.Usage != nil {
+				outputTokens = ev.Usage.OutputTokens
+			}
 			// Flush the last tool call before handling stop reason.
 			flushLastTool()
 			lastToolIdx = -1
@@ -287,7 +319,7 @@ func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk
 				select {
 				case <-ctx.Done():
 					return
-				case ch <- Chunk{Done: true}:
+				case ch <- Chunk{Done: true, InputTokens: inputTokens, OutputTokens: outputTokens}:
 				}
 				return
 			}
@@ -296,7 +328,7 @@ func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk
 			select {
 			case <-ctx.Done():
 				return
-			case ch <- Chunk{Done: true}:
+			case ch <- Chunk{Done: true, InputTokens: inputTokens, OutputTokens: outputTokens}:
 			}
 			return
 		}

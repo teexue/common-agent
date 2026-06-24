@@ -71,12 +71,12 @@ func InitInteractive(home string) error {
 	tui.PrintWelcome("setup", "config", "wizard")
 	fmt.Println(tui.Muted("配置目录: " + home))
 
-	spec, agentName, apiKeyEnv, err := runProviderWizard()
+	spec, agentName, apiKeyEnv, err := RunProviderWizard()
 	if err != nil {
 		return err
 	}
 
-	apiKey, err := inputSecret("API Key")
+	apiKey, err := InputSecret("API Key")
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,9 @@ tool_execution:
 	return nil
 }
 
-func runProviderWizard() (ProviderSpec, string, string, error) {
+// RunProviderWizard runs the interactive provider configuration wizard.
+// Returns the provider spec, agent name, API key env name, and any error.
+func RunProviderWizard() (ProviderSpec, string, string, error) {
 	labels := make([]string, 0, len(providerPresets)+1)
 	for _, p := range providerPresets {
 		labels = append(labels, p.Label)
@@ -331,34 +333,15 @@ func InstallDefaults(home string) error {
 			return err
 		}
 	}
-	scPath := fmt.Sprintf("%s/demo.yaml", AgentsDir(home))
-	if _, err := os.Stat(scPath); os.IsNotExist(err) {
-		content := `name: demo
-version: 1
-provider: moonshot
-model: kimi-k2.6
-system_prompt: |
-  You are a helpful demo assistant. Use tools when appropriate.
-tools:
-  - echo
-  - get_time
-max_turns: 10
-max_tokens: 4096
-tool_execution:
-  mode: parallel
-  max_parallel: 4
-`
-		if err := os.WriteFile(scPath, []byte(content), 0o644); err != nil {
-			return err
-		}
-	}
+	// Install built-in agent templates (skips existing ones).
+	InstallAllTemplates(home)
 	_, err := LoadSettings(home)
 	if err != nil {
 		return err
 	}
 	settingsPath := SettingsFile(home)
 	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
-		return SaveSettings(home, Settings{DefaultAgent: "demo"})
+		return SaveSettings(home, Settings{DefaultAgent: "chat-assistant"})
 	}
 	return nil
 }

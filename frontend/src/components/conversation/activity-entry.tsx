@@ -1,5 +1,11 @@
 import { useState } from "react"
-import { Bot, User } from "lucide-react"
+import {
+  Bot,
+  ChevronDown,
+  ChevronRight,
+  Minimize2,
+  User,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatTimestamp } from "@/lib/format"
 import { MarkdownRenderer } from "@/components/shared/markdown-renderer"
@@ -24,6 +30,11 @@ export function ActivityEntry({
 }: ActivityEntryProps) {
   const [thinkingExpanded, setThinkingExpanded] = useState(false)
   const isUser = entry.role === "user"
+
+  // Compaction banner
+  if (entry.compactionSummary) {
+    return <CompactionBanner summary={entry.compactionSummary} />
+  }
 
   // User messages: compact header row
   if (isUser) {
@@ -60,9 +71,7 @@ export function ActivityEntry({
       <div className="min-w-0 flex-1">
         {/* Header */}
         <div className="flex items-center gap-2">
-          <span className="font-heading text-xs text-foreground">
-            Agent
-          </span>
+          <span className="font-heading text-xs text-foreground">Agent</span>
           <span className="text-[10px] text-muted-foreground">
             {formatTimestamp(entry.timestamp)}
           </span>
@@ -70,6 +79,11 @@ export function ActivityEntry({
             <span className="flex items-center gap-1 text-[10px] text-primary">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
               生成中
+            </span>
+          )}
+          {entry.usage && !entry.isStreaming && (
+            <span className="text-[10px] text-muted-foreground/60">
+              {entry.usage.inputTokens.toLocaleString()} in / {entry.usage.outputTokens.toLocaleString()} out
             </span>
           )}
         </div>
@@ -122,6 +136,38 @@ export function ActivityEntry({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ─── Compaction Banner ────────────────────────────────────────────
+
+function CompactionBanner({ summary }: { summary: string }) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className="mx-1 rounded-xl border border-amber-200/50 bg-amber-50/50 dark:border-amber-800/30 dark:bg-amber-950/20">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+      >
+        <Minimize2 className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+        <span className="flex-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+          上下文已压缩
+        </span>
+        {expanded ? (
+          <ChevronDown className="h-3 w-3 text-amber-500" />
+        ) : (
+          <ChevronRight className="h-3 w-3 text-amber-500" />
+        )}
+      </button>
+      {expanded && (
+        <div className="border-t border-amber-200/50 px-3 py-2 dark:border-amber-800/30">
+          <p className="whitespace-pre-wrap text-xs leading-relaxed text-amber-800/80 dark:text-amber-200/70">
+            {summary}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

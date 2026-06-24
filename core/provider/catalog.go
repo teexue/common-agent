@@ -150,6 +150,28 @@ func (c *Catalog) Names() []string {
 	return names
 }
 
+// ProviderInfo returns summary information about a provider (without secrets).
+type ProviderInfo struct {
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	BaseURL      string `json:"base_url"`
+	DefaultModel string `json:"default_model"`
+}
+
+// Entries returns all configured providers as ProviderInfo (without API keys).
+func (c *Catalog) Entries() []ProviderInfo {
+	infos := make([]ProviderInfo, 0, len(c.entries))
+	for name, entry := range c.entries {
+		infos = append(infos, ProviderInfo{
+			Name:         name,
+			Type:         string(entry.Type),
+			BaseURL:      entry.BaseURL,
+			DefaultModel: entry.DefaultModel,
+		})
+	}
+	return infos
+}
+
 // NewProvider creates a Provider from a profile.
 func NewProvider(profile Profile) (Provider, error) {
 	switch profile.Kind {

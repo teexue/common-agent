@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
 
+	"github.com/teexue/common-agent/core/audit"
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/event"
@@ -45,6 +47,12 @@ func main() {
 		runTools(os.Args[2:], logger)
 	case "config":
 		runConfig(os.Args[2:])
+	case "templates":
+		runTemplates(os.Args[2:])
+	case "validate":
+		runValidate(os.Args[2:])
+	case "skills":
+		runSkills(os.Args[2:])
 	default:
 		usage()
 		os.Exit(1)
@@ -93,7 +101,7 @@ func runServe(args []string, logger *slog.Logger) {
 		os.Exit(1)
 	}
 
-	reg := newRegistry()
+	reg := newRegistry("") // uses current working directory
 
 	var sessStore session.Store
 	if !*mock {
@@ -104,16 +112,26 @@ func runServe(args []string, logger *slog.Logger) {
 		}
 	}
 
+	// Event logger for session replay.
+	eventLogger := audit.NewEventLogger(filepath.Join(paths.home, "events"))
+
 	// HTTP server.
 	srv := httpapi.NewServer(paths.agentsDir, reg, resolveProvider(catalog, *mock), distFS(), logger, sessStore)
+	srv.SetEventLogger(eventLogger)
+	if catalog != nil {
+		srv.SetCatalog(catalog)
+	}
+	srv.StartWatcher()
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	srv.SetShutdownCtx(ctx)
+
 	httpServer := &http.Server{
 		Addr:              *addr,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	// Start gRPC server if --grpc-addr is set.
 	var grpcServer *grpc.Server
@@ -206,7 +224,7 @@ func runCLI(args []string, logger *slog.Logger) {
 		os.Exit(1)
 	}
 
-	reg := newRegistry()
+	reg := newRegistry("") // uses current working directory
 	sess := session.New(a.Name)
 	events, err := loop.Run(context.Background(), loop.Config{
 		Provider: p,
@@ -243,15 +261,15 @@ func runTools(args []string, _ *slog.Logger) {
 	agentName := fs.String("agent", "", "validate tools for an agent")
 	_ = fs.Parse(args)
 
-	reg := newRegistry()
+	home, err := config.Home(false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	reg := newRegistry("") // uses current working directory
 
 	if *agentName != "" {
 		// Validate agent tools against registry.
-		home, err := config.Home(false)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
-			os.Exit(1)
-		}
 		a, err := agent.LoadByNameAndValidate(config.AgentsDir(home), *agentName, reg.Names())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)

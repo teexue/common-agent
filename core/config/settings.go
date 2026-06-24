@@ -18,7 +18,7 @@ func LoadSettings(home string) (Settings, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return Settings{DefaultAgent: "demo"}, nil
+			return Settings{DefaultAgent: "chat-assistant"}, nil
 		}
 		return Settings{}, fmt.Errorf("read settings: %w", err)
 	}
@@ -27,7 +27,7 @@ func LoadSettings(home string) (Settings, error) {
 		return Settings{}, fmt.Errorf("parse settings: %w", err)
 	}
 	if s.DefaultAgent == "" {
-		s.DefaultAgent = "demo"
+		s.DefaultAgent = "chat-assistant"
 	}
 	return s, nil
 }

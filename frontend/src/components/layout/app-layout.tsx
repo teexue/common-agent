@@ -5,7 +5,13 @@ import {
 } from "@/components/ui/resizable"
 import { TopBar } from "./top-bar"
 import { Sidebar } from "./sidebar"
-import type { AgentInfo, SessionMeta, StreamStatus, ToolInfo } from "@/types/agent"
+import type {
+  AgentInfo,
+  SessionMeta,
+  SkillInfo,
+  StreamStatus,
+  ToolInfo,
+} from "@/types/agent"
 
 interface AppLayoutProps {
   // Sidebar
@@ -23,6 +29,13 @@ interface AppLayoutProps {
   activeSessionId?: string | null
   onResumeSession?: (id: string) => void
   onDeleteSession?: (id: string) => void
+  onReplaySession?: (id: string) => void
+  // Agent management
+  onViewAgent?: (name: string) => void
+  onEditAgent?: (name: string) => void
+  onDeleteAgent?: (name: string) => void
+  onCreateAgent?: () => void
+  skills?: SkillInfo[]
 
   // Top bar
   agent: AgentInfo
@@ -51,6 +64,12 @@ export function AppLayout({
   activeSessionId,
   onResumeSession,
   onDeleteSession,
+  onReplaySession,
+  onViewAgent,
+  onEditAgent,
+  onDeleteAgent,
+  onCreateAgent,
+  skills,
   agent,
   status,
   inspectorOpen,
@@ -76,6 +95,12 @@ export function AppLayout({
         activeSessionId={activeSessionId}
         onResumeSession={onResumeSession}
         onDeleteSession={onDeleteSession}
+        onReplaySession={onReplaySession}
+        onViewAgent={onViewAgent}
+        onEditAgent={onEditAgent}
+        onDeleteAgent={onDeleteAgent}
+        onCreateAgent={onCreateAgent}
+        skills={skills}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">

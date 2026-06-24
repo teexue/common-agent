@@ -10,7 +10,7 @@ import (
 
 func TestRegisterAndGet(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	tool, ok := reg.Get("echo")
 	if !ok {
@@ -23,7 +23,7 @@ func TestRegisterAndGet(t *testing.T) {
 
 func TestRegisterDuplicate(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 	// Try registering echo again.
 	var e builtin.Echo
 	if err := reg.Register(e); err == nil {
@@ -43,7 +43,7 @@ func TestRegisterEmptyName(t *testing.T) {
 
 func TestDefinitions(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	defs, err := reg.Definitions([]string{"echo", "get_time"})
 	if err != nil {
@@ -67,18 +67,18 @@ func TestDefinitionsUnknownTool(t *testing.T) {
 
 func TestNames(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	names := reg.Names()
-	if len(names) != 2 {
-		t.Fatalf("got %d names, want 2", len(names))
+	if len(names) != 10 {
+		t.Fatalf("got %d names, want 10", len(names))
 	}
 	// Names should be sorted.
-	if names[0] != "echo" {
-		t.Fatalf("names[0] = %q, want echo", names[0])
+	if names[0] != "create_directory" {
+		t.Fatalf("names[0] = %q, want create_directory", names[0])
 	}
-	if names[1] != "get_time" {
-		t.Fatalf("names[1] = %q, want get_time", names[1])
+	if names[1] != "echo" {
+		t.Fatalf("names[1] = %q, want echo", names[1])
 	}
 }
 
@@ -92,24 +92,24 @@ func TestNamesEmpty(t *testing.T) {
 
 func TestList(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	tools := reg.List()
-	if len(tools) != 2 {
-		t.Fatalf("got %d tools, want 2", len(tools))
+	if len(tools) != 10 {
+		t.Fatalf("got %d tools, want 10", len(tools))
 	}
 	// List should be sorted by name.
-	if tools[0].Name() != "echo" {
-		t.Fatalf("tools[0].Name() = %q, want echo", tools[0].Name())
+	if tools[0].Name() != "create_directory" {
+		t.Fatalf("tools[0].Name() = %q, want create_directory", tools[0].Name())
 	}
-	if tools[1].Name() != "get_time" {
-		t.Fatalf("tools[1].Name() = %q, want get_time", tools[1].Name())
+	if tools[1].Name() != "echo" {
+		t.Fatalf("tools[1].Name() = %q, want echo", tools[1].Name())
 	}
 }
 
 func TestValidateTools(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	if err := reg.ValidateTools([]string{"echo", "get_time"}); err != nil {
 		t.Fatalf("ValidateTools: %v", err)
@@ -118,7 +118,7 @@ func TestValidateTools(t *testing.T) {
 
 func TestValidateToolsMissing(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	err := reg.ValidateTools([]string{"echo", "nonexistent", "also_missing"})
 	if err == nil {
@@ -135,7 +135,7 @@ func TestValidateToolsMissing(t *testing.T) {
 
 func TestValidateToolsEmpty(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	// Empty list should be valid.
 	if err := reg.ValidateTools([]string{}); err != nil {

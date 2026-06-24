@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  GitBranch,
   Loader2,
   ShieldCheck,
   ShieldQuestion,
@@ -66,6 +67,12 @@ const statusConfig = {
     color: "text-warning",
     bg: "bg-warning/10",
     label: "待审批",
+  },
+  sub_agent_running: {
+    icon: GitBranch,
+    color: "text-blue-500",
+    bg: "bg-blue-500/10",
+    label: "委派中",
   },
 }
 
@@ -135,7 +142,7 @@ export function ToolOperationCard({
               config.bg
             )}
           >
-            {toolCall.status === "running" ? (
+            {toolCall.status === "running" || toolCall.status === "sub_agent_running" ? (
               <Loader2
                 className={cn("h-3.5 w-3.5 animate-spin", config.color)}
               />
@@ -169,6 +176,8 @@ export function ToolOperationCard({
                   "bg-destructive/10 text-destructive",
                 toolCall.status === "running" &&
                   "bg-primary/10 text-primary",
+                toolCall.status === "sub_agent_running" &&
+                  "bg-blue-500/10 text-blue-500",
                 (toolCall.status === "denied" || toolCall.status === "pending_approval") &&
                   "bg-warning/10 text-warning"
               )}

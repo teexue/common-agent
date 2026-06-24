@@ -53,8 +53,24 @@ func (GetTime) Execute(_ context.Context, _ json.RawMessage) (tool.Result, error
 	return tool.Result{Output: out}, nil
 }
 
-// RegisterAll registers built-in tools.
-func RegisterAll(r *registry.Registry) {
+// RegisterAll registers all built-in tools.
+// workDir is the sandbox root for file operation tools (typically the agent's home directory).
+func RegisterAll(r *registry.Registry, workDir string) {
+	// Existing tools
 	r.MustRegister(Echo{})
 	r.MustRegister(GetTime{})
+
+	// File operation tools
+	r.MustRegister(ReadFile{WorkDir: workDir})
+	r.MustRegister(WriteFile{WorkDir: workDir})
+	r.MustRegister(ListDirectory{WorkDir: workDir})
+	r.MustRegister(EditFile{WorkDir: workDir})
+	r.MustRegister(CreateDirectory{WorkDir: workDir})
+	r.MustRegister(SearchFiles{WorkDir: workDir})
+
+	// Command execution
+	r.MustRegister(RunCommand{WorkDir: workDir})
+
+	// Network
+	r.MustRegister(WebFetch{})
 }

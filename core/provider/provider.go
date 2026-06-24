@@ -56,6 +56,10 @@ type Chunk struct {
 	ReasoningDelta string
 	ToolCalls      []ToolCall
 	Done           bool
+
+	// Usage is populated on the final chunk when the provider reports token counts.
+	InputTokens  int `json:"input_tokens,omitempty"`
+	OutputTokens int `json:"output_tokens,omitempty"`
 }
 
 // ThinkingConfig controls Kimi-style reasoning mode (OpenAI-compatible extensions).

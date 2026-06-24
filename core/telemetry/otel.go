@@ -2,13 +2,103 @@ package telemetry
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/metric"
+	metricSDK "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	traceSDK "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
 )
+
+// Init initializes OpenTelemetry with an OTLP gRPC exporter.
+// If OTEL_EXPORTER_OTLP_ENDPOINT is not set, it returns a no-op Telemetry
+// with zero overhead (global providers stay as no-op).
+// Returns the Telemetry instance and a shutdown function.
+func Init(ctx context.Context, serviceName string) (*Telemetry, func(context.Context) error, error) {
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if endpoint == "" {
+		// No endpoint configured — return no-op telemetry.
+		return newNoopTelemetry(serviceName)
+	}
+
+	// Create resource with service info.
+	res, err := resource.Merge(
+		resource.Default(),
+		resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceName(serviceName),
+		),
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Setup trace exporter + provider.
+	traceExporter, err := otlptracegrpc.New(ctx,
+		otlptracegrpc.WithEndpoint(endpoint),
+		otlptracegrpc.WithInsecure(),
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	tp := traceSDK.NewTracerProvider(
+		traceSDK.WithBatcher(traceExporter),
+		traceSDK.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+
+	// Setup metric exporter + provider.
+	metricExporter, err := otlpmetricgrpc.New(ctx,
+		otlpmetricgrpc.WithEndpoint(endpoint),
+		otlpmetricgrpc.WithInsecure(),
+	)
+	if err != nil {
+		tp.Shutdown(ctx)
+		return nil, nil, err
+	}
+	mp := metricSDK.NewMeterProvider(
+		metricSDK.WithReader(metricSDK.NewPeriodicReader(metricExporter)),
+		metricSDK.WithResource(res),
+	)
+	otel.SetMeterProvider(mp)
+
+	t, err := New(serviceName)
+	if err != nil {
+		tp.Shutdown(ctx)
+		mp.Shutdown(ctx)
+		return nil, nil, err
+	}
+
+	shutdown := func(ctx context.Context) error {
+		if err := tp.Shutdown(ctx); err != nil {
+			return err
+		}
+		return mp.Shutdown(ctx)
+	}
+
+	return t, shutdown, nil
+}
+
+// newNoopTelemetry creates a Telemetry using the global no-op providers.
+// When no OTLP endpoint is configured, OTel's default global providers are
+// no-op implementations with zero overhead.
+func newNoopTelemetry(serviceName string) (*Telemetry, func(context.Context) error, error) {
+	// The global providers are no-op by default (before Init).
+	// New() uses otel.Tracer/otel.Meter which return no-op implementations.
+	t, err := New(serviceName)
+	if err != nil {
+		return nil, nil, err
+	}
+	shutdown := func(_ context.Context) error { return nil }
+	return t, shutdown, nil
+}
 
 // Telemetry holds OpenTelemetry tracer and meter instances.
 type Telemetry struct {

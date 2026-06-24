@@ -7,6 +7,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { StatusIndicator } from "@/components/shared/status-indicator"
+import { HealthIndicator } from "@/components/monitoring/health-indicator"
 import type { AgentInfo, StreamStatus } from "@/types/agent"
 
 interface TopBarProps {
@@ -44,6 +45,8 @@ export function TopBar({
       </div>
 
       <div className="flex items-center gap-0.5">
+        <HealthIndicator />
+
         <Tooltip>
           <TooltipTrigger
             render={

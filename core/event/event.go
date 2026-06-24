@@ -46,8 +46,10 @@ type Event struct {
 	Message string `json:"message,omitempty"`
 
 	// done
-	Status string `json:"status,omitempty"`
-	Turns  int    `json:"turns,omitempty"`
+	Status       string `json:"status,omitempty"`
+	Turns        int    `json:"turns,omitempty"`
+	InputTokens  int    `json:"input_tokens,omitempty"`
+	OutputTokens int    `json:"output_tokens,omitempty"`
 }
 
 // StreamEvents writes JSON-line events to w until done or ctx cancelled.

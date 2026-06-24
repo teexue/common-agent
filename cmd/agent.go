@@ -1,15 +1,23 @@
 package main
 
 import (
+	"os"
+
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/tools/builtin"
 	"github.com/teexue/common-agent/tools/registry"
 )
 
-func newRegistry() *registry.Registry {
+func newRegistry(workDir string) *registry.Registry {
+	// If no workDir specified, use current working directory.
+	if workDir == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			workDir = cwd
+		}
+	}
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, workDir)
 	return reg
 }
 

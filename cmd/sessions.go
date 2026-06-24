@@ -142,7 +142,7 @@ func sessionsResume(args []string, logger *slog.Logger) {
 		agent:    a,
 		provider: p,
 		sess:     loaded,
-		reg:      newRegistry(),
+		reg:      newRegistry(""), // uses current working directory
 	}
 
 	fmt.Println(tui.Success(fmt.Sprintf("已恢复会话 %s (%s)", loaded.ID, loaded.Agent)))

@@ -46,12 +46,16 @@ type HealthServer struct {
 	// Runtime metrics.
 	activeSessions atomic.Int64
 	startTime      time.Time
+
+	// Per-agent metrics.
+	AgentMetrics *AgentMetrics
 }
 
 // NewHealthServer creates a HealthServer.
 func NewHealthServer() *HealthServer {
 	return &HealthServer{
-		startTime: time.Now(),
+		startTime:    time.Now(),
+		AgentMetrics: NewAgentMetrics(),
 	}
 }
 
@@ -119,11 +123,12 @@ func (h *HealthServer) HandleReady(w http.ResponseWriter, r *http.Request) {
 
 // MetricsResponse is the JSON response for /metrics.
 type MetricsResponse struct {
-	Goroutines      int    `json:"goroutines"`
-	HeapAllocBytes  uint64 `json:"heap_alloc_bytes"`
-	HeapSysBytes    uint64 `json:"heap_sys_bytes"`
-	ActiveSessions  int64  `json:"active_sessions"`
-	UptimeSeconds   int64  `json:"uptime_seconds"`
+	Goroutines      int                        `json:"goroutines"`
+	HeapAllocBytes  uint64                     `json:"heap_alloc_bytes"`
+	HeapSysBytes    uint64                     `json:"heap_sys_bytes"`
+	ActiveSessions  int64                      `json:"active_sessions"`
+	UptimeSeconds   int64                      `json:"uptime_seconds"`
+	Agents          map[string]AgentStatsView  `json:"agents,omitempty"`
 }
 
 // HandleMetrics handles GET /metrics — returns runtime metrics.
@@ -137,6 +142,7 @@ func (h *HealthServer) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 		HeapSysBytes:   m.HeapSys,
 		ActiveSessions: h.activeSessions.Load(),
 		UptimeSeconds:  int64(time.Since(h.startTime).Seconds()),
+		Agents:         h.AgentMetrics.All(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")

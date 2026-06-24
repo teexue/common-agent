@@ -39,7 +39,8 @@ func configUsage() {
   agent-server config path
   agent-server config set-key MOONSHOT_API_KEY sk-...
   agent-server config set default-agent demo [--home ...]
-  agent-server config set provider moonshot \
+  agent-server config set provider             # interactive wizard
+  agent-server config set provider moonshot \  # scripted mode
     --type openai --base-url https://api.moonshot.cn/v1 \
     --api-key-env MOONSHOT_API_KEY --model kimi-k2.6 [--thinking disabled]
 `)
@@ -186,6 +187,65 @@ func runConfigSetDefaultAgent(args []string) {
 }
 
 func runConfigSetProvider(args []string) {
+	// Check if flags were passed (for scripted use).
+	hasFlags := len(args) > 0 && strings.HasPrefix(args[0], "-")
+	// Check if a provider name was passed positionally with additional flags.
+	hasPositionalWithFlags := len(args) >= 2 && !strings.HasPrefix(args[0], "-") && !strings.HasPrefix(args[1], "-")
+
+	if hasFlags || hasPositionalWithFlags {
+		runConfigSetProviderFlags(args)
+		return
+	}
+
+	// Interactive mode: no flags or only --home.
+	homeFlag := ""
+	if len(args) >= 2 && args[0] == "--home" {
+		homeFlag = args[1]
+	} else if len(args) == 1 && strings.HasPrefix(args[0], "--home=") {
+		homeFlag = strings.TrimPrefix(args[0], "--home=")
+	}
+
+	paths, err := resolvePaths(homeFlag)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	spec, _, apiKeyEnv, err := config.RunProviderWizard()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	if err := config.UpsertProvider(paths.home, spec); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Printf("provider %q updated in %s\n", spec.Name, config.ProvidersFile(paths.home))
+
+	// Prompt for API key if not already set.
+	creds, err := config.NewCredentialStore(paths.home)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if creds.Lookup(apiKeyEnv) == "" {
+		apiKey, err := config.InputSecret("API Key")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		if strings.TrimSpace(apiKey) != "" {
+			if err := creds.Set(apiKeyEnv, apiKey); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			fmt.Printf("saved %s to %s\n", apiKeyEnv, config.CredentialsFile(paths.home))
+		}
+	}
+}
+
+func runConfigSetProviderFlags(args []string) {
 	fs := flag.NewFlagSet("config set provider", flag.ExitOnError)
 	homeFlag := fs.String("home", "", "config home")
 	pType := fs.String("type", "openai", "provider type: anthropic|openai")

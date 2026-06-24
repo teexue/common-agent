@@ -50,13 +50,18 @@ type openAIThinking struct {
 	Keep *string `json:"keep,omitempty"`
 }
 
+type openAIStreamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
+}
+
 type openAIRequest struct {
-	Model     string          `json:"model"`
-	Messages  []openAIMessage `json:"messages"`
-	Tools     []openAITool    `json:"tools,omitempty"`
-	Stream    bool            `json:"stream"`
-	MaxTokens int             `json:"max_tokens,omitempty"`
-	Thinking  *openAIThinking `json:"thinking,omitempty"`
+	Model         string              `json:"model"`
+	Messages      []openAIMessage     `json:"messages"`
+	Tools         []openAITool        `json:"tools,omitempty"`
+	Stream        bool                `json:"stream"`
+	StreamOptions *openAIStreamOptions `json:"stream_options,omitempty"`
+	MaxTokens     int                 `json:"max_tokens,omitempty"`
+	Thinking      *openAIThinking     `json:"thinking,omitempty"`
 }
 
 type openAIMessage struct {
@@ -100,6 +105,12 @@ type openAIStreamResponse struct {
 		} `json:"delta"`
 		FinishReason *string `json:"finish_reason"`
 	} `json:"choices"`
+	Usage *openAIUsage `json:"usage,omitempty"`
+}
+
+type openAIUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
 }
 
 // Stream implements Provider.
@@ -177,7 +188,14 @@ func (o *OpenAI) buildRequest(req Request) openAIRequest {
 	if maxTokens <= 0 {
 		maxTokens = 4096
 	}
-	out := openAIRequest{Model: req.Model, Messages: msgs, Tools: tools, Stream: true, MaxTokens: maxTokens}
+	out := openAIRequest{
+		Model:         req.Model,
+		Messages:      msgs,
+		Tools:         tools,
+		Stream:        true,
+		StreamOptions: &openAIStreamOptions{IncludeUsage: true},
+		MaxTokens:     maxTokens,
+	}
 	if o.thinking != nil && o.thinking.Type != "" {
 		th := openAIThinking{Type: o.thinking.Type}
 		if o.thinking.Keep != "" {
@@ -212,6 +230,7 @@ func (o *OpenAI) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 
 	toolAcc := map[int]*ToolCall{}
+	var lastUsage *openAIUsage
 
 	for scanner.Scan() {
 		select {
@@ -226,7 +245,12 @@ func (o *OpenAI) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
 		}
 		data := strings.TrimPrefix(line, "data: ")
 		if data == "[DONE]" {
-			ch <- Chunk{Done: true}
+			doneChunk := Chunk{Done: true}
+			if lastUsage != nil {
+				doneChunk.InputTokens = lastUsage.PromptTokens
+				doneChunk.OutputTokens = lastUsage.CompletionTokens
+			}
+			ch <- doneChunk
 			return
 		}
 
@@ -234,6 +258,12 @@ func (o *OpenAI) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
 		if err := json.Unmarshal([]byte(data), &stream); err != nil {
 			continue
 		}
+
+		// Capture usage from the final chunk (sent with empty choices).
+		if stream.Usage != nil {
+			lastUsage = stream.Usage
+		}
+
 		if len(stream.Choices) == 0 {
 			continue
 		}

@@ -56,7 +56,7 @@ func TestInstallDefaults(t *testing.T) {
 	if err := config.InstallDefaults(dir); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(config.AgentsDir(dir), "demo.yaml")); err != nil {
+	if _, err := os.Stat(filepath.Join(config.AgentsDir(dir), "chat-assistant.yaml")); err != nil {
 		t.Fatal(err)
 	}
 }

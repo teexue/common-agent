@@ -1,5 +1,9 @@
 import { useCallback, useRef, useReducer } from "react"
-import type { AgentEvent, ConversationEntry, ToolCallEntry } from "@/types/agent"
+import type {
+  AgentEvent,
+  ConversationEntry,
+  ToolCallEntry,
+} from "@/types/agent"
 
 // ─── Message conversion (frontend → backend) ─────────────────────
 
@@ -40,7 +44,10 @@ function toBackendMessages(entries: ConversationEntry[]): BackendMessage[] {
               role: "tool",
               tool_call_id: tc.id,
               name: tc.name,
-              content: typeof tc.output === "string" ? tc.output : JSON.stringify(tc.output),
+              content:
+                typeof tc.output === "string"
+                  ? tc.output
+                  : JSON.stringify(tc.output),
             })
           }
         }
@@ -72,16 +79,46 @@ type ChatAction =
   | { type: "APPEND_TEXT"; entryId: string; content: string }
   | { type: "APPEND_REASONING"; entryId: string; content: string }
   | { type: "TOOL_START"; entryId: string; toolCall: ToolCallEntry }
-  | { type: "TOOL_RESULT"; entryId: string; toolName: string; toolCallId?: string; output: unknown }
-  | { type: "TOOL_DENIED"; entryId: string; toolName: string; toolCallId?: string; output: unknown }
-  | { type: "TOOL_APPROVAL_REQUIRED"; entryId: string; toolName: string; toolCallId?: string; approvalId?: string }
-  | { type: "STREAM_DONE"; entryId: string; status: string; turns: number }
+  | {
+      type: "TOOL_RESULT"
+      entryId: string
+      toolName: string
+      toolCallId?: string
+      output: unknown
+    }
+  | {
+      type: "TOOL_DENIED"
+      entryId: string
+      toolName: string
+      toolCallId?: string
+      output: unknown
+    }
+  | {
+      type: "TOOL_APPROVAL_REQUIRED"
+      entryId: string
+      toolName: string
+      toolCallId?: string
+      approvalId?: string
+    }
+  | { type: "COMPACTION"; summary: string }
+  | { type: "SUB_AGENT_START"; entryId: string; toolCall: ToolCallEntry }
+  | {
+      type: "SUB_AGENT_END"
+      entryId: string
+      toolName: string
+      toolCallId?: string
+    }
+  | { type: "STREAM_DONE"; entryId: string; status: string; turns: number; inputTokens?: number; outputTokens?: number }
   | { type: "STREAM_ERROR"; message: string }
   | { type: "CLEAR" }
   | { type: "SET_SESSION_ID"; sessionId: string | null }
   | { type: "LOAD_SESSION"; sessionId: string; messages: ConversationEntry[] }
 
-function matchesToolCall(tc: ToolCallEntry, toolName: string, toolCallId?: string): boolean {
+function matchesToolCall(
+  tc: ToolCallEntry,
+  toolName: string,
+  toolCallId?: string
+): boolean {
   if (toolCallId && tc.toolCallId) {
     return tc.toolCallId === toolCallId
   }
@@ -97,7 +134,11 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         content: action.text,
         timestamp: Date.now(),
       }
-      return { ...state, messages: [...state.messages, userEntry], error: null }
+      return {
+        ...state,
+        messages: [...state.messages, userEntry],
+        error: null,
+      }
     }
 
     case "START_ASSISTANT": {
@@ -110,7 +151,11 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         timestamp: Date.now(),
         isStreaming: true,
       }
-      return { ...state, messages: [...state.messages, assistantEntry], isStreaming: true }
+      return {
+        ...state,
+        messages: [...state.messages, assistantEntry],
+        isStreaming: true,
+      }
     }
 
     case "APPEND_TEXT": {
@@ -129,7 +174,11 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         messages: state.messages.map((m) =>
           m.id === action.entryId
-            ? { ...m, reasoningContent: (m.reasoningContent ?? "") + action.content }
+            ? {
+                ...m,
+                reasoningContent:
+                  (m.reasoningContent ?? "") + action.content,
+              }
             : m
         ),
       }
@@ -140,7 +189,10 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         messages: state.messages.map((m) =>
           m.id === action.entryId
-            ? { ...m, toolCalls: [...(m.toolCalls ?? []), action.toolCall] }
+            ? {
+                ...m,
+                toolCalls: [...(m.toolCalls ?? []), action.toolCall],
+              }
             : m
         ),
       }
@@ -155,7 +207,12 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                 ...m,
                 toolCalls: m.toolCalls?.map((tc) =>
                   matchesToolCall(tc, action.toolName, action.toolCallId)
-                    ? { ...tc, output: action.output, status: "completed" as const, endTime: Date.now() }
+                    ? {
+                        ...tc,
+                        output: action.output,
+                        status: "completed" as const,
+                        endTime: Date.now(),
+                      }
                     : tc
                 ),
               }
@@ -173,7 +230,12 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                 ...m,
                 toolCalls: m.toolCalls?.map((tc) =>
                   matchesToolCall(tc, action.toolName, action.toolCallId)
-                    ? { ...tc, output: action.output, status: "denied" as const, endTime: Date.now() }
+                    ? {
+                        ...tc,
+                        output: action.output,
+                        status: "denied" as const,
+                        endTime: Date.now(),
+                      }
                     : tc
                 ),
               }
@@ -191,7 +253,61 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                 ...m,
                 toolCalls: m.toolCalls?.map((tc) =>
                   matchesToolCall(tc, action.toolName, action.toolCallId)
-                    ? { ...tc, status: "pending_approval" as const, approvalId: action.approvalId }
+                    ? {
+                        ...tc,
+                        status: "pending_approval" as const,
+                        approvalId: action.approvalId,
+                      }
+                    : tc
+                ),
+              }
+            : m
+        ),
+      }
+    }
+
+    case "COMPACTION": {
+      const compactionEntry: ConversationEntry = {
+        id: `compaction-${Date.now()}`,
+        role: "system",
+        content: "",
+        compactionSummary: action.summary,
+        timestamp: Date.now(),
+      }
+      return {
+        ...state,
+        messages: [...state.messages, compactionEntry],
+      }
+    }
+
+    case "SUB_AGENT_START": {
+      return {
+        ...state,
+        messages: state.messages.map((m) =>
+          m.id === action.entryId
+            ? {
+                ...m,
+                toolCalls: [...(m.toolCalls ?? []), action.toolCall],
+              }
+            : m
+        ),
+      }
+    }
+
+    case "SUB_AGENT_END": {
+      return {
+        ...state,
+        messages: state.messages.map((m) =>
+          m.id === action.entryId
+            ? {
+                ...m,
+                toolCalls: m.toolCalls?.map((tc) =>
+                  matchesToolCall(tc, action.toolName, action.toolCallId)
+                    ? {
+                        ...tc,
+                        status: "completed" as const,
+                        endTime: Date.now(),
+                      }
                     : tc
                 ),
               }
@@ -205,7 +321,19 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         isStreaming: false,
         messages: state.messages.map((m) =>
-          m.id === action.entryId ? { ...m, isStreaming: false } : m
+          m.id === action.entryId
+            ? {
+                ...m,
+                isStreaming: false,
+                usage:
+                  action.inputTokens || action.outputTokens
+                    ? {
+                        inputTokens: action.inputTokens ?? 0,
+                        outputTokens: action.outputTokens ?? 0,
+                      }
+                    : m.usage,
+              }
+            : m
         ),
       }
     }
@@ -279,7 +407,7 @@ function fromBackendMessages(msgs: BackendMsg[]): ConversationEntry[] {
         role: "assistant",
         content: msg.content ?? "",
         reasoningContent: msg.reasoning_content,
-        toolCalls: msg.tool_calls?.map((tc) => ({
+        toolCalls: (msg.tool_calls ?? []).map((tc) => ({
           id: tc.id,
           name: tc.name,
           input: tc.arguments,
@@ -311,7 +439,7 @@ export function useChat() {
   sessionIdRef.current = state.sessionId
 
   const sendMessage = useCallback(
-    async (text: string, agent: string) => {
+    async (text: string, agent: string, workDir?: string) => {
       // Abort any in-flight request
       abortRef.current?.abort()
       const controller = new AbortController()
@@ -334,6 +462,10 @@ export function useChat() {
         // Send session_id if we have one (for resume/continue)
         if (sessionIdRef.current) {
           body.session_id = sessionIdRef.current
+        }
+        // Send workdir if specified
+        if (workDir) {
+          body.workdir = workDir
         }
 
         const res = await fetch("/v1/agents/run", {
@@ -372,13 +504,21 @@ export function useChat() {
             switch (event.type) {
               case "text_delta":
                 if (event.content) {
-                  dispatch({ type: "APPEND_TEXT", entryId, content: event.content })
+                  dispatch({
+                    type: "APPEND_TEXT",
+                    entryId,
+                    content: event.content,
+                  })
                 }
                 break
 
               case "reasoning_delta":
                 if (event.content) {
-                  dispatch({ type: "APPEND_REASONING", entryId, content: event.content })
+                  dispatch({
+                    type: "APPEND_REASONING",
+                    entryId,
+                    content: event.content,
+                  })
                 }
                 break
 
@@ -399,9 +539,16 @@ export function useChat() {
 
               case "tool_result": {
                 // Check if this is a permission denied result
-                const output = event.output as Record<string, unknown> | undefined
-                const isDenied = output && typeof output === "object" && "error" in output &&
-                  (output.error === "permission denied" || output.error === "tool requires approval" || output.error === "tool approval denied")
+                const output = event.output as
+                  | Record<string, unknown>
+                  | undefined
+                const isDenied =
+                  output &&
+                  typeof output === "object" &&
+                  "error" in output &&
+                  (output.error === "permission denied" ||
+                    output.error === "tool requires approval" ||
+                    output.error === "tool approval denied")
                 dispatch({
                   type: isDenied ? "TOOL_DENIED" : "TOOL_RESULT",
                   entryId,
@@ -422,8 +569,41 @@ export function useChat() {
                 })
                 break
 
+              case "compaction":
+                if (event.content) {
+                  dispatch({ type: "COMPACTION", summary: event.content })
+                }
+                break
+
+              case "sub_agent_start":
+                dispatch({
+                  type: "SUB_AGENT_START",
+                  entryId,
+                  toolCall: {
+                    id: `sa-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    toolCallId: event.tool_call_id,
+                    name: event.tool ?? "sub-agent",
+                    input: event.content ?? "",
+                    status: "sub_agent_running",
+                    startTime: Date.now(),
+                  },
+                })
+                break
+
+              case "sub_agent_end":
+                dispatch({
+                  type: "SUB_AGENT_END",
+                  entryId,
+                  toolName: event.tool ?? "sub-agent",
+                  toolCallId: event.tool_call_id,
+                })
+                break
+
               case "error":
-                dispatch({ type: "STREAM_ERROR", message: event.message ?? "Unknown error" })
+                dispatch({
+                  type: "STREAM_ERROR",
+                  message: event.message ?? "Unknown error",
+                })
                 return
 
               case "done":
@@ -432,6 +612,8 @@ export function useChat() {
                   entryId,
                   status: event.status ?? "completed",
                   turns: event.turns ?? 0,
+                  inputTokens: event.input_tokens,
+                  outputTokens: event.output_tokens,
                 })
                 return
             }
@@ -439,7 +621,12 @@ export function useChat() {
         }
 
         // Stream ended without a done event
-        dispatch({ type: "STREAM_DONE", entryId, status: "completed", turns: 0 })
+        dispatch({
+          type: "STREAM_DONE",
+          entryId,
+          status: "completed",
+          turns: 0,
+        })
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === "AbortError") return
         dispatch({
@@ -455,7 +642,12 @@ export function useChat() {
     abortRef.current?.abort()
     abortRef.current = null
     // Reset streaming state when aborting.
-    dispatch({ type: "STREAM_DONE", entryId: "", status: "cancelled", turns: 0 })
+    dispatch({
+      type: "STREAM_DONE",
+      entryId: "",
+      status: "cancelled",
+      turns: 0,
+    })
   }, [])
 
   const clear = useCallback(() => {

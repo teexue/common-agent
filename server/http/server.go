@@ -1,24 +1,29 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/audit"
+	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/skill"
 	"github.com/teexue/common-agent/core/telemetry"
 	"github.com/teexue/common-agent/tools/registry"
 )
@@ -29,11 +34,13 @@ type RunRequest struct {
 	Prompt    string            `json:"prompt"`
 	SessionID string            `json:"session_id,omitempty"`
 	Messages  []provider.Message `json:"messages,omitempty"`
+	WorkDir   string            `json:"workdir,omitempty"` // working directory for file tools
 }
 
 // Server exposes agent HTTP endpoints via Gin.
 type Server struct {
 	agentsDir   string
+	skillsDir   string
 	registry    *registry.Registry
 	newProvider func(a *agent.Agent) (provider.Provider, error)
 	staticFS    fs.FS // optional embedded frontend; nil disables static serving
@@ -41,7 +48,20 @@ type Server struct {
 	store       session.Store   // optional session persistence; nil disables session endpoints
 	approver    *HTTPApprover   // handles tool approval flow
 	eventLogger *audit.EventLogger // optional event logging; nil disables replay
+	catalog     *provider.Catalog  // optional provider catalog; nil disables provider listing
+	auditStore  *audit.AuditStore  // optional audit store; nil disables audit export
 	health      *telemetry.HealthServer
+	watcher     *agent.Watcher    // watches agents dir for changes
+	shutdownCtx context.Context   // cancelled on server shutdown; nil = no shutdown propagation
+
+	// changeCh broadcasts agent file change events to SSE subscribers.
+	changeCh    chan agentChange
+}
+
+// agentChange is the JSON payload sent to frontend via SSE.
+type agentChange struct {
+	Type string `json:"type"` // "agent_created" | "agent_updated" | "agent_deleted"
+	Name string `json:"name"`
 }
 
 // NewServer creates an HTTP server wiring.
@@ -53,6 +73,7 @@ func NewServer(agentsDir string, reg *registry.Registry, newProvider func(a *age
 	}
 	return &Server{
 		agentsDir:   agentsDir,
+		skillsDir:   filepath.Join(filepath.Dir(agentsDir), "skills"),
 		registry:    reg,
 		newProvider: newProvider,
 		staticFS:    staticFS,
@@ -60,12 +81,62 @@ func NewServer(agentsDir string, reg *registry.Registry, newProvider func(a *age
 		store:       store,
 		approver:    NewHTTPApprover(),
 		health:      telemetry.NewHealthServer(),
+		changeCh:    make(chan agentChange, 16),
 	}
 }
 
 // SetEventLogger sets the event logger for session replay.
 func (s *Server) SetEventLogger(el *audit.EventLogger) {
 	s.eventLogger = el
+}
+
+// SetShutdownCtx sets a context that is cancelled on server shutdown.
+// Active agent runs will stop when this context is cancelled.
+func (s *Server) SetShutdownCtx(ctx context.Context) {
+	s.shutdownCtx = ctx
+}
+
+// SetCatalog sets the provider catalog for listing available providers.
+func (s *Server) SetCatalog(c *provider.Catalog) {
+	s.catalog = c
+}
+
+// StartWatcher begins watching the agents directory for file changes.
+// Agent change events are broadcast via the /v1/events SSE endpoint.
+func (s *Server) StartWatcher() {
+	s.watcher = agent.NewWatcher(s.agentsDir, s.logger, func(change agent.AgentChange) {
+		var eventType string
+		switch change.Type {
+		case agent.ChangeCreated:
+			eventType = "agent_created"
+		case agent.ChangeUpdated:
+			eventType = "agent_updated"
+		case agent.ChangeDeleted:
+			eventType = "agent_deleted"
+		default:
+			return
+		}
+		// Non-blocking send.
+		select {
+		case s.changeCh <- agentChange{Type: eventType, Name: change.Name}:
+		default:
+		}
+	})
+	if err := s.watcher.Start(); err != nil {
+		s.logger.Error("failed to start agent watcher", "error", err)
+	}
+}
+
+// StopWatcher stops the file watcher.
+func (s *Server) StopWatcher() {
+	if s.watcher != nil {
+		s.watcher.Stop()
+	}
+}
+
+// SetAuditStore sets the audit store for audit export.
+func (s *Server) SetAuditStore(as *audit.AuditStore) {
+	s.auditStore = as
 }
 
 // Health returns the health server for adding custom checkers.
@@ -90,6 +161,7 @@ func (s *Server) Handler() *gin.Engine {
 	r.GET("/v1/agents/:name", s.handleAgentGet)
 	r.PUT("/v1/agents/:name", s.handleAgentPut)
 	r.DELETE("/v1/agents/:name", s.handleAgentDelete)
+	r.POST("/v1/agents/validate", s.handleAgentValidate)
 
 	// Session endpoints (only when store is configured).
 	if s.store != nil {
@@ -102,6 +174,25 @@ func (s *Server) Handler() *gin.Engine {
 	if s.eventLogger != nil {
 		r.GET("/v1/sessions/:id/replay", s.handleSessionReplay)
 	}
+
+	// Provider listing (only when catalog is configured).
+	if s.catalog != nil {
+		r.GET("/v1/providers", s.handleProvidersList)
+	}
+
+	// MCP server listing (reads from agent configs).
+	r.GET("/v1/mcp", s.handleMCPList)
+
+	// Skills listing.
+	r.GET("/v1/skills", s.handleSkillsList)
+
+	// Audit export (only when audit store is configured).
+	if s.auditStore != nil {
+		r.GET("/v1/audit/export", s.handleAuditExport)
+	}
+
+	// SSE event stream for real-time notifications.
+	r.GET("/v1/events", s.handleEvents)
 
 	// Static frontend serving (only when embedded).
 	if s.staticFS != nil {
@@ -151,6 +242,9 @@ func (s *Server) handleRun(c *gin.Context) {
 		return
 	}
 
+	// Load skills and inject their instructions into the system prompt.
+	_, skillToolNames := s.injectSkills(a)
+
 	p, err := s.newProvider(a)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "provider_error", "message": err.Error()})
@@ -180,6 +274,7 @@ func (s *Server) handleRun(c *gin.Context) {
 		Store:    s.store,
 		Policy:   pol,
 		Approver: s.approver,
+		WorkDir:  req.WorkDir,
 	}
 
 	// Support session resume.
@@ -199,7 +294,20 @@ func (s *Server) handleRun(c *gin.Context) {
 		loopCfg.SessionID = req.SessionID
 	}
 
-	events, err := loop.Run(c.Request.Context(), loopCfg)
+	// Use shutdown context so the loop stops on server shutdown, not just client disconnect.
+	runCtx := c.Request.Context()
+	if s.shutdownCtx != nil {
+		var cancel context.CancelFunc
+		runCtx, cancel = mergeContext(s.shutdownCtx, c.Request.Context())
+		defer cancel()
+	}
+	events, err := loop.Run(runCtx, loopCfg)
+
+	// Clean up temporarily registered skill tools.
+	if len(skillToolNames) > 0 {
+		s.registry.UnregisterBatch(skillToolNames)
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "run_error", "message": err.Error()})
 		return
@@ -216,13 +324,40 @@ func (s *Server) handleRun(c *gin.Context) {
 	}
 
 	s.logger.Info("agent run started", "session_id", sess.ID, "agent", a.Name, "provider", a.Provider, "model", a.Model)
+	runStart := time.Now()
+	s.health.AgentMetrics.RecordRunStart(a.Name)
+
+	turn := 0
+	runSuccess := false
 	for ev := range events {
+		// Log event to audit logger if configured.
+		if s.eventLogger != nil {
+			if ev.Type == event.TypeDone || ev.Type == event.TypeError {
+				turn++
+			}
+			_ = s.eventLogger.Log(audit.EventRecord{
+				Timestamp: time.Now(),
+				SessionID: sess.ID,
+				Agent:     a.Name,
+				Turn:      turn,
+				Event:     ev,
+			})
+		}
+
+		// Track success for metrics.
+		if ev.Type == event.TypeDone && ev.Status == "completed" {
+			runSuccess = true
+		}
+
 		data, _ := json.Marshal(ev)
 		if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", data); err != nil {
 			return
 		}
 		flusher.Flush()
 	}
+
+	// Record run metrics.
+	s.health.AgentMetrics.RecordRunEnd(a.Name, time.Since(runStart), runSuccess)
 }
 
 // ToolInfo is the HTTP DTO for tool information.
@@ -288,6 +423,228 @@ func (s *Server) handleAgents(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, items)
+}
+
+func (s *Server) handleProvidersList(c *gin.Context) {
+	if s.catalog == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "no_catalog", "message": "provider catalog not configured"})
+		return
+	}
+	c.JSON(http.StatusOK, s.catalog.Entries())
+}
+
+// MCPServerInfo is the JSON DTO for MCP server listing.
+type MCPServerInfo struct {
+	Name      string   `json:"name"`
+	Type      string   `json:"type"`
+	Command   string   `json:"command,omitempty"`
+	URL       string   `json:"url,omitempty"`
+	AgentName string   `json:"agent"`
+}
+
+func (s *Server) handleMCPList(c *gin.Context) {
+	result, err := agent.LoadAll(s.agentsDir)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "agent_error", "message": err.Error()})
+		return
+	}
+
+	var servers []MCPServerInfo
+	for _, a := range result.Agents {
+		for _, mcp := range a.MCPServers {
+			servers = append(servers, MCPServerInfo{
+				Name:      mcp.Name,
+				Type:      mcp.Type,
+				Command:   mcp.Command,
+				URL:       mcp.URL,
+				AgentName: a.Name,
+			})
+		}
+	}
+
+	if servers == nil {
+		servers = []MCPServerInfo{}
+	}
+	c.JSON(http.StatusOK, servers)
+}
+
+// injectSkills loads skills and injects their instructions into the agent's
+// system prompt. For legacy skills with tool definitions, the tools are
+// temporarily registered in the registry. Returns the names of temporarily
+// registered tools (for cleanup after the run).
+func (s *Server) injectSkills(a *agent.Agent) (loadedSkills []*skill.Skill, tempToolNames []string) {
+	loader := skill.NewLoader(s.skillsDir)
+	allSkills, err := loader.LoadAll()
+	if err != nil {
+		s.logger.Warn("some skills failed to load", "error", err)
+	}
+	if len(allSkills) == 0 {
+		return nil, nil
+	}
+
+	// Filter skills: if agent declares specific skills, use those; otherwise use all.
+	var selected []*skill.Skill
+	if len(a.Skills) > 0 {
+		byName := make(map[string]*skill.Skill, len(allSkills))
+		for _, sk := range allSkills {
+			byName[sk.Name] = sk
+		}
+		for _, name := range a.Skills {
+			if sk, ok := byName[name]; ok {
+				selected = append(selected, sk)
+			} else {
+				s.logger.Warn("skill not found", "agent", a.Name, "skill", name)
+			}
+		}
+	} else {
+		selected = allSkills
+	}
+
+	if len(selected) == 0 {
+		return nil, nil
+	}
+
+	// Inject skill instructions into the system prompt.
+	var skillSections []string
+	for _, sk := range selected {
+		body := sk.Body()
+		if body != "" {
+			skillSections = append(skillSections, fmt.Sprintf("[[skill:%s]]\n%s", sk.Name, body))
+		}
+
+		// Register legacy skill tools temporarily.
+		if sk.LegacyManifest != nil {
+			tools := skill.Tools(sk)
+			for _, t := range tools {
+				if err := s.registry.Register(t); err != nil {
+					s.logger.Warn("failed to register skill tool", "skill", sk.Name, "tool", t.Name(), "error", err)
+					continue
+				}
+				tempToolNames = append(tempToolNames, t.Name())
+			}
+		}
+	}
+
+	if len(skillSections) > 0 {
+		a.SystemPrompt += "\n\n# Available Skills\n\n" + strings.Join(skillSections, "\n\n")
+	}
+
+	// Add skill tool names to the agent's tool list so the loop includes them.
+	if len(tempToolNames) > 0 {
+		existing := make(map[string]bool, len(a.Tools))
+		for _, t := range a.Tools {
+			existing[t] = true
+		}
+		for _, t := range tempToolNames {
+			if !existing[t] {
+				a.Tools = append(a.Tools, t)
+			}
+		}
+	}
+
+	return selected, tempToolNames
+}
+
+// SkillInfo is the JSON DTO for skill listing.
+type SkillInfo struct {
+	Name        string   `json:"name"`
+	Version     string   `json:"version"`
+	Description string   `json:"description"`
+	Format      string   `json:"format"`
+	Author      string   `json:"author,omitempty"`
+	Tools       []string `json:"tools"`
+}
+
+func (s *Server) handleSkillsList(c *gin.Context) {
+	loader := skill.NewLoader(s.skillsDir)
+	skills, err := loader.LoadAll()
+	if err != nil {
+		s.logger.Warn("some skills failed to load", "error", err)
+	}
+
+	result := make([]SkillInfo, 0, len(skills))
+	for _, sk := range skills {
+		var author string
+		if sk.MDManifest != nil {
+			author = sk.MDManifest.Frontmatter.Metadata["author"]
+		} else if sk.LegacyManifest != nil {
+			author = sk.LegacyManifest.Author
+		}
+		tools := sk.ToolNames()
+		if tools == nil {
+			tools = []string{}
+		}
+		result = append(result, SkillInfo{
+			Name:        sk.Name,
+			Version:     sk.Version,
+			Description: sk.Description,
+			Format:      sk.Format,
+			Author:      author,
+			Tools:       tools,
+		})
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (s *Server) handleAuditExport(c *gin.Context) {
+	if s.auditStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "no_audit", "message": "audit store not configured"})
+		return
+	}
+
+	format := c.DefaultQuery("format", "json")
+	agent := c.Query("agent")
+
+	filter := audit.Filter{
+		Agent: agent,
+	}
+
+	switch format {
+	case "csv":
+		c.Header("Content-Type", "text/csv")
+		c.Header("Content-Disposition", "attachment; filename=audit-export.csv")
+		if err := s.auditStore.ExportCSV(filter, c.Writer); err != nil {
+			// Headers already sent, can't change status code.
+			s.logger.Error("csv export error", "error", err)
+		}
+	default: // json
+		records, err := s.auditStore.Query(filter)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": "query_error", "message": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, records)
+	}
+}
+
+func (s *Server) handleEvents(c *gin.Context) {
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "stream_error", "message": "streaming unsupported"})
+		return
+	}
+
+	// Send initial ping.
+	fmt.Fprintf(c.Writer, "data: {\"type\":\"ping\"}\n\n")
+	flusher.Flush()
+
+	for {
+		select {
+		case <-c.Request.Context().Done():
+			return
+		case change := <-s.changeCh:
+			data, _ := json.Marshal(change)
+			if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", data); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
 }
 
 func (s *Server) handleAgentGet(c *gin.Context) {
@@ -377,6 +734,37 @@ func (s *Server) handleAgentDelete(c *gin.Context) {
 
 	s.logger.Info("agent deleted", "name", name)
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "name": name})
+}
+
+func (s *Server) handleAgentValidate(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "cannot read body"})
+		return
+	}
+
+	a, err := agent.LoadFromBytes(body)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"valid":   false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Validate that all referenced tools exist in the registry.
+	if err := s.registry.ValidateTools(a.Tools); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"valid":   false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"valid": true,
+		"name":  a.Name,
+	})
 }
 
 // ApproveRequest is the HTTP DTO for POST /v1/agents/approve.
@@ -502,4 +890,17 @@ func (s *Server) handleSessionReplay(c *gin.Context) {
 		c.Writer.Write(data)
 		c.Writer.Write([]byte("\n"))
 	}
+}
+
+// mergeContext returns a context that is cancelled when either a or b is done.
+func mergeContext(a, b context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		select {
+		case <-a.Done():
+		case <-b.Done():
+		}
+		cancel()
+	}()
+	return ctx, cancel
 }

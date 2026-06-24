@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/compaction"
@@ -14,6 +18,7 @@ import (
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/telemetry"
 	"github.com/teexue/common-agent/core/tool"
 )
 
@@ -24,6 +29,10 @@ type ToolRegistry interface {
 }
 
 // Config configures a single agent run.
+// workDirCtxKey is the context key for the working directory.
+// Shared with tools/builtin via the same string value.
+const workDirCtxKey = "workdir"
+
 type Config struct {
 	Provider provider.Provider
 	Registry ToolRegistry
@@ -52,6 +61,21 @@ type Config struct {
 	// Approver handles interactive tool approval when Policy returns Confirm.
 	// When nil, DenyAllApprover is used (tools requiring approval are denied).
 	Approver Approver
+
+	// WorkDir overrides the working directory for file operation tools.
+	// When empty, tools use their registered default.
+	WorkDir string
+
+	// Telemetry for OpenTelemetry tracing and metrics. Optional.
+	Telemetry *telemetry.Telemetry
+}
+
+// GetWorkDir returns the working directory from context, or empty string.
+func GetWorkDir(ctx context.Context) string {
+	if v, ok := ctx.Value(workDirCtxKey).(string); ok {
+		return v
+	}
+	return ""
 }
 
 // Run executes the agent loop and streams events.
@@ -101,6 +125,11 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 		})
 	}
 
+	// Inject WorkDir into context for tools to read.
+	if cfg.WorkDir != "" {
+		ctx = context.WithValue(ctx, workDirCtxKey, cfg.WorkDir)
+	}
+
 	out := make(chan event.Event)
 	go func() {
 		defer close(out)
@@ -121,6 +150,20 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 	execMode := cfg.Agent.ToolExecMode()
 	maxParallel := cfg.Agent.ToolMaxParallel()
 	log := cfg.Logger
+	tel := cfg.Telemetry
+
+	// Start run span and inject telemetry into context for tools.
+	runStart := time.Now()
+	if tel != nil {
+		var span trace.Span
+		ctx, span = tel.StartRun(ctx, cfg.Agent.Name, cfg.Agent.Model)
+		ctx = context.WithValue(ctx, "telemetry", tel)
+		defer span.End()
+	}
+
+	// Accumulate token usage across all turns.
+	var totalInputTokens, totalOutputTokens int
+
 	if log == nil {
 		log = slog.Default()
 	}
@@ -138,9 +181,16 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		select {
 		case <-ctx.Done():
 			forceEmit(out, event.Event{Type: event.TypeError, Code: "cancelled", Message: ctx.Err().Error()})
-			forceEmit(out, event.Event{Type: event.TypeDone, Status: "cancelled", Turns: turn})
+			forceEmit(out, event.Event{Type: event.TypeDone, Status: "cancelled", Turns: turn, InputTokens: totalInputTokens, OutputTokens: totalOutputTokens})
 			return
 		default:
+		}
+
+		// Start turn span.
+		turnCtx := ctx
+		var turnSpan trace.Span
+		if tel != nil {
+			turnCtx, turnSpan = tel.StartTurn(ctx, turn)
 		}
 
 		// OnTurnStart hook.
@@ -160,7 +210,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		chunks, err := cfg.Provider.Stream(ctx, req)
 		if err != nil {
 			forceEmit(out, event.Event{Type: event.TypeError, Code: "provider_error", Message: err.Error()})
-			forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: turn})
+			forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: turn, InputTokens: totalInputTokens, OutputTokens: totalOutputTokens})
 			return
 		}
 
@@ -183,6 +233,14 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		// readStream consumes provider chunks. Tool calls are executed
 		// immediately in parallel mode or collected for serial mode.
 		for chunk := range chunks {
+			// Accumulate token usage from provider.
+			if chunk.InputTokens > 0 {
+				totalInputTokens += chunk.InputTokens
+			}
+			if chunk.OutputTokens > 0 {
+				totalOutputTokens += chunk.OutputTokens
+			}
+
 			if chunk.ReasoningDelta != "" {
 				reasoningText += chunk.ReasoningDelta
 				emit(ctx, out, event.Event{Type: event.TypeReasoningDelta, Content: chunk.ReasoningDelta})
@@ -225,7 +283,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		select {
 		case <-ctx.Done():
 			forceEmit(out, event.Event{Type: event.TypeError, Code: "cancelled", Message: ctx.Err().Error()})
-			forceEmit(out, event.Event{Type: event.TypeDone, Status: "cancelled", Turns: turn})
+			forceEmit(out, event.Event{Type: event.TypeDone, Status: "cancelled", Turns: turn, InputTokens: totalInputTokens, OutputTokens: totalOutputTokens})
 			return
 		default:
 		}
@@ -237,7 +295,13 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 				Content:          assistantText,
 				ReasoningContent: reasoningText,
 			})
-			forceEmit(out, event.Event{Type: event.TypeDone, Status: "completed", Turns: turn})
+			if turnSpan != nil {
+				turnSpan.End()
+			}
+			if tel != nil {
+				tel.RecordRunDuration(turnCtx, time.Since(runStart), attribute.String("agent.name", cfg.Agent.Name))
+			}
+			forceEmit(out, event.Event{Type: event.TypeDone, Status: "completed", Turns: turn, InputTokens: totalInputTokens, OutputTokens: totalOutputTokens})
 			return
 		}
 
@@ -281,9 +345,17 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 
 		// OnTurnEnd hook.
 		if hooks != nil {
-			if err := hooks.OnTurnEnd(ctx, hook.TurnInfo{TurnNumber: turn}); err != nil {
+			if err := hooks.OnTurnEnd(turnCtx, hook.TurnInfo{TurnNumber: turn}); err != nil {
 				log.Warn("hook OnTurnEnd error", "turn", turn, "error", err)
 			}
+		}
+
+		// End turn span and record metrics.
+		if turnSpan != nil {
+			turnSpan.End()
+		}
+		if tel != nil {
+			tel.RecordTurn(turnCtx, attribute.Int("turn", turn))
 		}
 
 		// Record tool results in session.
@@ -318,8 +390,13 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		}
 	}
 
+	// Record run duration.
+	if tel != nil {
+		tel.RecordRunDuration(ctx, time.Since(runStart), attribute.String("agent.name", cfg.Agent.Name))
+	}
+
 	forceEmit(out, event.Event{Type: event.TypeError, Code: "max_turns", Message: fmt.Sprintf("exceeded max turns %d", maxTurns)})
-	forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: maxTurns})
+	forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: maxTurns, InputTokens: totalInputTokens, OutputTokens: totalOutputTokens})
 }
 
 // executeOneTool runs a single tool call and emits tool_start / tool_result events.
@@ -402,7 +479,29 @@ func executeOneTool(ctx context.Context, reg ToolRegistry, call provider.ToolCal
 
 	// Inject parent event channel into context for sub-agent event bubbling.
 	toolCtx := context.WithValue(ctx, "parent_event_chan", out)
+
+	// Start tool span.
+	toolStart := time.Now()
+	var toolSpan trace.Span
+	// Check if telemetry is available via context (passed from loop).
+	if tel, ok := ctx.Value("telemetry").(*telemetry.Telemetry); ok && tel != nil {
+		toolCtx, toolSpan = tel.StartTool(toolCtx, call.Name)
+	}
+
 	res, execErr := t.Execute(toolCtx, call.Arguments)
+	toolDuration := time.Since(toolStart)
+
+	// End tool span and record metrics.
+	if toolSpan != nil {
+		toolSpan.End()
+	}
+	if tel, ok := ctx.Value("telemetry").(*telemetry.Telemetry); ok && tel != nil {
+		tel.RecordToolDuration(ctx, toolDuration, attribute.String("tool.name", call.Name))
+		if execErr != nil {
+			tel.RecordToolError(ctx, attribute.String("tool.name", call.Name))
+		}
+	}
+
 	if execErr != nil {
 		outVal, _ := json.Marshal(map[string]string{"error": execErr.Error()})
 		if hooks != nil {

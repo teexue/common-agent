@@ -4,8 +4,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { Separator } from "@/components/ui/separator"
-import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -13,93 +12,300 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Bot } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Bot, FolderOpen, Keyboard, Monitor, Plug, Server, Settings } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { MetricsPanel } from "@/components/monitoring/metrics-panel"
+import type { AgentInfo } from "@/types/agent"
 
 interface SettingsSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   theme: string
   onThemeChange: (theme: string) => void
+  agents?: AgentInfo[]
+  workDir?: string
+  onWorkDirChange?: (dir: string) => void
 }
+
+const THEME_OPTIONS = [
+  { value: "light", label: "亮色" },
+  { value: "dark", label: "暗色" },
+  { value: "system", label: "跟随系统" },
+]
+
+const SHORTCUTS = [
+  ["切换侧边栏", "⌘ Shift S"],
+  ["关闭面板", "Esc"],
+  ["发送消息", "Enter"],
+  ["换行", "Shift Enter"],
+] as const
 
 export function SettingsSheet({
   open,
   onOpenChange,
   theme,
   onThemeChange,
+  agents = [],
+  workDir = "",
+  onWorkDirChange,
 }: SettingsSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="border-border bg-card">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2 font-heading text-sm tracking-tight">
-            <Bot className="h-4 w-4 text-primary" />
+      <SheetContent className="w-[400px] sm:max-w-[400px] border-border bg-card overflow-y-auto">
+        <SheetHeader className="pb-3">
+          <SheetTitle className="flex items-center gap-2 font-heading text-base tracking-tight">
+            <Settings className="h-4 w-4 text-primary" />
             设置
           </SheetTitle>
         </SheetHeader>
 
-        <div className="flex flex-col gap-5 p-4">
-          <div className="flex flex-col gap-2">
-            <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              主题
-            </Label>
-            <Select
-              value={theme}
-              onValueChange={(value) => {
-                if (value) onThemeChange(value)
-              }}
-            >
-              <SelectTrigger className="w-full rounded-xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="light">亮色</SelectItem>
-                <SelectItem value="dark">暗色</SelectItem>
-                <SelectItem value="system">跟随系统</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="px-6 pb-6">
+          <Tabs defaultValue="general">
+            <TabsList className="w-full rounded-xl bg-muted p-0.5 mb-5">
+              <TabsTrigger value="general" className="flex-1 rounded-lg text-xs">
+                <Settings className="mr-1 h-3 w-3" />
+                通用
+              </TabsTrigger>
+              <TabsTrigger value="monitoring" className="flex-1 rounded-lg text-xs">
+                <Monitor className="mr-1 h-3 w-3" />
+                监控
+              </TabsTrigger>
+              <TabsTrigger value="providers" className="flex-1 rounded-lg text-xs">
+                <Server className="mr-1 h-3 w-3" />
+                提供商
+              </TabsTrigger>
+              <TabsTrigger value="mcp" className="flex-1 rounded-lg text-xs">
+                <Plug className="mr-1 h-3 w-3" />
+                MCP
+              </TabsTrigger>
+            </TabsList>
 
-          <Separator />
+            {/* ── General ── */}
+            <TabsContent value="general" className="mt-0 space-y-6">
+            {/* Theme */}
+            <Section title="外观">
+              <Select
+                value={{ value: theme, label: THEME_OPTIONS.find(t => t.value === theme)?.label ?? theme }}
+                onValueChange={(v) => {
+                  if (v && typeof v === "object" && "value" in v) {
+                    onThemeChange((v as { value: string }).value)
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  {THEME_OPTIONS.map((t) => (
+                    <SelectItem key={t.value} value={{ value: t.value, label: t.label }}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Section>
 
-          <div className="flex flex-col gap-2">
-            <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              关于
-            </Label>
-            <div className="rounded-xl border border-border bg-muted/50 p-3">
-              <p className="font-mono text-xs text-foreground">
-                common-agent v0.0.1
+            {/* Work directory */}
+            <Section title="工作目录" icon={<FolderOpen className="h-3.5 w-3.5" />}>
+              <Input
+                value={workDir}
+                onChange={(e) => onWorkDirChange?.(e.target.value)}
+                placeholder="留空使用服务端默认目录"
+                className="rounded-xl font-mono text-xs"
+              />
+              <p className="text-[10px] text-muted-foreground leading-relaxed mt-1.5">
+                文件读写工具的根目录，留空则使用启动服务时的目录。
               </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                通用 Agent 运行时前端
-              </p>
-            </div>
-          </div>
+            </Section>
 
-          <Separator />
+            {/* Shortcuts */}
+            <Section title="快捷键" icon={<Keyboard className="h-3.5 w-3.5" />}>
+              <div className="rounded-xl border border-border divide-y divide-border overflow-hidden">
+                {SHORTCUTS.map(([label, key]) => (
+                  <div key={label} className="flex items-center justify-between px-3 py-2 text-xs">
+                    <span className="text-foreground">{label}</span>
+                    <kbd className="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      {key}
+                    </kbd>
+                  </div>
+                ))}
+              </div>
+            </Section>
 
-          <div className="flex flex-col gap-2">
-            <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              快捷键
-            </Label>
-            <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
-              {[
-                ["切换侧边栏", "⌘ Shift S"],
-                ["关闭面板", "Esc"],
-                ["发送消息", "Enter"],
-                ["换行", "Shift Enter"],
-              ].map(([label, key]) => (
-                <div key={label} className="flex items-center justify-between">
-                  <span>{label}</span>
-                  <kbd className="rounded-lg border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">
-                    {key}
-                  </kbd>
+            {/* About */}
+            <Section title="关于">
+              <div className="rounded-xl border border-border bg-muted/30 px-3.5 py-3">
+                <p className="font-mono text-xs font-medium text-foreground">
+                  common-agent v0.0.1
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  通用 Agent 运行时
+                </p>
+              </div>
+            </Section>
+          </TabsContent>
+
+          {/* ── Monitoring ── */}
+          <TabsContent value="monitoring" className="mt-0 space-y-4">
+            <Section title="运行时指标" icon={<Monitor className="h-3.5 w-3.5" />}>
+              <MetricsPanel />
+            </Section>
+          </TabsContent>
+
+          {/* ── Providers ── */}
+          <TabsContent value="providers" className="mt-0 space-y-4">
+            <Section title="已配置的 Agent" icon={<Server className="h-3.5 w-3.5" />}>
+              {agents.length === 0 ? (
+                <EmptyState text="暂无 Agent 配置" />
+              ) : (
+                <div className="space-y-2">
+                  {agents.map((a) => (
+                    <AgentCard key={a.name} agent={a} />
+                  ))}
                 </div>
-              ))}
+              )}
+            </Section>
+
+            <div className="rounded-xl border border-dashed border-border px-3 py-2.5 text-[11px] text-muted-foreground leading-relaxed">
+              提供商管理请通过 CLI：
+              <code className="mx-1 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">
+                agent-server config set provider
+              </code>
             </div>
-          </div>
+          </TabsContent>
+
+          {/* ── MCP ── */}
+          <TabsContent value="mcp" className="mt-0 space-y-4">
+            <Section title="MCP 服务器" icon={<Plug className="h-3.5 w-3.5" />}>
+              <MCPPanel />
+            </Section>
+          </TabsContent>
+        </Tabs>
         </div>
       </SheetContent>
     </Sheet>
+  )
+}
+
+// ─── Internal components ──────────────────────────────────────────
+
+function Section({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="mb-2.5 flex items-center gap-1.5">
+        {icon && <span className="text-muted-foreground">{icon}</span>}
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {title}
+        </span>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function AgentCard({ agent }: { agent: AgentInfo }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5 transition-colors hover:bg-muted/50">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+        <Bot className="h-4 w-4 text-primary" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-foreground truncate">
+          {agent.name}
+        </p>
+        <div className="mt-1 flex items-center gap-1.5">
+          {agent.provider && (
+            <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[9px] font-mono">
+              {agent.provider}
+            </Badge>
+          )}
+          {agent.model && (
+            <Badge variant="outline" className="rounded-md px-1.5 py-0 text-[9px] font-mono">
+              {agent.model}
+            </Badge>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="flex items-center justify-center rounded-xl border border-dashed border-border py-6">
+      <p className="text-xs text-muted-foreground">{text}</p>
+    </div>
+  )
+}
+
+// ─── MCP Panel ────────────────────────────────────────────────────
+
+import { useEffect, useState as useStateMCP } from "react"
+import { fetchMCPServers as fetchMCP } from "@/lib/api"
+import type { MCPServerInfo } from "@/types/agent"
+
+function MCPPanel() {
+  const [servers, setServers] = useStateMCP<MCPServerInfo[]>([])
+  const [loading, setLoading] = useStateMCP(true)
+
+  useEffect(() => {
+    fetchMCP()
+      .then(setServers)
+      .catch(() => setServers([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return <EmptyState text="加载中..." />
+  }
+
+  if (servers.length === 0) {
+    return (
+      <div className="space-y-3">
+        <EmptyState text="未配置 MCP 服务器" />
+        <div className="rounded-xl border border-dashed border-border px-3 py-2.5 text-[11px] text-muted-foreground leading-relaxed">
+          在 Agent YAML 中配置 <code className="mx-1 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">mcp_servers</code> 字段来添加 MCP 服务器。
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {servers.map((s) => (
+        <div
+          key={`${s.agent}-${s.name}`}
+          className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5"
+        >
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+            <Plug className="h-4 w-4 text-blue-500" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-foreground truncate">
+              {s.name}
+            </p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[9px] font-mono">
+                {s.type}
+              </Badge>
+              {s.command && (
+                <span className="text-[9px] text-muted-foreground font-mono truncate">
+                  {s.command}
+                </span>
+              )}
+              {s.url && (
+                <span className="text-[9px] text-muted-foreground font-mono truncate">
+                  {s.url}
+                </span>
+              )}
+            </div>
+          </div>
+          <Badge variant="outline" className="rounded-md px-1.5 py-0 text-[9px] shrink-0">
+            {s.agent}
+          </Badge>
+        </div>
+      ))}
+    </div>
   )
 }

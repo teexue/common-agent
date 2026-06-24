@@ -3,11 +3,13 @@
 package audit
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -224,4 +226,42 @@ func matchesFilter(rec AuditRecord, f Filter) bool {
 		return false
 	}
 	return true
+}
+
+// ExportCSV writes audit records as CSV to the given writer.
+func (s *AuditStore) ExportCSV(filter Filter, w interface{ Write([]byte) (int, error) }) error {
+	records, err := s.Query(filter)
+	if err != nil {
+		return err
+	}
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	// Header.
+	if err := writer.Write([]string{
+		"timestamp", "session_id", "agent", "provider", "model",
+		"turns", "status", "tool_calls", "duration_ms",
+	}); err != nil {
+		return err
+	}
+
+	// Rows.
+	for _, rec := range records {
+		if err := writer.Write([]string{
+			rec.Timestamp.Format(time.RFC3339),
+			rec.SessionID,
+			rec.Agent,
+			rec.Provider,
+			rec.Model,
+			strconv.Itoa(rec.Turns),
+			rec.Status,
+			strconv.Itoa(rec.ToolCalls),
+			strconv.FormatInt(rec.DurationMs, 10),
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

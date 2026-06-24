@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/chzyer/readline"
 	"github.com/teexue/common-agent/core/agent"
@@ -100,7 +102,10 @@ func runChat(args []string, logger *slog.Logger) {
 			pol = permission.AllowAllPolicy{}
 		}
 
-		events, err := loop.Run(context.Background(), loop.Config{
+		// Cancel loop on SIGINT (Ctrl+C).
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+
+		events, err := loop.Run(ctx, loop.Config{
 			Provider: state.provider,
 			Registry: state.reg,
 			Agent:    state.agent,
@@ -110,6 +115,7 @@ func runChat(args []string, logger *slog.Logger) {
 			Policy:   pol,
 			Approver: CLIApprover{},
 		})
+		stop() // release signal handler so readline can catch Ctrl+C again
 		if err != nil {
 			fmt.Println(tui.Error(err.Error()))
 			continue
@@ -154,7 +160,7 @@ func newChatState(catalog *provider.Catalog, mock bool, paths runtimePaths, agen
 		agent:    a,
 		provider: p,
 		sess:     session.New(a.Name),
-		reg:      newRegistry(),
+		reg:      newRegistry(""), // uses current working directory
 		store:    store,
 	}, nil
 }

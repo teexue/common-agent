@@ -18,7 +18,7 @@ import (
 
 func TestRunWithMockProvider(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -73,7 +73,7 @@ func TestRunWithMockProvider(t *testing.T) {
 
 func TestRunUnknownTool(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -119,7 +119,7 @@ func TestRunUnknownTool(t *testing.T) {
 
 func TestRunSerialMode(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -168,7 +168,7 @@ func TestRunSerialMode(t *testing.T) {
 
 func TestRunMaxTurnsExceeded(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -210,7 +210,7 @@ func TestRunMaxTurnsExceeded(t *testing.T) {
 
 func TestRunContextCancellation(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -282,7 +282,7 @@ func TestRunContextCancellation(t *testing.T) {
 
 func TestRunTextOnlyResponse(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -323,7 +323,7 @@ func TestRunTextOnlyResponse(t *testing.T) {
 
 func TestRunReasoningDeltaEvents(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -368,7 +368,7 @@ func TestRunReasoningDeltaEvents(t *testing.T) {
 }
 func TestRunApproval_Approved(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -439,7 +439,7 @@ func TestRunApproval_Approved(t *testing.T) {
 
 func TestRunApproval_Denied(t *testing.T) {
 	reg := registry.New()
-	builtin.RegisterAll(reg)
+	builtin.RegisterAll(reg, t.TempDir())
 
 	sc := &agent.Agent{
 		Name:         "test",

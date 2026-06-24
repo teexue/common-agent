@@ -120,6 +120,44 @@ func (m *Manager) ToolNames() []string {
 	return names
 }
 
+// MCPServerStatus represents the status of an MCP server.
+type MCPServerStatus struct {
+	Name      string   `json:"name"`
+	Type      string   `json:"type"`
+	Connected bool     `json:"connected"`
+	Tools     []string `json:"tools"`
+}
+
+// Status returns the status of all configured MCP servers.
+func (m *Manager) Status() []MCPServerStatus {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var result []MCPServerStatus
+	for _, cfg := range m.servers {
+		client, connected := m.clients[cfg.Name]
+
+		// Gather tool names for this server.
+		var tools []string
+		if connected {
+			// Find tools belonging to this client.
+			for toolName, t := range m.tools {
+				if ext, ok := t.(*ExternalTool); ok && ext.client == client {
+					tools = append(tools, toolName)
+				}
+			}
+		}
+
+		result = append(result, MCPServerStatus{
+			Name:      cfg.Name,
+			Type:      cfg.Type,
+			Connected: connected,
+			Tools:     tools,
+		})
+	}
+	return result
+}
+
 // Reconnect attempts to reconnect a disconnected server with exponential backoff.
 func (m *Manager) Reconnect(ctx context.Context, cfg ServerConfig) {
 	const maxDelay = 60 * time.Second

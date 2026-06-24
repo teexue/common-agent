@@ -73,7 +73,8 @@ func inputString(label, defaultVal string) (string, error) {
 	return value, nil
 }
 
-func inputSecret(label string) (string, error) {
+// InputSecret prompts for a secret value (password echo mode).
+func InputSecret(label string) (string, error) {
 	if !isInteractive() {
 		return fallbackInput(label, ""), nil
 	}
