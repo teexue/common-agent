@@ -525,8 +525,24 @@ func emit(ctx context.Context, out chan<- event.Event, ev event.Event) {
 	}
 }
 
-// forceEmit sends an event to the channel without checking ctx cancellation.
-// Used for terminal events (cancelled, done) that must always be delivered.
+// forceEmitTimeout is the maximum duration to wait for a terminal event
+// to be delivered before falling back to a log warning.
+var forceEmitTimeout = 5 * time.Second
+
+// forceEmit sends a terminal event (cancelled, done, error) to the channel
+// with a timeout fallback. If the consumer is stuck and the event cannot be
+// delivered within forceEmitTimeout, the event is dropped and a warning is
+// logged to prevent the loop from blocking indefinitely.
 func forceEmit(out chan<- event.Event, ev event.Event) {
-	out <- ev
+	timer := time.NewTimer(forceEmitTimeout)
+	defer timer.Stop()
+	select {
+	case out <- ev:
+	case <-timer.C:
+		slog.Warn("forceEmit timed out, dropping terminal event",
+			slog.String("event_type", string(ev.Type)),
+			slog.String("status", ev.Status),
+			slog.String("code", ev.Code),
+		)
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 )
@@ -30,6 +31,20 @@ type DailyUsage struct {
 	TotalTokens   int    `json:"total_tokens"`
 }
 
+// validIDPattern restricts tenant IDs to safe characters to prevent path traversal.
+var validIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+// validateID ensures the tenant ID contains only safe characters.
+func validateID(id string) error {
+	if id == "" {
+		return fmt.Errorf("tenant ID is required")
+	}
+	if !validIDPattern.MatchString(id) {
+		return fmt.Errorf("tenant ID %q contains invalid characters; only alphanumeric, hyphen and underscore are allowed", id)
+	}
+	return nil
+}
+
 // Tracker tracks and persists usage records.
 type Tracker struct {
 	dir string
@@ -43,6 +58,9 @@ func NewTracker(dir string) *Tracker {
 
 // Record persists a usage record.
 func (t *Tracker) Record(rec UsageRecord) error {
+	if err := validateID(rec.TenantID); err != nil {
+		return err
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -71,6 +89,9 @@ func (t *Tracker) Record(rec UsageRecord) error {
 
 // DailyUsage returns aggregated usage for a tenant on a given date.
 func (t *Tracker) DailyUsage(tenantID, date string) (*DailyUsage, error) {
+	if err := validateID(tenantID); err != nil {
+		return nil, err
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 

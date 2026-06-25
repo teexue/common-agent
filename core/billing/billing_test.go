@@ -140,3 +140,48 @@ func TestTracker_CheckTokenQuota(t *testing.T) {
 		t.Error("expected token quota exceeded")
 	}
 }
+
+func TestTracker_PathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	tracker := NewTracker(dir)
+
+	maliciousIDs := []string{
+		"../../etc/passwd",
+		"../tmp",
+		"a/b/c",
+		"test@evil",
+	}
+
+	for _, id := range maliciousIDs {
+		t.Run("Record_"+id, func(t *testing.T) {
+			err := tracker.Record(UsageRecord{TenantID: id, Timestamp: time.Now()})
+			if err == nil {
+				t.Fatalf("expected error for malicious ID %q", id)
+			}
+		})
+		t.Run("DailyUsage_"+id, func(t *testing.T) {
+			_, err := tracker.DailyUsage(id, "2026-01-01")
+			if err == nil {
+				t.Fatalf("expected error for malicious ID %q", id)
+			}
+		})
+	}
+}
+
+func TestTracker_ValidIDs(t *testing.T) {
+	dir := t.TempDir()
+	tracker := NewTracker(dir)
+
+	validIDs := []string{
+		"t1", "tenant-a", "tenant_b", "ABC123",
+	}
+
+	for _, id := range validIDs {
+		t.Run(id, func(t *testing.T) {
+			err := tracker.Record(UsageRecord{TenantID: id, Timestamp: time.Now()})
+			if err != nil {
+				t.Fatalf("expected success for valid ID %q, got: %v", id, err)
+			}
+		})
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 )
@@ -42,12 +43,29 @@ func NewFileStore(dir string) (*FileStore, error) {
 	return &FileStore{dir: dir}, nil
 }
 
+// validIDPattern restricts tenant IDs to safe characters to prevent path traversal.
+var validIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+// validateID ensures the tenant ID contains only safe characters.
+func validateID(id string) error {
+	if id == "" {
+		return fmt.Errorf("tenant ID is required")
+	}
+	if !validIDPattern.MatchString(id) {
+		return fmt.Errorf("tenant ID %q contains invalid characters; only alphanumeric, hyphen and underscore are allowed", id)
+	}
+	return nil
+}
+
 func (s *FileStore) path(id string) string {
 	return filepath.Join(s.dir, id+".json")
 }
 
 // Get returns a tenant by ID.
 func (s *FileStore) Get(id string) (*Tenant, error) {
+	if err := validateID(id); err != nil {
+		return nil, err
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -96,12 +114,12 @@ func (s *FileStore) List() ([]*Tenant, error) {
 
 // Save creates or updates a tenant.
 func (s *FileStore) Save(t *Tenant) error {
+	if err := validateID(t.ID); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if t.ID == "" {
-		return fmt.Errorf("tenant ID is required")
-	}
 	if t.CreatedAt.IsZero() {
 		t.CreatedAt = time.Now()
 	}
@@ -115,6 +133,9 @@ func (s *FileStore) Save(t *Tenant) error {
 
 // Delete removes a tenant.
 func (s *FileStore) Delete(id string) error {
+	if err := validateID(id); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

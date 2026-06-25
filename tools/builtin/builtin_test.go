@@ -449,6 +449,12 @@ func TestSafePath(t *testing.T) {
 		{"traversal", "/home/user", "../etc/passwd", true},
 		{"deep traversal", "/home/user", "sub/../../etc/passwd", true},
 		{"empty path", "/home/user", "", true},
+		{"absolute outside", "/home/user", "/etc/passwd", true},
+		{"valid special chars", "/home/user", "sub/..%2f..%2fetc", false},
+		{"root itself", "/home/user", ".", false},
+		{"nested valid", "/home/user", "a/b/c/d.txt", false},
+		{"traversal to parent of root", "/home/user", "..", true},
+		{"traversal via absolute", "/home/user", "/home/user/../../../etc/passwd", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -457,5 +463,29 @@ func TestSafePath(t *testing.T) {
 				t.Errorf("SafePath(%q, %q) error = %v, wantErr %v", tt.root, tt.path, err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestSearchFilesTraversal(t *testing.T) {
+	dir := t.TempDir()
+	sf := builtin.SearchFiles{WorkDir: dir}
+	input, _ := json.Marshal(map[string]any{"pattern": "test", "path": "../../../etc"})
+	_, err := sf.Execute(context.Background(), input)
+	if err == nil {
+		t.Fatal("expected error for path traversal in search_files")
+	}
+}
+
+func TestEditFileTraversal(t *testing.T) {
+	dir := t.TempDir()
+	ef := builtin.EditFile{WorkDir: dir}
+	input, _ := json.Marshal(map[string]any{
+		"path":       "../../../tmp/evil.go",
+		"old_string": "a",
+		"new_string": "b",
+	})
+	_, err := ef.Execute(context.Background(), input)
+	if err == nil {
+		t.Fatal("expected error for path traversal in edit_file")
 	}
 }

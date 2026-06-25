@@ -115,3 +115,56 @@ func TestFileStore_PreservesCreatedAt(t *testing.T) {
 		t.Errorf("expected created_at %v, got %v", ts, got.CreatedAt)
 	}
 }
+
+func TestFileStore_PathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := NewFileStore(dir)
+
+	maliciousIDs := []string{
+		"../../etc/passwd",
+		"../tmp",
+		".../.../evil",
+		"a/b/c",
+		"test@evil",
+		"test:evil",
+	}
+
+	for _, id := range maliciousIDs {
+		t.Run("Save_"+id, func(t *testing.T) {
+			err := store.Save(&Tenant{ID: id, Name: "evil"})
+			if err == nil {
+				t.Fatalf("expected error for malicious ID %q", id)
+			}
+		})
+		t.Run("Get_"+id, func(t *testing.T) {
+			_, err := store.Get(id)
+			if err == nil {
+				t.Fatalf("expected error for malicious ID %q", id)
+			}
+		})
+		t.Run("Delete_"+id, func(t *testing.T) {
+			err := store.Delete(id)
+			if err == nil {
+				t.Fatalf("expected error for malicious ID %q", id)
+			}
+		})
+	}
+}
+
+func TestFileStore_ValidIDs(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := NewFileStore(dir)
+
+	validIDs := []string{
+		"t1", "tenant-a", "tenant_b", "ABC123", "a-b_c-1",
+	}
+
+	for _, id := range validIDs {
+		t.Run(id, func(t *testing.T) {
+			err := store.Save(&Tenant{ID: id, Name: "valid"})
+			if err != nil {
+				t.Fatalf("expected success for valid ID %q, got: %v", id, err)
+			}
+		})
+	}
+}

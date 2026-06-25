@@ -53,6 +53,7 @@ type Server struct {
 	health      *telemetry.HealthServer
 	watcher     *agent.Watcher    // watches agents dir for changes
 	shutdownCtx context.Context   // cancelled on server shutdown; nil = no shutdown propagation
+	apiKey      string            // when non-empty, all /v1/ routes require this key
 
 	// changeCh broadcasts agent file change events to SSE subscribers.
 	changeCh    chan agentChange
@@ -94,6 +95,14 @@ func (s *Server) SetEventLogger(el *audit.EventLogger) {
 // Active agent runs will stop when this context is cancelled.
 func (s *Server) SetShutdownCtx(ctx context.Context) {
 	s.shutdownCtx = ctx
+}
+
+// SetAPIKey enables API key authentication for all /v1/ routes.
+// When set to a non-empty value, clients must send the key via
+// the "Authorization: Bearer <key>" or "X-API-Key" header.
+// Health endpoints (/healthz, /readyz, /metrics) are always exempt.
+func (s *Server) SetAPIKey(key string) {
+	s.apiKey = key
 }
 
 // SetCatalog sets the provider catalog for listing available providers.
@@ -144,55 +153,78 @@ func (s *Server) Health() *telemetry.HealthServer {
 	return s.health
 }
 
+// authMiddleware enforces API key authentication for /v1/ routes.
+// When s.apiKey is empty, authentication is disabled.
+func (s *Server) authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if s.apiKey == "" {
+			c.Next()
+			return
+		}
+
+		// Check Authorization: Bearer <key>.
+		auth := c.GetHeader("Authorization")
+		if strings.HasPrefix(auth, "Bearer ") {
+			if strings.TrimPrefix(auth, "Bearer ") == s.apiKey {
+				c.Next()
+				return
+			}
+		}
+
+		// Check X-API-Key header.
+		if c.GetHeader("X-API-Key") == s.apiKey {
+			c.Next()
+			return
+		}
+
+		c.JSON(http.StatusUnauthorized, gin.H{"code": "unauthorized", "message": "invalid or missing API key"})
+		c.Abort()
+	}
+}
+
 // Handler returns the root Gin engine.
 func (s *Server) Handler() *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	// API routes.
+	// Health endpoints — always public, no auth required.
 	r.GET("/healthz", gin.WrapF(s.health.HandleHealth))
 	r.GET("/readyz", gin.WrapF(s.health.HandleReady))
 	r.GET("/metrics", gin.WrapF(s.health.HandleMetrics))
-	r.POST("/v1/agents/run", s.handleRun)
-	r.POST("/v1/agents/approve", s.handleApprove)
-	r.GET("/v1/tools", s.handleTools)
-	r.GET("/v1/agents", s.handleAgents)
-	r.GET("/v1/agents/:name", s.handleAgentGet)
-	r.PUT("/v1/agents/:name", s.handleAgentPut)
-	r.DELETE("/v1/agents/:name", s.handleAgentDelete)
-	r.POST("/v1/agents/validate", s.handleAgentValidate)
 
-	// Session endpoints (only when store is configured).
+	// API routes — protected by auth middleware when apiKey is set.
+	v1 := r.Group("/v1", s.authMiddleware())
+	v1.POST("/agents/run", s.handleRun)
+	v1.POST("/agents/approve", s.handleApprove)
+	v1.GET("/tools", s.handleTools)
+	v1.GET("/agents", s.handleAgents)
+	v1.GET("/agents/:name", s.handleAgentGet)
+	v1.PUT("/agents/:name", s.handleAgentPut)
+	v1.DELETE("/agents/:name", s.handleAgentDelete)
+	v1.POST("/agents/validate", s.handleAgentValidate)
+	v1.GET("/mcp", s.handleMCPList)
+	v1.GET("/skills", s.handleSkillsList)
+	v1.GET("/events", s.handleEvents)
+
+	// Conditional endpoints (auth middleware applies via group).
 	if s.store != nil {
-		r.GET("/v1/sessions", s.handleSessionsList)
-		r.GET("/v1/sessions/:id", s.handleSessionsGet)
-		r.DELETE("/v1/sessions/:id", s.handleSessionsDelete)
+		v1.GET("/sessions", s.handleSessionsList)
+		v1.GET("/sessions/:id", s.handleSessionsGet)
+		v1.DELETE("/sessions/:id", s.handleSessionsDelete)
 	}
 
-	// Replay endpoint (only when event logger is configured).
 	if s.eventLogger != nil {
-		r.GET("/v1/sessions/:id/replay", s.handleSessionReplay)
+		v1.GET("/sessions/:id/replay", s.handleSessionReplay)
 	}
 
-	// Provider listing (only when catalog is configured).
 	if s.catalog != nil {
-		r.GET("/v1/providers", s.handleProvidersList)
+		v1.GET("/providers", s.handleProvidersList)
 	}
 
-	// MCP server listing (reads from agent configs).
-	r.GET("/v1/mcp", s.handleMCPList)
-
-	// Skills listing.
-	r.GET("/v1/skills", s.handleSkillsList)
-
-	// Audit export (only when audit store is configured).
 	if s.auditStore != nil {
-		r.GET("/v1/audit/export", s.handleAuditExport)
+		v1.GET("/audit/export", s.handleAuditExport)
 	}
-
-	// SSE event stream for real-time notifications.
-	r.GET("/v1/events", s.handleEvents)
 
 	// Static frontend serving (only when embedded).
 	if s.staticFS != nil {

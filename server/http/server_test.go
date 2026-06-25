@@ -847,3 +847,104 @@ func TestHandleSessionsDelete_NotFound(t *testing.T) {
 		t.Fatalf("expected status 404, got %d", w.Code)
 	}
 }
+
+// ─── Auth Middleware ──────────────────────────────────────────────
+
+func TestAuth_NoAPIKey_AllowsAll(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	router := srv.Handler()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/v1/tools", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 without auth, got %d", w.Code)
+	}
+}
+
+func TestAuth_WithAPIKey_RequiresKey(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	srv.SetAPIKey("secret-key-123")
+	router := srv.Handler()
+
+	// No key → 401.
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/v1/tools", nil)
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without key, got %d", w.Code)
+	}
+
+	// Wrong key → 401.
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/v1/tools", nil)
+	req.Header.Set("Authorization", "Bearer wrong-key")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 with wrong key, got %d", w.Code)
+	}
+
+	// Correct key via Bearer → 200.
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/v1/tools", nil)
+	req.Header.Set("Authorization", "Bearer secret-key-123")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with correct Bearer key, got %d", w.Code)
+	}
+
+	// Correct key via X-API-Key → 200.
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/v1/tools", nil)
+	req.Header.Set("X-API-Key", "secret-key-123")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with correct X-API-Key, got %d", w.Code)
+	}
+}
+
+func TestAuth_HealthEndpointsAlwaysPublic(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	srv.SetAPIKey("secret-key-123")
+	router := srv.Handler()
+
+	for _, path := range []string{"/healthz", "/readyz"} {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", path, nil)
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200 for %s with auth enabled, got %d", path, w.Code)
+		}
+	}
+}
+
+func TestAuth_RunEndpointWithKey(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	srv.SetAPIKey("test-api-key")
+	router := srv.Handler()
+
+	body, _ := json.Marshal(RunRequest{
+		Agent:  "test",
+		Prompt: "hello",
+	})
+
+	// Without key → 401.
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/v1/agents/run", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without key, got %d", w.Code)
+	}
+
+	// With correct key → 200.
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/v1/agents/run", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-api-key")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with correct key, got %d: %s", w.Code, w.Body.String())
+	}
+}

@@ -12,6 +12,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/teexue/common-agent/core/agent"
@@ -34,6 +35,7 @@ type GRPCServer struct {
 	logger      *slog.Logger
 	store       session.Store
 	approver    *GRPCApprover
+	apiKey      string // when non-empty, all methods require this key
 }
 
 // NewGRPCServer creates a GRPCServer.
@@ -54,6 +56,44 @@ func NewGRPCServer(
 	}
 }
 
+// SetAPIKey enables API key authentication for all gRPC methods.
+// When set to a non-empty value, clients must send the key via
+// the "authorization" metadata key as "bearer <key>" or the
+// "x-api-key" metadata key.
+func (s *GRPCServer) SetAPIKey(key string) {
+	s.apiKey = key
+}
+
+// checkAuth validates the API key from gRPC metadata.
+// Returns nil if auth is disabled or the key is valid.
+func (s *GRPCServer) checkAuth(ctx context.Context) error {
+	if s.apiKey == "" {
+		return nil
+	}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "missing metadata")
+	}
+
+	// Check authorization: bearer <key>.
+	for _, val := range md.Get("authorization") {
+		if strings.HasPrefix(val, "bearer ") {
+			if strings.TrimPrefix(val, "bearer ") == s.apiKey {
+				return nil
+			}
+		}
+	}
+
+	// Check x-api-key.
+	for _, val := range md.Get("x-api-key") {
+		if val == s.apiKey {
+			return nil
+		}
+	}
+
+	return status.Error(codes.Unauthenticated, "invalid or missing API key")
+}
+
 // RegisterServer registers the GRPCServer on the given gRPC server.
 func (s *GRPCServer) RegisterServer(srv *grpc.Server) {
 	commonagentv1.RegisterAgentServiceServer(srv, s)
@@ -62,6 +102,10 @@ func (s *GRPCServer) RegisterServer(srv *grpc.Server) {
 // Run executes an agent and streams events back to the client.
 func (s *GRPCServer) Run(req *commonagentv1.RunRequest, stream grpc.ServerStreamingServer[commonagentv1.AgentEvent]) error {
 	ctx := stream.Context()
+
+	if err := s.checkAuth(ctx); err != nil {
+		return err
+	}
 
 	if req.Agent == "" || req.Prompt == "" {
 		return status.Error(codes.InvalidArgument, "agent and prompt are required")
@@ -131,7 +175,10 @@ func (s *GRPCServer) Run(req *commonagentv1.RunRequest, stream grpc.ServerStream
 }
 
 // Approve resolves a pending tool approval.
-func (s *GRPCServer) Approve(_ context.Context, req *commonagentv1.ApproveRequest) (*commonagentv1.ApproveResponse, error) {
+func (s *GRPCServer) Approve(ctx context.Context, req *commonagentv1.ApproveRequest) (*commonagentv1.ApproveResponse, error) {
+	if err := s.checkAuth(ctx); err != nil {
+		return nil, err
+	}
 	if req.ApprovalId == "" {
 		return nil, status.Error(codes.InvalidArgument, "approval_id is required")
 	}
@@ -149,7 +196,10 @@ func (s *GRPCServer) Approve(_ context.Context, req *commonagentv1.ApproveReques
 }
 
 // ListTools returns all registered tools.
-func (s *GRPCServer) ListTools(_ context.Context, _ *commonagentv1.ListToolsRequest) (*commonagentv1.ListToolsResponse, error) {
+func (s *GRPCServer) ListTools(ctx context.Context, _ *commonagentv1.ListToolsRequest) (*commonagentv1.ListToolsResponse, error) {
+	if err := s.checkAuth(ctx); err != nil {
+		return nil, err
+	}
 	tools := s.registry.List()
 	result := make([]*commonagentv1.ToolInfo, len(tools))
 	for i, t := range tools {
@@ -164,7 +214,10 @@ func (s *GRPCServer) ListTools(_ context.Context, _ *commonagentv1.ListToolsRequ
 }
 
 // ListAgents returns all loaded agents.
-func (s *GRPCServer) ListAgents(_ context.Context, _ *commonagentv1.ListAgentsRequest) (*commonagentv1.ListAgentsResponse, error) {
+func (s *GRPCServer) ListAgents(ctx context.Context, _ *commonagentv1.ListAgentsRequest) (*commonagentv1.ListAgentsResponse, error) {
+	if err := s.checkAuth(ctx); err != nil {
+		return nil, err
+	}
 	all, err := agent.LoadAll(s.agentsDir)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "load agents: %v", err)
@@ -187,7 +240,10 @@ func (s *GRPCServer) ListAgents(_ context.Context, _ *commonagentv1.ListAgentsRe
 }
 
 // GetAgent returns details for a specific agent.
-func (s *GRPCServer) GetAgent(_ context.Context, req *commonagentv1.GetAgentRequest) (*commonagentv1.GetAgentResponse, error) {
+func (s *GRPCServer) GetAgent(ctx context.Context, req *commonagentv1.GetAgentRequest) (*commonagentv1.GetAgentResponse, error) {
+	if err := s.checkAuth(ctx); err != nil {
+		return nil, err
+	}
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "agent name is required")
 	}
@@ -212,7 +268,10 @@ func (s *GRPCServer) GetAgent(_ context.Context, req *commonagentv1.GetAgentRequ
 }
 
 // UpdateAgent creates or updates an agent YAML.
-func (s *GRPCServer) UpdateAgent(_ context.Context, req *commonagentv1.UpdateAgentRequest) (*commonagentv1.UpdateAgentResponse, error) {
+func (s *GRPCServer) UpdateAgent(ctx context.Context, req *commonagentv1.UpdateAgentRequest) (*commonagentv1.UpdateAgentResponse, error) {
+	if err := s.checkAuth(ctx); err != nil {
+		return nil, err
+	}
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "agent name is required")
 	}
@@ -242,7 +301,10 @@ func (s *GRPCServer) UpdateAgent(_ context.Context, req *commonagentv1.UpdateAge
 }
 
 // DeleteAgent deletes an agent YAML.
-func (s *GRPCServer) DeleteAgent(_ context.Context, req *commonagentv1.DeleteAgentRequest) (*commonagentv1.DeleteAgentResponse, error) {
+func (s *GRPCServer) DeleteAgent(ctx context.Context, req *commonagentv1.DeleteAgentRequest) (*commonagentv1.DeleteAgentResponse, error) {
+	if err := s.checkAuth(ctx); err != nil {
+		return nil, err
+	}
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "agent name is required")
 	}
@@ -262,7 +324,10 @@ func (s *GRPCServer) DeleteAgent(_ context.Context, req *commonagentv1.DeleteAge
 }
 
 // ListSessions returns all persisted sessions.
-func (s *GRPCServer) ListSessions(_ context.Context, _ *commonagentv1.ListSessionsRequest) (*commonagentv1.ListSessionsResponse, error) {
+func (s *GRPCServer) ListSessions(ctx context.Context, _ *commonagentv1.ListSessionsRequest) (*commonagentv1.ListSessionsResponse, error) {
+	if err := s.checkAuth(ctx); err != nil {
+		return nil, err
+	}
 	if s.store == nil {
 		return nil, status.Error(codes.FailedPrecondition, "session persistence not configured")
 	}
@@ -284,7 +349,10 @@ func (s *GRPCServer) ListSessions(_ context.Context, _ *commonagentv1.ListSessio
 }
 
 // GetSession returns a specific session with its messages.
-func (s *GRPCServer) GetSession(_ context.Context, req *commonagentv1.GetSessionRequest) (*commonagentv1.GetSessionResponse, error) {
+func (s *GRPCServer) GetSession(ctx context.Context, req *commonagentv1.GetSessionRequest) (*commonagentv1.GetSessionResponse, error) {
+	if err := s.checkAuth(ctx); err != nil {
+		return nil, err
+	}
 	if s.store == nil {
 		return nil, status.Error(codes.FailedPrecondition, "session persistence not configured")
 	}
@@ -317,7 +385,10 @@ func (s *GRPCServer) GetSession(_ context.Context, req *commonagentv1.GetSession
 }
 
 // DeleteSession deletes a persisted session.
-func (s *GRPCServer) DeleteSession(_ context.Context, req *commonagentv1.DeleteSessionRequest) (*commonagentv1.DeleteSessionResponse, error) {
+func (s *GRPCServer) DeleteSession(ctx context.Context, req *commonagentv1.DeleteSessionRequest) (*commonagentv1.DeleteSessionResponse, error) {
+	if err := s.checkAuth(ctx); err != nil {
+		return nil, err
+	}
 	if s.store == nil {
 		return nil, status.Error(codes.FailedPrecondition, "session persistence not configured")
 	}
