@@ -1,7 +1,6 @@
 package provider
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -127,23 +126,7 @@ func (o *OpenAI) Stream(ctx context.Context, req Request) (<-chan Chunk, error) 
 	httpReq.Header.Set("Authorization", "Bearer "+o.apiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := o.client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("openai request: %w", err)
-	}
-	if resp.StatusCode >= 400 {
-		defer resp.Body.Close()
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("openai status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
-	}
-
-	ch := make(chan Chunk)
-	go func() {
-		defer close(ch)
-		defer resp.Body.Close()
-		o.readStream(ctx, resp.Body, ch)
-	}()
-	return ch, nil
+	return StreamHTTP(ctx, o.client, httpReq, o.readStream)
 }
 
 func convertOpenAIMessages(msgs []Message) []openAIMessage {
@@ -232,8 +215,7 @@ func flushToolCalls(toolAcc map[int]*ToolCall, ch chan<- Chunk, ctx context.Cont
 }
 
 func (o *OpenAI) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	scanner := NewSSEScanner(r)
 
 	toolAcc := map[int]*ToolCall{}
 	var lastUsage *openAIUsage
@@ -246,10 +228,10 @@ func (o *OpenAI) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
 		}
 
 		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
+		data, ok := ParseSSELine(line)
+		if !ok {
 			continue
 		}
-		data := strings.TrimPrefix(line, "data: ")
 		if data == "[DONE]" {
 			doneChunk := Chunk{Done: true}
 			if lastUsage != nil {

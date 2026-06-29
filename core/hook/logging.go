@@ -20,6 +20,7 @@ func NewLoggingHook(logger *slog.Logger) *LoggingHook {
 	return &LoggingHook{Logger: logger}
 }
 
+// OnToolStart logs the tool name and argument length before execution.
 func (h *LoggingHook) OnToolStart(_ context.Context, info ToolStartInfo) error {
 	h.Logger.Info("tool start",
 		"tool", info.Name,
@@ -28,6 +29,7 @@ func (h *LoggingHook) OnToolStart(_ context.Context, info ToolStartInfo) error {
 	return nil
 }
 
+// OnToolResult logs the tool result or error after execution.
 func (h *LoggingHook) OnToolResult(_ context.Context, info ToolResultInfo) error {
 	if info.Error != nil {
 		h.Logger.Warn("tool result (error)",
@@ -43,11 +45,13 @@ func (h *LoggingHook) OnToolResult(_ context.Context, info ToolResultInfo) error
 	return nil
 }
 
+// OnTurnStart logs the turn number at the beginning of each turn.
 func (h *LoggingHook) OnTurnStart(_ context.Context, info TurnInfo) error {
 	h.Logger.Debug("turn start", "turn", info.TurnNumber)
 	return nil
 }
 
+// OnTurnEnd logs the turn number at the end of each turn.
 func (h *LoggingHook) OnTurnEnd(_ context.Context, info TurnInfo) error {
 	h.Logger.Debug("turn end", "turn", info.TurnNumber)
 	return nil

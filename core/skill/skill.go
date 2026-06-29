@@ -357,8 +357,13 @@ func NewSkillTool(def ToolDef, skill *LegacySkill) *SkillTool {
 	return &SkillTool{def: def, skill: skill}
 }
 
-func (t *SkillTool) Name() string             { return t.def.Name }
-func (t *SkillTool) Description() string       { return t.def.Description }
+// Name returns the skill tool name.
+func (t *SkillTool) Name() string { return t.def.Name }
+
+// Description returns the skill tool description.
+func (t *SkillTool) Description() string { return t.def.Description }
+
+// InputSchema returns the skill tool input schema.
 func (t *SkillTool) InputSchema() map[string]any { return t.def.InputSchema }
 
 // Execute runs the skill tool.

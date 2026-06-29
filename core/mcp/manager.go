@@ -136,26 +136,28 @@ func (m *Manager) Status() []MCPServerStatus {
 	var result []MCPServerStatus
 	for _, cfg := range m.servers {
 		client, connected := m.clients[cfg.Name]
-
-		// Gather tool names for this server.
-		var tools []string
-		if connected {
-			// Find tools belonging to this client.
-			for toolName, t := range m.tools {
-				if ext, ok := t.(*ExternalTool); ok && ext.client == client {
-					tools = append(tools, toolName)
-				}
-			}
-		}
-
 		result = append(result, MCPServerStatus{
 			Name:      cfg.Name,
 			Type:      cfg.Type,
 			Connected: connected,
-			Tools:     tools,
+			Tools:     m.clientTools(client, connected),
 		})
 	}
 	return result
+}
+
+// clientTools returns tool names belonging to the given client.
+func (m *Manager) clientTools(client Client, connected bool) []string {
+	if !connected {
+		return nil
+	}
+	var names []string
+	for toolName, t := range m.tools {
+		if ext, ok := t.(*ExternalTool); ok && ext.client == client {
+			names = append(names, toolName)
+		}
+	}
+	return names
 }
 
 // Reconnect attempts to reconnect a disconnected server with exponential backoff.

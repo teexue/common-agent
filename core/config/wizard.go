@@ -182,24 +182,32 @@ func presetProviderWizard(p providerPreset) (ProviderSpec, string, error) {
 	}
 
 	if p.NeedThinking {
-		thinking, err := selectOption("Thinking 模式（Agent 建议 disabled）", []string{"disabled", "enabled"}, 0)
-		if err != nil {
+		if err := configureThinking(&spec); err != nil {
 			return ProviderSpec{}, "", err
-		}
-		spec.ThinkingType = thinking
-		if thinking == "enabled" {
-			keep, err := selectOption("保留历史 reasoning", []string{"不保留", "all"}, 0)
-			if err != nil {
-				return ProviderSpec{}, "", err
-			}
-			if keep == "all" {
-				spec.ThinkingKeep = "all"
-			}
 		}
 	}
 
 	fmt.Printf("\n已选: provider=%s type=%s model=%s\n", spec.Name, spec.Type, spec.DefaultModel)
 	return spec, p.APIKeyEnv, nil
+}
+
+func configureThinking(spec *ProviderSpec) error {
+	thinking, err := selectOption("Thinking 模式（Agent 建议 disabled）", []string{"disabled", "enabled"}, 0)
+	if err != nil {
+		return err
+	}
+	spec.ThinkingType = thinking
+	if thinking != "enabled" {
+		return nil
+	}
+	keep, err := selectOption("保留历史 reasoning", []string{"不保留", "all"}, 0)
+	if err != nil {
+		return err
+	}
+	if keep == "all" {
+		spec.ThinkingKeep = "all"
+	}
+	return nil
 }
 
 func customProviderWizard() (ProviderSpec, string, error) {

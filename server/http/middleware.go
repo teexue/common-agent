@@ -35,3 +35,11 @@ func (s *Server) authMiddleware() gin.HandlerFunc {
 		c.Abort()
 	}
 }
+
+// bodySizeLimit returns middleware that limits request body size.
+func (s *Server) bodySizeLimit(maxBytes int64) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes)
+		c.Next()
+	}
+}

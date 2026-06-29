@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/teexue/common-agent/core/agent"
+	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/hook"
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
@@ -19,9 +20,14 @@ type ToolRegistry interface {
 	Definitions(names []string) ([]provider.ToolDefinition, error)
 }
 
-// workDirCtxKey is the context key for the working directory.
-// Shared with tools/builtin via the same string value.
-const workDirCtxKey = "workdir"
+// ctxKeyWorkDir is the unexported context key for the working directory.
+type ctxKeyWorkDir struct{}
+
+// ctxKeyParentEventChan is the unexported context key for the parent event channel.
+type ctxKeyParentEventChan struct{}
+
+// ctxKeyTelemetry is the unexported context key for the telemetry instance.
+type ctxKeyTelemetry struct{}
 
 // Config configures a single agent run.
 type Config struct {
@@ -63,8 +69,39 @@ type Config struct {
 
 // GetWorkDir returns the working directory from context, or empty string.
 func GetWorkDir(ctx context.Context) string {
-	if v, ok := ctx.Value(workDirCtxKey).(string); ok {
+	if v, ok := ctx.Value(ctxKeyWorkDir{}).(string); ok {
 		return v
 	}
 	return ""
+}
+
+// WithWorkDir returns a context with the working directory set.
+func WithWorkDir(ctx context.Context, dir string) context.Context {
+	return context.WithValue(ctx, ctxKeyWorkDir{}, dir)
+}
+
+// GetParentEventChan returns the parent event channel from context, or nil.
+func GetParentEventChan(ctx context.Context) chan<- event.Event {
+	if ch, ok := ctx.Value(ctxKeyParentEventChan{}).(chan<- event.Event); ok {
+		return ch
+	}
+	return nil
+}
+
+// WithParentEventChan returns a context with the parent event channel set.
+func WithParentEventChan(ctx context.Context, ch chan<- event.Event) context.Context {
+	return context.WithValue(ctx, ctxKeyParentEventChan{}, ch)
+}
+
+// GetTelemetry returns the telemetry instance from context, or nil.
+func GetTelemetry(ctx context.Context) *telemetry.Telemetry {
+	if tel, ok := ctx.Value(ctxKeyTelemetry{}).(*telemetry.Telemetry); ok {
+		return tel
+	}
+	return nil
+}
+
+// WithTelemetry returns a context with the telemetry instance set.
+func WithTelemetry(ctx context.Context, tel *telemetry.Telemetry) context.Context {
+	return context.WithValue(ctx, ctxKeyTelemetry{}, tel)
 }

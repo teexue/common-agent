@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 
@@ -14,7 +13,11 @@ import (
 )
 
 func (s *Server) handleSessionsList(c *gin.Context) {
-	metas, err := s.store.List()
+	if s.store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "session_error", "message": "session persistence not configured"})
+		return
+	}
+	metas, err := s.svc.ListSessions()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "session_error", "message": err.Error()})
 		return
@@ -26,15 +29,14 @@ func (s *Server) handleSessionsList(c *gin.Context) {
 }
 
 func (s *Server) handleSessionsGet(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "session id is required"})
+	if s.store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "session_error", "message": "session persistence not configured"})
 		return
 	}
-
-	sess, err := s.store.Load(id)
+	id := c.Param("id")
+	sess, err := s.svc.LoadSession(id)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, session.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "session not found"})
 			return
 		}
@@ -53,14 +55,13 @@ func (s *Server) handleSessionsGet(c *gin.Context) {
 }
 
 func (s *Server) handleSessionsDelete(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "session id is required"})
+	if s.store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "session_error", "message": "session persistence not configured"})
 		return
 	}
-
-	if err := s.store.Delete(id); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+	id := c.Param("id")
+	if err := s.svc.DeleteSession(id); err != nil {
+		if errors.Is(err, session.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "session not found"})
 			return
 		}
@@ -78,7 +79,6 @@ func (s *Server) handleSessionReplay(c *gin.Context) {
 		return
 	}
 
-	// Parse optional turn filter.
 	fromTurn := 0
 	toTurn := 0
 	if v := c.Query("from_turn"); v != "" {
@@ -98,7 +98,6 @@ func (s *Server) handleSessionReplay(c *gin.Context) {
 		records = []audit.EventRecord{}
 	}
 
-	// Stream as NDJSON.
 	c.Header("Content-Type", "application/x-ndjson")
 	for _, rec := range records {
 		data, _ := json.Marshal(rec)

@@ -29,6 +29,7 @@ type RPCError struct {
 	Data    json.RawMessage `json:"data,omitempty"`
 }
 
+// Error returns the JSON-RPC error message.
 func (e *RPCError) Error() string {
 	return e.Message
 }

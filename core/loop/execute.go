@@ -14,7 +14,6 @@ import (
 	"github.com/teexue/common-agent/core/hook"
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
-	"github.com/teexue/common-agent/core/telemetry"
 	"github.com/teexue/common-agent/core/tool"
 )
 
@@ -126,10 +125,10 @@ func emitToolNotFound(ctx context.Context, hooks *hook.Chain, call provider.Tool
 
 // executeWithTelemetry runs the tool with telemetry tracing.
 func executeWithTelemetry(ctx context.Context, t tool.Tool, call provider.ToolCall, out chan<- event.Event) (tool.Result, error) {
-	toolCtx := context.WithValue(ctx, "parent_event_chan", out)
+	toolCtx := WithParentEventChan(ctx, out)
 	toolStart := time.Now()
 	var toolSpan trace.Span
-	if tel, ok := ctx.Value("telemetry").(*telemetry.Telemetry); ok && tel != nil {
+	if tel := GetTelemetry(ctx); tel != nil {
 		toolCtx, toolSpan = tel.StartTool(toolCtx, call.Name)
 	}
 
@@ -139,7 +138,7 @@ func executeWithTelemetry(ctx context.Context, t tool.Tool, call provider.ToolCa
 	if toolSpan != nil {
 		toolSpan.End()
 	}
-	if tel, ok := ctx.Value("telemetry").(*telemetry.Telemetry); ok && tel != nil {
+	if tel := GetTelemetry(ctx); tel != nil {
 		tel.RecordToolDuration(ctx, toolDuration, attribute.String("tool.name", call.Name))
 		if execErr != nil {
 			tel.RecordToolError(ctx, attribute.String("tool.name", call.Name))

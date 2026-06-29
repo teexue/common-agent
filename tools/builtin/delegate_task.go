@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/teexue/common-agent/core/event"
+	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/subagent"
 	"github.com/teexue/common-agent/core/tool"
 )
@@ -74,10 +74,7 @@ func (d *DelegateTask) Execute(ctx context.Context, input json.RawMessage) (tool
 	}
 
 	// Get the parent event channel from context (set by the loop).
-	var parentOut chan<- event.Event
-	if ch, ok := ctx.Value("parent_event_chan").(chan<- event.Event); ok {
-		parentOut = ch
-	}
+	parentOut := loop.GetParentEventChan(ctx)
 
 	result, err := subagent.Run(ctx, cfg, d.Deps, parentOut)
 	if err != nil {

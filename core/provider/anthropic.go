@@ -1,7 +1,6 @@
 package provider
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -124,23 +123,7 @@ func (a *Anthropic) Stream(ctx context.Context, req Request) (<-chan Chunk, erro
 	httpReq.Header.Set("anthropic-version", a.apiVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := a.client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("anthropic request: %w", err)
-	}
-	if resp.StatusCode >= 400 {
-		defer resp.Body.Close()
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("anthropic status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
-	}
-
-	ch := make(chan Chunk)
-	go func() {
-		defer close(ch)
-		defer resp.Body.Close()
-		a.readStream(ctx, resp.Body, ch)
-	}()
-	return ch, nil
+	return StreamHTTP(ctx, a.client, httpReq, a.readStream)
 }
 
 func (a *Anthropic) buildRequest(req Request) anthropicRequest {
@@ -234,8 +217,7 @@ func convertMessages(msgs []Message) (string, []anthropicMessage) {
 }
 
 func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	scanner := NewSSEScanner(r)
 
 	toolAcc := map[int]*ToolCall{}
 	lastToolIdx := -1
@@ -263,12 +245,13 @@ func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk
 		}
 
 		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
+		data, ok := ParseSSELine(line)
+		if !ok {
 			continue
 		}
 
 		var ev anthropicStreamEvent
-		if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &ev); err != nil {
+		if err := json.Unmarshal([]byte(data), &ev); err != nil {
 			continue
 		}
 
@@ -349,10 +332,7 @@ func handleContentBlockDelta(sec StreamEventContext, ev anthropicStreamEvent) bo
 	return false
 }
 
-// sendChunk sends a chunk to the channel, respecting context cancellation.
+// sendChunk delegates to the shared SendChunk.
 func sendChunk(ctx context.Context, ch chan<- Chunk, c Chunk) {
-	select {
-	case <-ctx.Done():
-	case ch <- c:
-	}
+	SendChunk(ctx, ch, c)
 }

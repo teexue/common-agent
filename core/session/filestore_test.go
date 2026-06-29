@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -69,8 +70,8 @@ func TestFileStoreLoadNotExist(t *testing.T) {
 	}
 
 	_, err = store.Load("nonexistent")
-	if !os.IsNotExist(err) {
-		t.Fatalf("expected os.ErrNotExist, got %v", err)
+	if !errors.Is(err, session.ErrNotFound) {
+		t.Fatalf("expected session.ErrNotFound, got %v", err)
 	}
 }
 
@@ -126,8 +127,8 @@ func TestFileStoreDelete(t *testing.T) {
 	}
 
 	_, err = store.Load(sess.ID)
-	if !os.IsNotExist(err) {
-		t.Fatalf("expected os.ErrNotExist after delete, got %v", err)
+	if !errors.Is(err, session.ErrNotFound) {
+		t.Fatalf("expected session.ErrNotFound after delete, got %v", err)
 	}
 }
 
@@ -139,8 +140,8 @@ func TestFileStoreDeleteNotExist(t *testing.T) {
 	}
 
 	err = store.Delete("nonexistent")
-	if !os.IsNotExist(err) {
-		t.Fatalf("expected os.ErrNotExist, got %v", err)
+	if !errors.Is(err, session.ErrNotFound) {
+		t.Fatalf("expected session.ErrNotFound, got %v", err)
 	}
 }
 
@@ -285,12 +286,12 @@ func TestFileStorePathTraversal(t *testing.T) {
 
 	// Try to load with path traversal characters.
 	_, err = store.Load("../../../etc/passwd")
-	if !os.IsNotExist(err) {
-		t.Fatalf("expected os.ErrNotExist for path traversal, got %v", err)
+	if !errors.Is(err, session.ErrNotFound) {
+		t.Fatalf("expected session.ErrNotFound for path traversal, got %v", err)
 	}
 
 	_, err = store.Load("../hack")
-	if !os.IsNotExist(err) {
-		t.Fatalf("expected os.ErrNotExist for path traversal, got %v", err)
+	if !errors.Is(err, session.ErrNotFound) {
+		t.Fatalf("expected session.ErrNotFound for path traversal, got %v", err)
 	}
 }

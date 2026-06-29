@@ -5,13 +5,12 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/permission"
+	"github.com/teexue/common-agent/core/service"
 )
 
 // AgentListItem is the HTTP DTO for GET /v1/agents.
@@ -37,17 +36,9 @@ type AgentDetail struct {
 }
 
 func (s *Server) handleAgents(c *gin.Context) {
-	result, err := agent.LoadAll(s.agentsDir)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "agent_error", "message": err.Error()})
-		return
-	}
-	for _, e := range result.Errors {
-		s.logger.Warn("failed to load agent", "name", e.Name, "error", e.Err)
-	}
-
-	items := make([]AgentListItem, len(result.Agents))
-	for i, a := range result.Agents {
+	summaries := s.svc.ListAgents()
+	items := make([]AgentListItem, len(summaries))
+	for i, a := range summaries {
 		items[i] = AgentListItem{
 			Name:     a.Name,
 			Provider: a.Provider,
@@ -61,18 +52,13 @@ func (s *Server) handleAgents(c *gin.Context) {
 
 func (s *Server) handleAgentGet(c *gin.Context) {
 	name := c.Param("name")
-	if name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "agent name is required"})
-		return
-	}
-
-	a, err := agent.LoadByName(s.agentsDir, NormalizeAgentName(name))
+	a, err := s.svc.GetAgent(name)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "agent not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "agent_error", "message": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"code": "agent_error", "message": err.Error()})
 		return
 	}
 
@@ -90,52 +76,24 @@ func (s *Server) handleAgentGet(c *gin.Context) {
 }
 
 func (s *Server) handleAgentPut(c *gin.Context) {
-	name := NormalizeAgentName(c.Param("name"))
-	if name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "agent name is required"})
-		return
-	}
-
-	// Read raw YAML body.
-	body, err := c.GetRawData()
+	name := c.Param("name")
+	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": err.Error()})
 		return
 	}
 
-	// Validate by parsing the YAML.
-	a, err := agent.LoadFromBytes(body)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_yaml", "message": err.Error()})
+	if err := s.svc.SaveAgent(name, body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "save_error", "message": err.Error()})
 		return
 	}
 
-	// Ensure the name in the URL matches the name in the YAML.
-	if a.Name != name {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "name_mismatch", "message": "URL name does not match YAML name"})
-		return
-	}
-
-	// Write to disk.
-	path := filepath.Join(s.agentsDir, name+".yaml")
-	if err := os.WriteFile(path, body, 0o644); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "write_error", "message": err.Error()})
-		return
-	}
-
-	s.logger.Info("agent saved", "name", name)
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "name": name})
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "name": service.NormalizeAgentName(name)})
 }
 
 func (s *Server) handleAgentDelete(c *gin.Context) {
-	name := NormalizeAgentName(c.Param("name"))
-	if name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "agent name is required"})
-		return
-	}
-
-	path := filepath.Join(s.agentsDir, name+".yaml")
-	if err := os.Remove(path); err != nil {
+	name := c.Param("name")
+	if err := s.svc.DeleteAgent(name); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "agent not found"})
 			return
@@ -144,8 +102,7 @@ func (s *Server) handleAgentDelete(c *gin.Context) {
 		return
 	}
 
-	s.logger.Info("agent deleted", "name", name)
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "name": name})
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "name": service.NormalizeAgentName(name)})
 }
 
 func (s *Server) handleAgentValidate(c *gin.Context) {
@@ -164,7 +121,6 @@ func (s *Server) handleAgentValidate(c *gin.Context) {
 		return
 	}
 
-	// Validate that all referenced tools exist in the registry.
 	if err := s.registry.ValidateTools(a.Tools); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"valid":   false,
@@ -180,6 +136,7 @@ func (s *Server) handleAgentValidate(c *gin.Context) {
 }
 
 // NormalizeAgentName strips optional .yaml suffix.
+// Deprecated: Use service.NormalizeAgentName instead.
 func NormalizeAgentName(name string) string {
-	return strings.TrimSuffix(name, ".yaml")
+	return service.NormalizeAgentName(name)
 }

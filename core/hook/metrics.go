@@ -28,6 +28,7 @@ func NewMetricsHook() *MetricsHook {
 	}
 }
 
+// OnToolStart records the start time of a tool execution.
 func (h *MetricsHook) OnToolStart(_ context.Context, info ToolStartInfo) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -35,6 +36,7 @@ func (h *MetricsHook) OnToolStart(_ context.Context, info ToolStartInfo) error {
 	return nil
 }
 
+// OnToolResult records the duration and error status of a completed tool execution.
 func (h *MetricsHook) OnToolResult(_ context.Context, info ToolResultInfo) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()

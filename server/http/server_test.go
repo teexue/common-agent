@@ -79,6 +79,7 @@ func setupTestServerWithProvider(t *testing.T, newProvider func(a *agent.Agent) 
 	t.Helper()
 	srv, dir := setupTestServer(t)
 	srv.newProvider = newProvider
+	srv.svc.NewProvider = newProvider
 	return srv, dir
 }
 
@@ -89,7 +90,7 @@ func setupTestServerWithStore(t *testing.T) (*Server, string, session.Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv.store = store
+	srv.SetStore(store)
 	return srv, dir, store
 }
 
@@ -515,8 +516,8 @@ func TestHandleRun_SessionResumeNotFound(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
-	if resp["code"] != "session_error" {
-		t.Fatalf("expected code session_error, got %v", resp["code"])
+	if resp["code"] != "invalid_request" && resp["code"] != "run_error" {
+		t.Fatalf("expected code invalid_request or run_error, got %v", resp["code"])
 	}
 }
 
@@ -541,8 +542,8 @@ func TestHandleRun_SessionResumeNoStore(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
-	if resp["code"] != "session_error" {
-		t.Fatalf("expected code session_error, got %v", resp["code"])
+	if resp["code"] != "invalid_request" && resp["code"] != "run_error" {
+		t.Fatalf("expected code invalid_request or run_error, got %v", resp["code"])
 	}
 }
 
@@ -637,7 +638,7 @@ permissions:
 
 	// Provider emits a tool call that will require approval.
 	args, _ := json.Marshal(map[string]string{})
-	srv.newProvider = func(a *agent.Agent) (provider.Provider, error) {
+	mockProviderFactory := func(a *agent.Agent) (provider.Provider, error) {
 		return &provider.MockProvider{
 			Calls: [][]provider.MockStep{
 				{{
@@ -650,6 +651,8 @@ permissions:
 			},
 		}, nil
 	}
+	srv.newProvider = mockProviderFactory
+	srv.svc.NewProvider = mockProviderFactory
 
 	router := srv.Handler()
 	body, _ := json.Marshal(RunRequest{

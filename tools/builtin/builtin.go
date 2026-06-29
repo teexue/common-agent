@@ -28,6 +28,7 @@ func (Echo) InputSchema() map[string]any {
 	}
 }
 
+// Execute echoes the input message back as output.
 func (Echo) Execute(_ context.Context, input json.RawMessage) (tool.Result, error) {
 	var args struct {
 		Message string `json:"message"`

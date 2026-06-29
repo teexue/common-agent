@@ -59,6 +59,7 @@ func NewStdioClient(cfg StdioConfig) *StdioClient {
 	}
 }
 
+// Name returns the configured name of this MCP server.
 func (c *StdioClient) Name() string { return c.name }
 
 // Connect starts the subprocess and performs the MCP initialize handshake.

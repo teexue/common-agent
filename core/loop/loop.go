@@ -74,7 +74,7 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 	}
 
 	if cfg.WorkDir != "" {
-		ctx = context.WithValue(ctx, workDirCtxKey, cfg.WorkDir)
+		ctx = WithWorkDir(ctx, cfg.WorkDir)
 	}
 
 	out := make(chan event.Event)
@@ -100,7 +100,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 	if tel != nil {
 		var span trace.Span
 		ctx, span = tel.StartRun(ctx, cfg.Agent.Name, cfg.Agent.Model)
-		ctx = context.WithValue(ctx, "telemetry", tel)
+		ctx = WithTelemetry(ctx, tel)
 		defer span.End()
 	}
 

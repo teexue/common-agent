@@ -1,6 +1,12 @@
 package session
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+// ErrNotFound is returned by Store.Load and Store.Delete when the session does not exist.
+var ErrNotFound = errors.New("session not found")
 
 // SessionMeta is the lightweight metadata returned by Store.List.
 // It omits the full message payload for efficiency.
@@ -19,12 +25,12 @@ type Store interface {
 	// it is overwritten (upsert semantics).
 	Save(sess *Session) error
 
-	// Load retrieves a session by ID. Returns os.ErrNotExist if not found.
+	// Load retrieves a session by ID. Returns ErrNotFound if not found.
 	Load(id string) (*Session, error)
 
 	// List returns metadata for all stored sessions, ordered by UpdatedAt descending.
 	List() ([]SessionMeta, error)
 
-	// Delete removes a session by ID. Returns os.ErrNotExist if not found.
+	// Delete removes a session by ID. Returns ErrNotFound if not found.
 	Delete(id string) error
 }

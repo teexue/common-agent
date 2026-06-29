@@ -6,16 +6,14 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-)
 
-// workDirCtxKey is the context key for the working directory.
-// Set by the loop to override the static WorkDir on tools.
-const workDirCtxKey = "workdir"
+	"github.com/teexue/common-agent/core/loop"
+)
 
 // resolveWorkDir returns the working directory from context if set,
 // otherwise falls back to the static value.
 func resolveWorkDir(ctx context.Context, static string) string {
-	if v, ok := ctx.Value(workDirCtxKey).(string); ok && v != "" {
+	if v := loop.GetWorkDir(ctx); v != "" {
 		return v
 	}
 	return static

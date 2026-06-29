@@ -19,8 +19,13 @@ func NewExternalTool(def ToolDefinition, client Client) *ExternalTool {
 	return &ExternalTool{def: def, client: client}
 }
 
-func (t *ExternalTool) Name() string        { return t.def.Name }
-func (t *ExternalTool) Description() string  { return t.def.Description }
+// Name returns the MCP tool name.
+func (t *ExternalTool) Name() string { return t.def.Name }
+
+// Description returns the MCP tool description.
+func (t *ExternalTool) Description() string { return t.def.Description }
+
+// InputSchema returns the MCP tool input schema.
 func (t *ExternalTool) InputSchema() map[string]any { return t.def.InputSchema }
 
 // Execute calls the MCP tool and returns the result.

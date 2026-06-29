@@ -123,6 +123,10 @@ func newChatState(catalog *provider.Catalog, mock bool, paths runtimePaths, agen
 
 // runChatLoop runs the interactive chat REPL until the user exits.
 func runChatLoop(rl *readline.Instance, state *chatState) {
+	// Register signal handler once for the entire REPL session.
+	sigCtx, sigStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer sigStop()
+
 	for {
 		line, err := rl.Readline()
 		if err != nil {
@@ -147,8 +151,9 @@ func runChatLoop(rl *readline.Instance, state *chatState) {
 			pol = permission.AllowAllPolicy{}
 		}
 
-		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-		events, err := loop.Run(ctx, loop.Config{
+		// Derive a per-run cancel context from the signal context.
+		runCtx, runCancel := context.WithCancel(sigCtx)
+		events, err := loop.Run(runCtx, loop.Config{
 			Provider: state.provider,
 			Registry: state.reg,
 			Agent:    state.agent,
@@ -158,7 +163,7 @@ func runChatLoop(rl *readline.Instance, state *chatState) {
 			Policy:   pol,
 			Approver: CLIApprover{},
 		})
-		stop()
+		runCancel()
 		if err != nil {
 			fmt.Println(tui.Error(err.Error()))
 			continue

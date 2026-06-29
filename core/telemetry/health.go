@@ -160,7 +160,10 @@ func NewProviderChecker(name string, checkFn func(ctx context.Context) error) *P
 	return &ProviderChecker{name: name, checkFn: checkFn}
 }
 
+// Name returns the checker name.
 func (c *ProviderChecker) Name() string { return c.name }
+
+// Check runs the provider health check function.
 func (c *ProviderChecker) Check(ctx context.Context) error {
 	if c.checkFn != nil {
 		return c.checkFn(ctx)

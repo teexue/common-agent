@@ -54,6 +54,7 @@ func NewSSEClient(cfg SSEConfig) *SSEClient {
 	}
 }
 
+// Name returns the configured name of this MCP server.
 func (c *SSEClient) Name() string { return c.name }
 
 // Connect establishes the SSE connection and performs the MCP handshake.

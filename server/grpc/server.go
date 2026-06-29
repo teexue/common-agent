@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io/fs"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"google.golang.org/grpc"
@@ -19,6 +17,7 @@ import (
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
+	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
 	commonagentv1 "github.com/teexue/common-agent/proto"
 	"github.com/teexue/common-agent/tools/registry"
@@ -34,6 +33,7 @@ type GRPCServer struct {
 	newProvider func(a *agent.Agent) (provider.Provider, error)
 	logger      *slog.Logger
 	store       session.Store
+	svc         *service.Service
 	approver    *GRPCApprover
 	apiKey      string // when non-empty, all methods require this key
 }
@@ -46,12 +46,20 @@ func NewGRPCServer(
 	logger *slog.Logger,
 	store session.Store,
 ) *GRPCServer {
+	svc := service.New(service.ServiceConfig{
+		AgentsDir:   agentsDir,
+		Registry:    reg,
+		NewProvider: newProvider,
+		Logger:      logger,
+		Store:       store,
+	})
 	return &GRPCServer{
 		agentsDir:   agentsDir,
 		registry:    reg,
 		newProvider: newProvider,
 		logger:      logger,
 		store:       store,
+		svc:         svc,
 		approver:    NewGRPCApprover(),
 	}
 }
@@ -150,7 +158,7 @@ func (s *GRPCServer) Run(req *commonagentv1.RunRequest, stream grpc.ServerStream
 			return status.Error(codes.FailedPrecondition, "session persistence not configured")
 		}
 		if _, err := s.store.Load(req.SessionId); err != nil {
-			if errors.Is(err, os.ErrNotExist) {
+			if errors.Is(err, session.ErrNotFound) {
 				return status.Errorf(codes.NotFound, "session %q not found", req.SessionId)
 			}
 			return status.Errorf(codes.Internal, "load session: %v", err)
@@ -218,16 +226,9 @@ func (s *GRPCServer) ListAgents(ctx context.Context, _ *commonagentv1.ListAgents
 	if err := s.checkAuth(ctx); err != nil {
 		return nil, err
 	}
-	all, err := agent.LoadAll(s.agentsDir)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "load agents: %v", err)
-	}
-	for _, e := range all.Errors {
-		s.logger.Warn("failed to load agent", "name", e.Name, "error", e.Err)
-	}
-
-	items := make([]*commonagentv1.AgentListItem, len(all.Agents))
-	for i, a := range all.Agents {
+	summaries := s.svc.ListAgents()
+	items := make([]*commonagentv1.AgentListItem, len(summaries))
+	for i, a := range summaries {
 		items[i] = &commonagentv1.AgentListItem{
 			Name:     a.Name,
 			Provider: a.Provider,
@@ -244,16 +245,12 @@ func (s *GRPCServer) GetAgent(ctx context.Context, req *commonagentv1.GetAgentRe
 	if err := s.checkAuth(ctx); err != nil {
 		return nil, err
 	}
-	if req.Name == "" {
-		return nil, status.Error(codes.InvalidArgument, "agent name is required")
-	}
-
-	a, err := agent.LoadByName(s.agentsDir, strings.TrimSuffix(req.Name, ".yaml"))
+	a, err := s.svc.GetAgent(req.Name)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, status.Errorf(codes.NotFound, "agent %q not found", req.Name)
 		}
-		return nil, status.Errorf(codes.Internal, "load agent: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "load agent: %v", err)
 	}
 
 	return &commonagentv1.GetAgentResponse{
@@ -272,32 +269,10 @@ func (s *GRPCServer) UpdateAgent(ctx context.Context, req *commonagentv1.UpdateA
 	if err := s.checkAuth(ctx); err != nil {
 		return nil, err
 	}
-	if req.Name == "" {
-		return nil, status.Error(codes.InvalidArgument, "agent name is required")
+	if err := s.svc.SaveAgent(req.Name, req.YamlContent); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "save agent: %v", err)
 	}
-	if len(req.YamlContent) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "yaml_content is required")
-	}
-
-	name := strings.TrimSuffix(req.Name, ".yaml")
-
-	// Validate the YAML.
-	a, err := agent.LoadFromBytes(req.YamlContent)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid agent YAML: %v", err)
-	}
-	if a.Name != name {
-		return nil, status.Errorf(codes.InvalidArgument, "URL name %q does not match YAML name %q", name, a.Name)
-	}
-
-	// Write to disk.
-	path := filepath.Join(s.agentsDir, name+".yaml")
-	if err := os.WriteFile(path, req.YamlContent, 0o644); err != nil {
-		return nil, status.Errorf(codes.Internal, "write agent: %v", err)
-	}
-
-	s.logger.Info("agent saved", "name", name)
-	return &commonagentv1.UpdateAgentResponse{Name: name}, nil
+	return &commonagentv1.UpdateAgentResponse{Name: service.NormalizeAgentName(req.Name)}, nil
 }
 
 // DeleteAgent deletes an agent YAML.
@@ -305,21 +280,12 @@ func (s *GRPCServer) DeleteAgent(ctx context.Context, req *commonagentv1.DeleteA
 	if err := s.checkAuth(ctx); err != nil {
 		return nil, err
 	}
-	if req.Name == "" {
-		return nil, status.Error(codes.InvalidArgument, "agent name is required")
-	}
-
-	name := strings.TrimSuffix(req.Name, ".yaml")
-	path := filepath.Join(s.agentsDir, name+".yaml")
-
-	if err := os.Remove(path); err != nil {
+	if err := s.svc.DeleteAgent(req.Name); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, status.Errorf(codes.NotFound, "agent %q not found", name)
+			return nil, status.Errorf(codes.NotFound, "agent %q not found", req.Name)
 		}
 		return nil, status.Errorf(codes.Internal, "delete agent: %v", err)
 	}
-
-	s.logger.Info("agent deleted", "name", name)
 	return &commonagentv1.DeleteAgentResponse{}, nil
 }
 
@@ -328,13 +294,9 @@ func (s *GRPCServer) ListSessions(ctx context.Context, _ *commonagentv1.ListSess
 	if err := s.checkAuth(ctx); err != nil {
 		return nil, err
 	}
-	if s.store == nil {
-		return nil, status.Error(codes.FailedPrecondition, "session persistence not configured")
-	}
-
-	metas, err := s.store.List()
+	metas, err := s.svc.ListSessions()
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "list sessions: %v", err)
+		return nil, status.Errorf(codes.FailedPrecondition, "%v", err)
 	}
 
 	items := make([]*commonagentv1.SessionMeta, len(metas))
@@ -353,19 +315,12 @@ func (s *GRPCServer) GetSession(ctx context.Context, req *commonagentv1.GetSessi
 	if err := s.checkAuth(ctx); err != nil {
 		return nil, err
 	}
-	if s.store == nil {
-		return nil, status.Error(codes.FailedPrecondition, "session persistence not configured")
-	}
-	if req.Id == "" {
-		return nil, status.Error(codes.InvalidArgument, "session id is required")
-	}
-
-	sess, err := s.store.Load(req.Id)
+	sess, err := s.svc.LoadSession(req.Id)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, session.ErrNotFound) {
 			return nil, status.Errorf(codes.NotFound, "session %q not found", req.Id)
 		}
-		return nil, status.Errorf(codes.Internal, "load session: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
 	msgs := sess.GetMessages()
@@ -389,20 +344,12 @@ func (s *GRPCServer) DeleteSession(ctx context.Context, req *commonagentv1.Delet
 	if err := s.checkAuth(ctx); err != nil {
 		return nil, err
 	}
-	if s.store == nil {
-		return nil, status.Error(codes.FailedPrecondition, "session persistence not configured")
-	}
-	if req.Id == "" {
-		return nil, status.Error(codes.InvalidArgument, "session id is required")
-	}
-
-	if err := s.store.Delete(req.Id); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+	if err := s.svc.DeleteSession(req.Id); err != nil {
+		if errors.Is(err, session.ErrNotFound) {
 			return nil, status.Errorf(codes.NotFound, "session %q not found", req.Id)
 		}
-		return nil, status.Errorf(codes.Internal, "delete session: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	return &commonagentv1.DeleteSessionResponse{}, nil
 }
 

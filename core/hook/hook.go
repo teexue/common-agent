@@ -46,7 +46,14 @@ type Hook interface {
 // in concrete hooks to avoid implementing all methods.
 type BaseHook struct{}
 
-func (BaseHook) OnToolStart(_ context.Context, _ ToolStartInfo) error  { return nil }
+// OnToolStart is a no-op implementation of Hook.OnToolStart.
+func (BaseHook) OnToolStart(_ context.Context, _ ToolStartInfo) error { return nil }
+
+// OnToolResult is a no-op implementation of Hook.OnToolResult.
 func (BaseHook) OnToolResult(_ context.Context, _ ToolResultInfo) error { return nil }
-func (BaseHook) OnTurnStart(_ context.Context, _ TurnInfo) error      { return nil }
-func (BaseHook) OnTurnEnd(_ context.Context, _ TurnInfo) error        { return nil }
+
+// OnTurnStart is a no-op implementation of Hook.OnTurnStart.
+func (BaseHook) OnTurnStart(_ context.Context, _ TurnInfo) error { return nil }
+
+// OnTurnEnd is a no-op implementation of Hook.OnTurnEnd.
+func (BaseHook) OnTurnEnd(_ context.Context, _ TurnInfo) error { return nil }

@@ -47,7 +47,7 @@ export function MarkdownRenderer({ content, isStreaming = false }: { content: st
   return (
     <div className="space-y-2 text-sm leading-relaxed">
       <Markdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{content}</Markdown>
-      {isStreaming && <span className="inline-block w-px animate-pulse bg-primary align-baseline" style={{ height: "1em" }} />}
+      {isStreaming && <span className="inline-block w-px h-[1em] animate-pulse bg-primary align-baseline" />}
     </div>
   )
 }

@@ -81,7 +81,7 @@ func (fs *FileStore) Save(sess *Session) error {
 	return nil
 }
 
-// Load retrieves a session by ID. Returns os.ErrNotExist if not found.
+// Load retrieves a session by ID. Returns ErrNotFound if not found.
 func (fs *FileStore) Load(id string) (*Session, error) {
 	fs.mu.RLock()
 	defer fs.mu.RUnlock()
@@ -89,6 +89,9 @@ func (fs *FileStore) Load(id string) (*Session, error) {
 	path := fs.filePath(id)
 	data, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("%w: %s", ErrNotFound, id)
+		}
 		return nil, err
 	}
 
@@ -170,13 +173,16 @@ func (fs *FileStore) List() ([]SessionMeta, error) {
 	return metas, nil
 }
 
-// Delete removes a session file. Returns os.ErrNotExist if not found.
+// Delete removes a session file. Returns ErrNotFound if not found.
 func (fs *FileStore) Delete(id string) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
 	path := fs.filePath(id)
 	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: %s", ErrNotFound, id)
+		}
 		return err
 	}
 	return nil
@@ -184,9 +190,13 @@ func (fs *FileStore) Delete(id string) error {
 
 func (fs *FileStore) filePath(id string) string {
 	// Sanitize ID to prevent path traversal.
-	safe := strings.ReplaceAll(id, "/", "_")
-	safe = strings.ReplaceAll(safe, "..", "_")
-	return filepath.Join(fs.dir, safe+".json")
+	safe := strings.NewReplacer("/", "_", "\\", "_", "..", "_", "\x00", "_").Replace(id)
+	cleaned := filepath.Clean(filepath.Join(fs.dir, safe+".json"))
+	// Defense in depth: ensure the cleaned path is still within dir.
+	if !strings.HasPrefix(cleaned, filepath.Clean(fs.dir)+string(filepath.Separator)) {
+		return filepath.Join(fs.dir, "_invalid_.json")
+	}
+	return cleaned
 }
 
 func parseTime(s string) (time.Time, error) {

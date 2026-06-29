@@ -13,6 +13,7 @@ import (
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/audit"
 	"github.com/teexue/common-agent/core/provider"
+	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/telemetry"
 	"github.com/teexue/common-agent/tools/registry"
@@ -27,6 +28,7 @@ type Server struct {
 	staticFS    fs.FS               // optional embedded frontend; nil disables static serving
 	logger      *slog.Logger
 	store       session.Store       // optional session persistence; nil disables session endpoints
+	svc         *service.Service    // shared business logic
 	approver    *HTTPApprover       // handles tool approval flow
 	eventLogger *audit.EventLogger  // optional event logging; nil disables replay
 	catalog     *provider.Catalog   // optional provider catalog; nil disables provider listing
@@ -58,6 +60,13 @@ func NewServer(cfg ServerConfig) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	svc := service.New(service.ServiceConfig{
+		AgentsDir:   cfg.AgentsDir,
+		Registry:    cfg.Registry,
+		NewProvider: cfg.NewProvider,
+		Logger:      logger,
+		Store:       cfg.Store,
+	})
 	return &Server{
 		agentsDir:   cfg.AgentsDir,
 		skillsDir:   filepath.Join(filepath.Dir(cfg.AgentsDir), "skills"),
@@ -66,10 +75,17 @@ func NewServer(cfg ServerConfig) *Server {
 		staticFS:    cfg.StaticFS,
 		logger:      logger,
 		store:       cfg.Store,
+		svc:         svc,
 		approver:    NewHTTPApprover(),
 		health:      telemetry.NewHealthServer(),
 		changeCh:    make(chan agentChange, 16),
 	}
+}
+
+// SetStore sets the session store and updates the shared service.
+func (s *Server) SetStore(store session.Store) {
+	s.store = store
+	s.svc.Store = store
 }
 
 // SetEventLogger sets the event logger for session replay.
@@ -141,9 +157,14 @@ func (s *Server) Health() *telemetry.HealthServer {
 
 // Handler returns the root Gin engine.
 func (s *Server) Handler() *gin.Engine {
+	if s.apiKey == "" {
+		s.logger.Warn("API key not set — all /v1/ endpoints are unauthenticated; pass --api-key to secure")
+	}
+
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(s.bodySizeLimit(10 << 20)) // 10 MB
 
 	// Health endpoints — always public, no auth required.
 	r.GET("/healthz", gin.WrapF(s.health.HandleHealth))
