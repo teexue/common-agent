@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# pre-commit hook — 提交前代码规范检查
+# 安装: ./scripts/setup-hooks.sh
+
+exec python3 "$(dirname "$0")/check-standards.py" --hook
