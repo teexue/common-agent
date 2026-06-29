@@ -71,7 +71,7 @@ max_tokens: 1024
 		}, nil
 	}
 
-	srv := NewServer(dir, reg, newProvider, nil, nil, nil)
+	srv := NewServer(ServerConfig{AgentsDir: dir, Registry: reg, NewProvider: newProvider})
 	return srv, dir
 }
 

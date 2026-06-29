@@ -19,75 +19,38 @@ interface TopBarProps {
   onToggleTheme: () => void
 }
 
+function TopBarButton({ tooltip, onClick, children }: { tooltip: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={onClick} className="h-7 w-7 rounded-lg" />}>
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function TopBar({
-  agent,
-  status,
-  artifactOpen,
-  onToggleArtifact,
-  theme,
-  onToggleTheme,
+  agent, status, artifactOpen, onToggleArtifact, theme, onToggleTheme,
 }: TopBarProps) {
   return (
     <header className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md">
       <div className="flex items-center gap-2.5">
-        <span className="font-heading text-sm tracking-tight text-foreground">
-          {agent.name}
-        </span>
+        <span className="font-heading text-sm tracking-tight text-foreground">{agent.name}</span>
         {agent.model && (
-          <Badge
-            variant="secondary"
-            className="rounded-md px-1.5 py-0 text-[10px] font-mono"
-          >
-            {agent.model}
-          </Badge>
+          <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px] font-mono">{agent.model}</Badge>
         )}
         <StatusIndicator status={status} />
       </div>
 
       <div className="flex items-center gap-0.5">
         <HealthIndicator />
-
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={onToggleTheme}
-                className="h-7 w-7 rounded-lg"
-              />
-            }
-          >
-            {theme === "dark" ? (
-              <Sun className="h-3.5 w-3.5 text-muted-foreground" />
-            ) : (
-              <Moon className="h-3.5 w-3.5 text-muted-foreground" />
-            )}
-          </TooltipTrigger>
-          <TooltipContent>切换主题</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={onToggleArtifact}
-                className="h-7 w-7 rounded-lg"
-              />
-            }
-          >
-            {artifactOpen ? (
-              <PanelRightClose className="h-3.5 w-3.5 text-muted-foreground" />
-            ) : (
-              <PanelRightOpen className="h-3.5 w-3.5 text-muted-foreground" />
-            )}
-          </TooltipTrigger>
-          <TooltipContent>
-            {artifactOpen ? "关闭检查器" : "打开检查器"}
-          </TooltipContent>
-        </Tooltip>
+        <TopBarButton tooltip="切换主题" onClick={onToggleTheme}>
+          {theme === "dark" ? <Sun className="h-3.5 w-3.5 text-muted-foreground" /> : <Moon className="h-3.5 w-3.5 text-muted-foreground" />}
+        </TopBarButton>
+        <TopBarButton tooltip={artifactOpen ? "关闭检查器" : "打开检查器"} onClick={onToggleArtifact}>
+          {artifactOpen ? <PanelRightClose className="h-3.5 w-3.5 text-muted-foreground" /> : <PanelRightOpen className="h-3.5 w-3.5 text-muted-foreground" />}
+        </TopBarButton>
       </div>
     </header>
   )

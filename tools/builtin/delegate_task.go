@@ -17,10 +17,14 @@ type DelegateTask struct {
 	Depth int
 }
 
+// Name returns the tool name.
 func (d *DelegateTask) Name() string { return "delegate_task" }
+// Description returns a human-readable description.
 func (d *DelegateTask) Description() string {
 	return "Delegate a task to a sub-agent. The sub-agent will execute the task independently and return the result."
 }
+
+// InputSchema returns the JSON Schema for the tool's input.
 func (d *DelegateTask) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
@@ -46,6 +50,7 @@ func (d *DelegateTask) InputSchema() map[string]any {
 	}
 }
 
+// Execute runs the tool.
 func (d *DelegateTask) Execute(ctx context.Context, input json.RawMessage) (tool.Result, error) {
 	var args struct {
 		Agent    string `json:"agent"`

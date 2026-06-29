@@ -38,59 +38,69 @@ func (m *MockProvider) Stream(ctx context.Context, req Request) (<-chan Chunk, e
 	ch := make(chan Chunk)
 	go func() {
 		defer close(ch)
-		if len(steps) == 0 {
-			if m.BlockOnStream {
-				// Block until context is cancelled.
-				<-ctx.Done()
-				return
-			}
-			select {
-			case <-ctx.Done():
-			case ch <- Chunk{TextDelta: "mock empty response", Done: true}:
-			}
-			return
-		}
-		for i, step := range steps {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			if step.Reasoning != "" {
-				for _, r := range step.Reasoning {
-					select {
-					case <-ctx.Done():
-						return
-					case ch <- Chunk{ReasoningDelta: string(r)}:
-					}
-				}
-			}
-			if step.Text != "" {
-				for _, r := range step.Text {
-					select {
-					case <-ctx.Done():
-						return
-					case ch <- Chunk{TextDelta: string(r)}:
-					}
-				}
-			}
-			if len(step.ToolCalls) > 0 {
-				select {
-				case <-ctx.Done():
-					return
-				case ch <- Chunk{ToolCalls: step.ToolCalls}:
-				}
-			}
-			if i == len(steps)-1 {
-				select {
-				case <-ctx.Done():
-					return
-				case ch <- Chunk{Done: true}:
-				}
-			}
-		}
+		m.runSteps(ctx, ch, steps)
 	}()
 	return ch, nil
+}
+
+func (m *MockProvider) runSteps(ctx context.Context, ch chan<- Chunk, steps []MockStep) {
+	if len(steps) == 0 {
+		m.handleEmptyResponse(ctx, ch)
+		return
+	}
+
+	for i, step := range steps {
+		if ctx.Err() != nil {
+			return
+		}
+		m.emitStep(ctx, ch, step)
+		if i == len(steps)-1 {
+			sendDone(ctx, ch)
+		}
+	}
+}
+
+func (m *MockProvider) handleEmptyResponse(ctx context.Context, ch chan<- Chunk) {
+	if m.BlockOnStream {
+		<-ctx.Done()
+		return
+	}
+	select {
+	case <-ctx.Done():
+	case ch <- Chunk{TextDelta: "mock empty response", Done: true}:
+	}
+}
+
+func (m *MockProvider) emitStep(ctx context.Context, ch chan<- Chunk, step MockStep) {
+	if step.Reasoning != "" {
+		emitRunes(ctx, ch, step.Reasoning, func(r string) Chunk { return Chunk{ReasoningDelta: r} })
+	}
+	if step.Text != "" {
+		emitRunes(ctx, ch, step.Text, func(r string) Chunk { return Chunk{TextDelta: r} })
+	}
+	if len(step.ToolCalls) > 0 {
+		select {
+		case <-ctx.Done():
+		case ch <- Chunk{ToolCalls: step.ToolCalls}:
+		}
+	}
+}
+
+func emitRunes(ctx context.Context, ch chan<- Chunk, s string, makeChunk func(string) Chunk) {
+	for _, r := range s {
+		select {
+		case <-ctx.Done():
+			return
+		case ch <- makeChunk(string(r)):
+		}
+	}
+}
+
+func sendDone(ctx context.Context, ch chan<- Chunk) {
+	select {
+	case <-ctx.Done():
+	case ch <- Chunk{Done: true}:
+	}
 }
 
 // EchoThenReply builds a mock that calls echo on first turn then replies on second.

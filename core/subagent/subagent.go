@@ -69,84 +69,70 @@ type Result struct {
 // Run executes a sub-agent and returns the result.
 // It emits TypeSubAgentStart and TypeSubAgentEnd events on the parent's event channel.
 func Run(ctx context.Context, cfg Config, deps Deps, parentOut chan<- event.Event) (*Result, error) {
-	// Depth check.
-	maxDepth := DefaultMaxDepth
-	if cfg.Depth >= maxDepth {
-		return nil, fmt.Errorf("sub-agent depth limit exceeded (%d)", maxDepth)
+	if cfg.Depth >= DefaultMaxDepth {
+		return nil, fmt.Errorf("sub-agent depth limit exceeded (%d)", DefaultMaxDepth)
 	}
 
-	// Load the sub-agent config.
-	var a *agent.Agent
-	var err error
-	if cfg.AgentName != "" {
-		a, err = agent.LoadByName(deps.AgentsDir, cfg.AgentName)
-		if err != nil {
-			return nil, fmt.Errorf("load sub-agent %q: %w", cfg.AgentName, err)
-		}
-	} else {
-		// Use a minimal agent config.
-		a = &agent.Agent{
-			Name:         "sub-agent",
-			Provider:     "default",
-			SystemPrompt: "You are a helpful sub-agent. Complete the assigned task.",
-			Tools:        []string{},
-			MaxTurns:     5,
-			MaxTokens:    4096,
-		}
+	a, err := loadSubAgent(deps.AgentsDir, cfg)
+	if err != nil {
+		return nil, err
 	}
 
-	// Override max_turns if specified.
-	if cfg.MaxTurns > 0 {
-		a.MaxTurns = cfg.MaxTurns
-	}
-
-	// Build the prompt.
-	prompt := cfg.Task
-	if cfg.Context != "" {
-		prompt = cfg.Context + "\n\n" + cfg.Task
-	}
-
-	// Create provider.
 	p, err := deps.NewProvider(a)
 	if err != nil {
 		return nil, fmt.Errorf("create provider for sub-agent: %w", err)
 	}
 
-	// Create a child session.
-	sess := session.New(a.Name)
+	prompt := cfg.Task
+	if cfg.Context != "" {
+		prompt = cfg.Context + "\n\n" + cfg.Task
+	}
 
-	// Build loop config.
 	loopCfg := loop.Config{
-		Provider:  p,
-		Registry:  deps.Registry,
-		Agent:     a,
-		Session:   sess,
-		Prompt:    prompt,
-		Logger:    deps.Logger,
-		Policy:    deps.Policy,
-		Approver:  deps.Approver,
+		Provider: p, Registry: deps.Registry, Agent: a,
+		Session: session.New(a.Name), Prompt: prompt,
+		Logger: deps.Logger, Policy: deps.Policy, Approver: deps.Approver,
 	}
 
-	// Emit sub-agent start event.
-	startEvent := event.Event{
-		Type:    event.TypeSubAgentStart,
-		Tool:    a.Name,
-		Content: cfg.Task,
-	}
-	emitEvent(ctx, parentOut, startEvent)
+	emitEvent(ctx, parentOut, event.Event{Type: event.TypeSubAgentStart, Tool: a.Name, Content: cfg.Task})
 
-	// Run the sub-agent loop.
 	events, err := loop.Run(ctx, loopCfg)
 	if err != nil {
-		emitEvent(ctx, parentOut, event.Event{
-			Type:    event.TypeSubAgentEnd,
-			Tool:    a.Name,
-			Content: fmt.Sprintf("error: %v", err),
-		})
+		emitEvent(ctx, parentOut, event.Event{Type: event.TypeSubAgentEnd, Tool: a.Name, Content: fmt.Sprintf("error: %v", err)})
 		return nil, fmt.Errorf("run sub-agent: %w", err)
 	}
 
-	// Collect events and extract the final response.
+	result := collectResult(events)
+
+	emitEvent(ctx, parentOut, event.Event{Type: event.TypeSubAgentEnd, Tool: a.Name, Content: result.Response})
+	return result, nil
+}
+
+// loadSubAgent loads or creates a sub-agent configuration.
+func loadSubAgent(agentsDir string, cfg Config) (*agent.Agent, error) {
+	if cfg.AgentName != "" {
+		a, err := agent.LoadByName(agentsDir, cfg.AgentName)
+		if err != nil {
+			return nil, fmt.Errorf("load sub-agent %q: %w", cfg.AgentName, err)
+		}
+		if cfg.MaxTurns > 0 {
+			a.MaxTurns = cfg.MaxTurns
+		}
+		return a, nil
+	}
+	a := &agent.Agent{
+		Name: "sub-agent", Provider: "default",
+		SystemPrompt: "You are a helpful sub-agent. Complete the assigned task.",
+		Tools: []string{}, MaxTurns: 5, MaxTokens: 4096,
+	}
+	if cfg.MaxTurns > 0 {
+		a.MaxTurns = cfg.MaxTurns
+	}
+	return a, nil
+}
+
+// collectResult drains the event channel and builds the sub-agent result.
+func collectResult(events <-chan event.Event) *Result {
 	result := &Result{}
 	var lastText string
 	for ev := range events {
@@ -162,16 +148,7 @@ func Run(ctx context.Context, cfg Config, deps Deps, parentOut chan<- event.Even
 		}
 	}
 	result.Response = lastText
-
-	// Emit sub-agent end event.
-	endEvent := event.Event{
-		Type:    event.TypeSubAgentEnd,
-		Tool:    a.Name,
-		Content: result.Response,
-	}
-	emitEvent(ctx, parentOut, endEvent)
-
-	return result, nil
+	return result
 }
 
 func emitEvent(ctx context.Context, out chan<- event.Event, ev event.Event) {

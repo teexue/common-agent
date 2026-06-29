@@ -24,7 +24,7 @@ There is no `go generate`, `go install`, or Docker step at this phase.
 
 ## Architecture
 
-This is a Go agent runtime (`common-agent`). The project is in **Phase 1** (production base). See `AGENTS.md` for detailed coding conventions.
+This is a Go agent runtime (`common-agent`). The project is in **Phase 1** (production base).
 
 **Dependency direction**: `cmd → server → core ← tools`. Core must not import `server` or `cmd`.
 
@@ -33,14 +33,14 @@ This is a Go agent runtime (`common-agent`). The project is in **Phase 1** (prod
 | Entry | `cmd/agent-server/` | CLI wiring only — subcommands: `chat`, `run`, `serve`, `config` |
 | Transport | `server/http/` | HTTP/SSE handler — parse request → call core `loop.Run` → stream events |
 | Core | `core/loop/` | The single agent loop — all paths (CLI/HTTP/gRPC) must call this `Run` |
-| Core | `core/event/` | Unified event types: `text_delta`, `reasoning_delta`, `tool_start`, `tool_result`, `error`, `done` + `PrintEvents`, `StreamEvents` |
+| Core | `core/event/` | Unified event types: `text_delta`, `reasoning_delta`, `tool_start`, `tool_result`, `error`, `done` |
 | Core | `core/provider/` | LLM provider interface (`Stream`) + OpenAI/Anthropic implementations + mock + catalog |
 | Core | `core/tool/` | Tool interface (`Name/Description/InputSchema/Execute`) — `Result.Output` is `json.RawMessage` |
 | Core | `core/agent/` | YAML agent loading (prompt, tools, model, max turns, max tokens, tool_execution) |
 | Core | `core/session/` | Thread-safe conversation session with `AddMessages`/`GetMessages`/`Clear` API |
 | Core | `core/config/` | User config in `~/.common-agent/` (settings, providers, `CredentialStore`, wizard) |
 | Extension | `tools/registry/` | Tool registry (register by name, resolve definitions for LLM) |
-| Built-in | `tools/builtin/` | Built-in tools: `echo`, `get_time` |
+| Built-in | `tools/builtin/` | Built-in tools: `echo`, `get_time`, `read_file`, `write_file`, etc. |
 
 ## Key patterns
 
@@ -60,16 +60,51 @@ This is a Go agent runtime (`common-agent`). The project is in **Phase 1** (prod
 
 `core/event.Event` is the universal output format. Adding a new event type requires updating all consumers: `PrintEvents` in `core/event`, HTTP SSE encoder in `server/http`, and any future gRPC handler.
 
+## Coding standards
+
+编码规范的权威来源是 `docs/html/code-standards.html`，本文件仅记录 Claude Code 工作时需要特别注意的要点：
+
+### 可维护性约束
+
+| 指标 | Go | 前端 |
+|------|-----|------|
+| 单文件行数 | ≤ 500 行（测试 ≤ 600） | ≤ 400 行（测试 ≤ 600） |
+| 单函数行数 | ≤ 80 行 | ≤ 60 行 |
+| 函数参数数 | ≤ 5 个 | ≤ 5 个 |
+| 嵌套深度 | ≤ 4 层 | ≤ 4 层 |
+
+### Go 规范要点
+
+- 导出符号必须有 doc comment（以名称开头的简短注释）
+- 错误用 `fmt.Errorf("context: %w", err)` 包装，早返回
+- Context 不存 struct，第一参数传入
+- 小接口 + `NewXxx(deps...)` 注入，避免 `init()` 注册
+- Import 三组分隔：标准库 / 外部 / 内部
+- 测试推荐 `testify/assert` + `testify/require`，表驱动优先
+
+### 前端规范要点
+
+- 无分号、双引号、2 空格缩进（Prettier 强制）
+- 函数组件 + hooks，禁止 class 组件
+- 禁止 `any` 类型
+- Tailwind utility-first，用 `cn()` 合并类名
+- 组件文件 PascalCase，工具函数 camelCase
+
+### Git 规范
+
+- Commit: Conventional Commits 格式 — `feat(core/loop): description`
+- 分支: `feat/<name>`、`fix/<name>`
+
 ## Documentation management
 
-- **Authority**: `docs/html/` is the authoritative documentation layer. All `docs/*.md` files are legacy reference only — do not treat them as source of truth.
-- **index.html**: Records the completed project state — architecture, core modules, API reference, development guides. Updated each phase when features are DONE.
-- **roadmap.html**: The development plan — detailed task breakdowns per phase with sub-tasks, acceptance criteria, dependencies, and complexity estimates. Updated at the START of each phase to define scope, and throughout as tasks progress.
-- **When implementing a phase**: Update `roadmap.html` to mark subtasks as done, then update `index.html` to document newly completed features.
-- **New HTML docs**: When a phase has substantial new capabilities, create a dedicated HTML page (e.g., `mcp-integration.html`) and link it from both `index.html` and `roadmap.html`.
-- **CSS**: All HTML docs share `docs/html/css/style.css`. Add page-specific styles in `<style>` tags within each HTML file — do not modify shared CSS unless the change benefits all pages.
-- **CLAUDE.md** records project-level instructions for AI assistants (build commands, architecture, patterns).
-- **AGENTS.md** records coding conventions and development discipline rules.
+- **权威来源**: `docs/html/` 是项目文档的唯一权威来源。
+- **站点结构**: 多页面纯 HTML 站点，由 `_assets/nav-config.js` 定义导航，`_assets/nav.js` 动态注入侧边栏。
+- **共享样式**: `docs/html/_assets/style.css`，页面特有样式写在各自的 `<style>` 标签内。
+- **导航分组**: 项目 / 入门 / 编码规范 / 核心—运行时 / 核心—扩展 / 核心—基础设施 / 执行流程 / 开发指南
+- **index.html**: 记录已完成的项目状态，每个 phase 完成后更新。
+- **roadmap.html**: 开发计划，每个 phase 开始时定义范围，过程中更新进度。
+- **code-standards.html**: 编码规范，全栈通用的编码标准。
+- **refactoring-plan.html**: 重构计划，基于编码规范的代码审查结果。
 
 ## Agent YAML reference
 

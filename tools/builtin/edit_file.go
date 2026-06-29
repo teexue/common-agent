@@ -15,10 +15,14 @@ type EditFile struct {
 	WorkDir string // sandbox root for path resolution
 }
 
+// Name returns the tool name.
 func (EditFile) Name() string { return "edit_file" }
+// Description returns a human-readable description.
 func (EditFile) Description() string {
 	return "Replace text in a file using exact string matching. Safer than write_file for targeted changes. Returns the number of replacements made."
 }
+
+// InputSchema returns the JSON Schema for the tool's input.
 func (EditFile) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
@@ -44,6 +48,7 @@ func (EditFile) InputSchema() map[string]any {
 	}
 }
 
+// Execute runs the tool.
 func (ef EditFile) Execute(ctx context.Context, input json.RawMessage) (tool.Result, error) {
 	var args struct {
 		Path      string `json:"path"`

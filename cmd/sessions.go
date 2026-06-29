@@ -1,18 +1,14 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"text/tabwriter"
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/config"
-	"github.com/teexue/common-agent/core/loop"
-	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/tui"
 	httpapi "github.com/teexue/common-agent/server/http"
@@ -156,47 +152,7 @@ func sessionsResume(args []string, logger *slog.Logger) {
 	}
 	defer rl.Close()
 
-	for {
-		line, err := rl.Readline()
-		if err != nil {
-			fmt.Println()
-			return
-		}
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		if strings.HasPrefix(line, "/") {
-			if handleChatCommand(line, state) {
-				return
-			}
-			continue
-		}
-
-		// Create policy from agent permissions.
-		var pol permission.Policy
-		if state.agent.Permissions != nil {
-			pol = permission.NewAgentPolicy(*state.agent.Permissions)
-		} else {
-			pol = permission.AllowAllPolicy{}
-		}
-
-		events, err := loop.Run(context.Background(), loop.Config{
-			Provider: state.provider,
-			Registry: state.reg,
-			Agent:    state.agent,
-			Session:  state.sess,
-			Prompt:   line,
-			Store:    store,
-			Policy:   pol,
-			Approver: CLIApprover{},
-		})
-		if err != nil {
-			fmt.Println(tui.Error(err.Error()))
-			continue
-		}
-		tui.PrintEvents(events)
-	}
+	runChatLoop(rl, state)
 }
 
 func sessionsDelete(args []string, logger *slog.Logger) {

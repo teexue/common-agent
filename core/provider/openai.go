@@ -146,9 +146,9 @@ func (o *OpenAI) Stream(ctx context.Context, req Request) (<-chan Chunk, error) 
 	return ch, nil
 }
 
-func (o *OpenAI) buildRequest(req Request) openAIRequest {
-	msgs := make([]openAIMessage, 0, len(req.Messages))
-	for _, m := range req.Messages {
+func convertOpenAIMessages(msgs []Message) []openAIMessage {
+	result := make([]openAIMessage, 0, len(msgs))
+	for _, m := range msgs {
 		msg := openAIMessage{
 			Role:             string(m.Role),
 			Content:          m.Content,
@@ -169,12 +169,15 @@ func (o *OpenAI) buildRequest(req Request) openAIRequest {
 				})
 			}
 		}
-		msgs = append(msgs, msg)
+		result = append(result, msg)
 	}
+	return result
+}
 
-	tools := make([]openAITool, 0, len(req.Tools))
-	for _, t := range req.Tools {
-		tools = append(tools, openAITool{
+func convertTools(tools []ToolDefinition) []openAITool {
+	result := make([]openAITool, 0, len(tools))
+	for _, t := range tools {
+		result = append(result, openAITool{
 			Type: "function",
 			Function: openAIFunction{
 				Name:        t.Name,
@@ -183,15 +186,18 @@ func (o *OpenAI) buildRequest(req Request) openAIRequest {
 			},
 		})
 	}
+	return result
+}
 
+func (o *OpenAI) buildRequest(req Request) openAIRequest {
 	maxTokens := req.MaxTokens
 	if maxTokens <= 0 {
 		maxTokens = 4096
 	}
 	out := openAIRequest{
 		Model:         req.Model,
-		Messages:      msgs,
-		Tools:         tools,
+		Messages:      convertOpenAIMessages(req.Messages),
+		Tools:         convertTools(req.Tools),
 		Stream:        true,
 		StreamOptions: &openAIStreamOptions{IncludeUsage: true},
 		MaxTokens:     maxTokens,
@@ -258,56 +264,76 @@ func (o *OpenAI) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
 		if err := json.Unmarshal([]byte(data), &stream); err != nil {
 			continue
 		}
-
-		// Capture usage from the final chunk (sent with empty choices).
 		if stream.Usage != nil {
 			lastUsage = stream.Usage
 		}
-
 		if len(stream.Choices) == 0 {
 			continue
 		}
+
 		choice := stream.Choices[0]
-		if choice.Delta.ReasoningContent != "" {
-			select {
-			case <-ctx.Done():
+		emitChoiceDeltas(ctx, ch, choice)
+		accumulateToolCalls(toolAcc, choice.Delta.ToolCalls)
+
+		if choice.FinishReason != nil {
+			switch *choice.FinishReason {
+			case "tool_calls":
+				flushToolCalls(toolAcc, ch, ctx)
+				toolAcc = map[int]*ToolCall{}
+			case "stop":
+				flushToolCalls(toolAcc, ch, ctx)
+				ch <- Chunk{Done: true}
 				return
-			case ch <- Chunk{ReasoningDelta: choice.Delta.ReasoningContent}:
 			}
-		}
-		if choice.Delta.Content != "" {
-			select {
-			case <-ctx.Done():
-				return
-			case ch <- Chunk{TextDelta: choice.Delta.Content}:
-			}
-		}
-		for _, tc := range choice.Delta.ToolCalls {
-			idx := tc.Index
-			acc, ok := toolAcc[idx]
-			if !ok {
-				acc = &ToolCall{}
-				toolAcc[idx] = acc
-			}
-			if tc.ID != "" {
-				acc.ID = tc.ID
-			}
-			if tc.Function.Name != "" {
-				acc.Name = tc.Function.Name
-			}
-			if tc.Function.Arguments != "" {
-				acc.Arguments = append(acc.Arguments, []byte(tc.Function.Arguments)...)
-			}
-		}
-		if choice.FinishReason != nil && *choice.FinishReason == "tool_calls" {
-			flushToolCalls(toolAcc, ch, ctx)
-			toolAcc = map[int]*ToolCall{}
-		}
-		if choice.FinishReason != nil && *choice.FinishReason == "stop" {
-			flushToolCalls(toolAcc, ch, ctx)
-			ch <- Chunk{Done: true}
-			return
 		}
 	}
 	flushToolCalls(toolAcc, ch, ctx)
+}
+
+// openAIStreamChoice represents a single choice in an OpenAI stream response.
+type openAIStreamChoice = struct {
+	Delta struct {
+		Content          string          `json:"content"`
+		ReasoningContent string          `json:"reasoning_content"`
+		ToolCalls        []openAIToolCall `json:"tool_calls"`
+	} `json:"delta"`
+	FinishReason *string `json:"finish_reason"`
+}
+
+// emitChoiceDeltas sends reasoning and text deltas from a choice to the channel.
+func emitChoiceDeltas(ctx context.Context, ch chan<- Chunk, choice openAIStreamChoice) {
+	if choice.Delta.ReasoningContent != "" {
+		select {
+		case <-ctx.Done():
+			return
+		case ch <- Chunk{ReasoningDelta: choice.Delta.ReasoningContent}:
+		}
+	}
+	if choice.Delta.Content != "" {
+		select {
+		case <-ctx.Done():
+			return
+		case ch <- Chunk{TextDelta: choice.Delta.Content}:
+		}
+	}
+}
+
+// accumulateToolCalls merges incremental tool call deltas into the accumulator.
+func accumulateToolCalls(toolAcc map[int]*ToolCall, calls []openAIToolCall) {
+	for _, tc := range calls {
+		acc, ok := toolAcc[tc.Index]
+		if !ok {
+			acc = &ToolCall{}
+			toolAcc[tc.Index] = acc
+		}
+		if tc.ID != "" {
+			acc.ID = tc.ID
+		}
+		if tc.Function.Name != "" {
+			acc.Name = tc.Function.Name
+		}
+		if tc.Function.Arguments != "" {
+			acc.Arguments = append(acc.Arguments, []byte(tc.Function.Arguments)...)
+		}
+	}
 }

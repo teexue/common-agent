@@ -14,7 +14,6 @@ import type {
 } from "@/types/agent"
 
 interface AppLayoutProps {
-  // Sidebar
   sidebarCollapsed: boolean
   onToggleSidebar: () => void
   agents: AgentInfo[]
@@ -24,115 +23,42 @@ interface AppLayoutProps {
   onSelectTool: (tool: ToolInfo) => void
   onOpenSettings: () => void
   onNewSession?: () => void
-  // Session props
   sessions?: SessionMeta[]
   activeSessionId?: string | null
   onResumeSession?: (id: string) => void
   onDeleteSession?: (id: string) => void
   onReplaySession?: (id: string) => void
-  // Agent management
   onViewAgent?: (name: string) => void
   onEditAgent?: (name: string) => void
   onDeleteAgent?: (name: string) => void
   onCreateAgent?: () => void
   skills?: SkillInfo[]
-
-  // Top bar
   agent: AgentInfo
   status: StreamStatus
   inspectorOpen: boolean
   onToggleInspector: () => void
   theme: string
   onToggleTheme: () => void
-
-  // Panels
   leftPanel: React.ReactNode
   rightPanel: React.ReactNode
 }
 
-export function AppLayout({
-  sidebarCollapsed,
-  onToggleSidebar,
-  agents,
-  selectedAgent,
-  onSelectAgent,
-  tools,
-  onSelectTool,
-  onOpenSettings,
-  onNewSession,
-  sessions,
-  activeSessionId,
-  onResumeSession,
-  onDeleteSession,
-  onReplaySession,
-  onViewAgent,
-  onEditAgent,
-  onDeleteAgent,
-  onCreateAgent,
-  skills,
-  agent,
-  status,
-  inspectorOpen,
-  onToggleInspector,
-  theme,
-  onToggleTheme,
-  leftPanel,
-  rightPanel,
-}: AppLayoutProps) {
+export function AppLayout({ inspectorOpen, leftPanel, rightPanel, agent, status, onToggleInspector, theme, onToggleTheme, ...sidebarProps }: AppLayoutProps) {
   return (
     <div className="flex h-svh overflow-hidden bg-background">
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={onToggleSidebar}
-        agents={agents}
-        selectedAgent={selectedAgent}
-        onSelectAgent={onSelectAgent}
-        tools={tools}
-        onSelectTool={onSelectTool}
-        onOpenSettings={onOpenSettings}
-        onNewSession={onNewSession}
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        onResumeSession={onResumeSession}
-        onDeleteSession={onDeleteSession}
-        onReplaySession={onReplaySession}
-        onViewAgent={onViewAgent}
-        onEditAgent={onEditAgent}
-        onDeleteAgent={onDeleteAgent}
-        onCreateAgent={onCreateAgent}
-        skills={skills}
-      />
+      <Sidebar {...sidebarProps} collapsed={sidebarProps.sidebarCollapsed} onToggle={sidebarProps.onToggleSidebar} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar
-          agent={agent}
-          status={status}
-          artifactOpen={inspectorOpen}
-          onToggleArtifact={onToggleInspector}
-          theme={theme}
-          onToggleTheme={onToggleTheme}
-        />
+        <TopBar agent={agent} status={status} artifactOpen={inspectorOpen} onToggleArtifact={onToggleInspector} theme={theme} onToggleTheme={onToggleTheme} />
 
-        <ResizablePanelGroup
-          orientation="horizontal"
-          className="flex-1"
-        >
-          <ResizablePanel
-            defaultSize={inspectorOpen ? 60 : 100}
-            minSize={35}
-            className="bg-background"
-          >
+        <ResizablePanelGroup orientation="horizontal" className="flex-1">
+          <ResizablePanel defaultSize={inspectorOpen ? 60 : 100} minSize={35} className="bg-background">
             {leftPanel}
           </ResizablePanel>
-
           {inspectorOpen && (
             <>
               <ResizableHandle className="w-[3px] bg-border/40 transition-colors hover:bg-primary/25" />
-              <ResizablePanel
-                defaultSize={40}
-                minSize={25}
-                className="border-l border-border bg-card/30"
-              >
+              <ResizablePanel defaultSize={40} minSize={25} className="border-l border-border bg-card/30">
                 {rightPanel}
               </ResizablePanel>
             </>

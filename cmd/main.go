@@ -20,10 +20,12 @@ import (
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/loop"
+	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/tui"
 	grpcapi "github.com/teexue/common-agent/server/grpc"
 	httpapi "github.com/teexue/common-agent/server/http"
+	"github.com/teexue/common-agent/tools/registry"
 )
 
 func main() {
@@ -116,7 +118,7 @@ func runServe(args []string, logger *slog.Logger) {
 	eventLogger := audit.NewEventLogger(filepath.Join(paths.home, "events"))
 
 	// HTTP server.
-	srv := httpapi.NewServer(paths.agentsDir, reg, resolveProvider(catalog, *mock), distFS(), logger, sessStore)
+	srv := httpapi.NewServer(httpapi.ServerConfig{AgentsDir: paths.agentsDir, Registry: reg, NewProvider: resolveProvider(catalog, *mock), StaticFS: distFS(), Logger: logger, Store: sessStore})
 	srv.SetEventLogger(eventLogger)
 	if catalog != nil {
 		srv.SetCatalog(catalog)
@@ -136,23 +138,7 @@ func runServe(args []string, logger *slog.Logger) {
 	// Start gRPC server if --grpc-addr is set.
 	var grpcServer *grpc.Server
 	if *grpcAddr != "" {
-		grpcSrv := grpcapi.NewGRPCServer(paths.agentsDir, reg, resolveProvider(catalog, *mock), logger, sessStore)
-		grpcServer = grpc.NewServer()
-		grpcSrv.RegisterServer(grpcServer)
-
-		lis, err := net.Listen("tcp", *grpcAddr)
-		if err != nil {
-			logger.Error("grpc listen", "error", err)
-			os.Exit(1)
-		}
-
-		go func() {
-			logger.Info("grpc server listening", "addr", *grpcAddr, "home", paths.home)
-			if err := grpcServer.Serve(lis); err != nil {
-				logger.Error("grpc server failed", "error", err)
-				os.Exit(1)
-			}
-		}()
+		grpcServer = startGRPCServer(GRPCConfig{Addr: *grpcAddr, Paths: paths, Reg: reg, Catalog: catalog, Mock: *mock, Logger: logger, SessStore: sessStore})
 	}
 
 	go func() {
@@ -172,6 +158,39 @@ func runServe(args []string, logger *slog.Logger) {
 	_ = httpServer.Shutdown(shutdownCtx)
 }
 
+// GRPCConfig holds configuration for starting a gRPC server.
+type GRPCConfig struct {
+	Addr      string
+	Paths     runtimePaths
+	Reg       *registry.Registry
+	Catalog   *provider.Catalog
+	Mock      bool
+	Logger    *slog.Logger
+	SessStore session.Store
+}
+
+// startGRPCServer creates, registers, and starts a gRPC server in a goroutine.
+func startGRPCServer(cfg GRPCConfig) *grpc.Server {
+	grpcSrv := grpcapi.NewGRPCServer(cfg.Paths.agentsDir, cfg.Reg, resolveProvider(cfg.Catalog, cfg.Mock), cfg.Logger, cfg.SessStore)
+	srv := grpc.NewServer()
+	grpcSrv.RegisterServer(srv)
+
+	lis, err := net.Listen("tcp", cfg.Addr)
+	if err != nil {
+		cfg.Logger.Error("grpc listen", "error", err)
+		os.Exit(1)
+	}
+
+	go func() {
+		cfg.Logger.Info("grpc server listening", "addr", cfg.Addr, "home", cfg.Paths.home)
+		if err := srv.Serve(lis); err != nil {
+			cfg.Logger.Error("grpc server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+	return srv
+}
+
 func runCLI(args []string, logger *slog.Logger) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	agentName := fs.String("agent", "", "agent name (default from config)")
@@ -185,7 +204,6 @@ func runCLI(args []string, logger *slog.Logger) {
 		fmt.Fprintf(os.Stderr, "error: --format must be text or json\n")
 		os.Exit(1)
 	}
-
 	if *prompt == "" {
 		fmt.Fprintln(os.Stderr, "error: --prompt is required")
 		os.Exit(1)
@@ -227,33 +245,37 @@ func runCLI(args []string, logger *slog.Logger) {
 	reg := newRegistry("") // uses current working directory
 	sess := session.New(a.Name)
 	events, err := loop.Run(context.Background(), loop.Config{
-		Provider: p,
-		Registry: reg,
-		Agent:    a,
-		Session:  sess,
-		Prompt:   *prompt,
+		Provider: p, Registry: reg, Agent: a, Session: sess, Prompt: *prompt,
 	})
 	if err != nil {
 		logger.Error("run agent", "error", err)
 		os.Exit(1)
 	}
 
-	if *format == "json" {
-		if err := event.StreamEvents(context.Background(), os.Stdout, events); err != nil {
-			logger.Error("stream events", "error", err)
+	outputCLIResult(CLIOutputConfig{Format: *format, Events: events, Session: sess, Agent: a, Paths: paths, Logger: logger})
+}
+
+// CLIOutputConfig holds configuration for CLI output formatting.
+type CLIOutputConfig struct {
+	Format  string
+	Events  <-chan event.Event
+	Session *session.Session
+	Agent   *agent.Agent
+	Paths   runtimePaths
+	Logger  *slog.Logger
+}
+
+// outputCLIResult writes agent run results in the requested format.
+func outputCLIResult(cfg CLIOutputConfig) {
+	if cfg.Format == "json" {
+		if err := event.StreamEvents(context.Background(), os.Stdout, cfg.Events); err != nil {
+			cfg.Logger.Error("stream events", "error", err)
 			os.Exit(1)
 		}
 		return
 	}
-
-	logger.Info("agent run started",
-		"session_id", sess.ID,
-		"agent", a.Name,
-		"provider", a.Provider,
-		"model", a.Model,
-		"home", paths.home,
-	)
-	tui.PrintEvents(events)
+	cfg.Logger.Info("agent run started", "session_id", cfg.Session.ID, "agent", cfg.Agent.Name, "provider", cfg.Agent.Provider, "model", cfg.Agent.Model, "home", cfg.Paths.home)
+	tui.PrintEvents(cfg.Events)
 }
 
 func runTools(args []string, _ *slog.Logger) {

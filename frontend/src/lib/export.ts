@@ -2,88 +2,51 @@ import type { ConversationEntry } from "@/types/agent"
 
 // ─── Markdown Export ──────────────────────────────────────────────
 
-export function exportToMarkdown(entries: ConversationEntry[], agentName: string): string {
+function formatToolCall(tc: ConversationEntry["toolCalls"] extends (infer T)[] | undefined ? T : never): string[] {
+  const lines: string[] = []
+  const status = tc.status === "completed" ? "✅" : tc.status === "error" ? "❌" : "⏳"
+  lines.push(`### ${status} 工具: \`${tc.name}\``, "")
+  if (tc.input) {
+    lines.push("**输入:**", "```json", JSON.stringify(tc.input, null, 2), "```", "")
+  }
+  if (tc.output !== undefined) {
+    lines.push("**输出:**", "```json", typeof tc.output === "string" ? tc.output : JSON.stringify(tc.output, null, 2), "```", "")
+  }
+  return lines
+}
+
+function formatEntry(entry: ConversationEntry): string[] {
+  if (entry.compactionSummary) return ["---", `> ⚡ 上下文已压缩: ${entry.compactionSummary}`, ""]
+
+  const time = new Date(entry.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
   const lines: string[] = []
 
-  lines.push(`# 会话记录 — ${agentName}`)
-  lines.push("")
-  lines.push(`> 导出时间: ${new Date().toLocaleString("zh-CN")}`)
-  lines.push("")
+  if (entry.role === "user") {
+    lines.push(`## 👤 你 _(${time})_`, "", entry.content, "")
+  }
 
-  for (const entry of entries) {
-    // Skip compaction entries
-    if (entry.compactionSummary) {
-      lines.push("---")
-      lines.push(`> ⚡ 上下文已压缩: ${entry.compactionSummary}`)
-      lines.push("")
-      continue
+  if (entry.role === "assistant") {
+    lines.push(`## 🤖 Agent _(${time})_`, "")
+    if (entry.reasoningContent) {
+      lines.push("<details>", "<summary>💭 推理过程</summary>", "", entry.reasoningContent, "", "</details>", "")
     }
-
-    const time = new Date(entry.timestamp).toLocaleTimeString("zh-CN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    })
-
-    if (entry.role === "user") {
-      lines.push(`## 👤 你 _(${time})_`)
-      lines.push("")
-      lines.push(entry.content)
-      lines.push("")
+    if (entry.toolCalls?.length) {
+      for (const tc of entry.toolCalls) lines.push(...formatToolCall(tc))
     }
-
-    if (entry.role === "assistant") {
-      lines.push(`## 🤖 Agent _(${time})_`)
-      lines.push("")
-
-      if (entry.reasoningContent) {
-        lines.push("<details>")
-        lines.push("<summary>💭 推理过程</summary>")
-        lines.push("")
-        lines.push(entry.reasoningContent)
-        lines.push("")
-        lines.push("</details>")
-        lines.push("")
-      }
-
-      if (entry.toolCalls && entry.toolCalls.length > 0) {
-        for (const tc of entry.toolCalls) {
-          const status = tc.status === "completed" ? "✅" : tc.status === "error" ? "❌" : "⏳"
-          lines.push(`### ${status} 工具: \`${tc.name}\``)
-          lines.push("")
-          if (tc.input) {
-            lines.push("**输入:**")
-            lines.push("```json")
-            lines.push(JSON.stringify(tc.input, null, 2))
-            lines.push("```")
-            lines.push("")
-          }
-          if (tc.output !== undefined) {
-            lines.push("**输出:**")
-            lines.push("```json")
-            lines.push(
-              typeof tc.output === "string" ? tc.output : JSON.stringify(tc.output, null, 2)
-            )
-            lines.push("```")
-            lines.push("")
-          }
-        }
-      }
-
-      if (entry.content) {
-        lines.push(entry.content)
-        lines.push("")
-      }
-
-      if (entry.usage) {
-        lines.push(
-          `_Token 用量: ${entry.usage.inputTokens.toLocaleString()} 输入 / ${entry.usage.outputTokens.toLocaleString()} 输出_`
-        )
-        lines.push("")
-      }
+    if (entry.content) lines.push(entry.content, "")
+    if (entry.usage) {
+      lines.push(`_Token 用量: ${entry.usage.inputTokens.toLocaleString()} 输入 / ${entry.usage.outputTokens.toLocaleString()} 输出_`, "")
     }
   }
 
+  return lines
+}
+
+export function exportToMarkdown(entries: ConversationEntry[], agentName: string): string {
+  const lines: string[] = [
+    `# 会话记录 — ${agentName}`, "", `> 导出时间: ${new Date().toLocaleString("zh-CN")}`, "",
+  ]
+  for (const entry of entries) lines.push(...formatEntry(entry))
   return lines.join("\n")
 }
 

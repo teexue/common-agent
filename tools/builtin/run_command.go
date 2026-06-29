@@ -18,10 +18,14 @@ type RunCommand struct {
 	WorkDir string // working directory for command execution
 }
 
+// Name returns the tool name.
 func (RunCommand) Name() string { return "run_command" }
+// Description returns a human-readable description.
 func (RunCommand) Description() string {
 	return "Execute a shell command and return its output. Use with caution — commands run in the agent's working directory."
 }
+
+// InputSchema returns the JSON Schema for the tool's input.
 func (RunCommand) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
@@ -43,6 +47,7 @@ func (RunCommand) InputSchema() map[string]any {
 	}
 }
 
+// Execute runs the tool.
 func (rc RunCommand) Execute(ctx context.Context, input json.RawMessage) (tool.Result, error) {
 	var args struct {
 		Command string `json:"command"`

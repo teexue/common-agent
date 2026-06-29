@@ -77,51 +77,7 @@ func runChat(args []string, logger *slog.Logger) {
 	}
 	defer rl.Close()
 
-	for {
-		line, err := rl.Readline()
-		if err != nil {
-			fmt.Println()
-			return
-		}
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		if strings.HasPrefix(line, "/") {
-			if handleChatCommand(line, state) {
-				return
-			}
-			continue
-		}
-
-		// Create policy from agent permissions.
-		var pol permission.Policy
-		if state.agent.Permissions != nil {
-			pol = permission.NewAgentPolicy(*state.agent.Permissions)
-		} else {
-			pol = permission.AllowAllPolicy{}
-		}
-
-		// Cancel loop on SIGINT (Ctrl+C).
-		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-
-		events, err := loop.Run(ctx, loop.Config{
-			Provider: state.provider,
-			Registry: state.reg,
-			Agent:    state.agent,
-			Session:  state.sess,
-			Prompt:   line,
-			Store:    state.store,
-			Policy:   pol,
-			Approver: CLIApprover{},
-		})
-		stop() // release signal handler so readline can catch Ctrl+C again
-		if err != nil {
-			fmt.Println(tui.Error(err.Error()))
-			continue
-		}
-		tui.PrintEvents(events)
-	}
+	runChatLoop(rl, state)
 }
 
 func newChatReadline(home string) (*readline.Instance, error) {
@@ -165,6 +121,53 @@ func newChatState(catalog *provider.Catalog, mock bool, paths runtimePaths, agen
 	}, nil
 }
 
+// runChatLoop runs the interactive chat REPL until the user exits.
+func runChatLoop(rl *readline.Instance, state *chatState) {
+	for {
+		line, err := rl.Readline()
+		if err != nil {
+			fmt.Println()
+			return
+		}
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "/") {
+			if handleChatCommand(line, state) {
+				return
+			}
+			continue
+		}
+
+		var pol permission.Policy
+		if state.agent.Permissions != nil {
+			pol = permission.NewAgentPolicy(*state.agent.Permissions)
+		} else {
+			pol = permission.AllowAllPolicy{}
+		}
+
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		events, err := loop.Run(ctx, loop.Config{
+			Provider: state.provider,
+			Registry: state.reg,
+			Agent:    state.agent,
+			Session:  state.sess,
+			Prompt:   line,
+			Store:    state.store,
+			Policy:   pol,
+			Approver: CLIApprover{},
+		})
+		stop()
+		if err != nil {
+			fmt.Println(tui.Error(err.Error()))
+			continue
+		}
+		tui.PrintEvents(events)
+	}
+}
+
+// handleChatCommand processes a /command input; returns true to exit the REPL.
 func handleChatCommand(line string, state *chatState) (exit bool) {
 	parts := strings.Fields(line)
 	switch parts[0] {
@@ -186,63 +189,73 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 		fmt.Println(tui.Success("会话已清空"))
 		return false
 	case "/agent":
-		if len(parts) < 2 {
-			names, err := agent.ListAvailable(state.paths.agentsDir)
-			if err != nil {
-				fmt.Println(tui.Error(err.Error()))
-				return false
-			}
-			if len(names) == 0 {
-				fmt.Println(tui.Muted("没有可用的 agent"))
-				return false
-			}
-			fmt.Println(tui.Muted("可用 agent:"))
-			for _, n := range names {
-				marker := " "
-				if n == state.agent.Name {
-					marker = tui.Success("●")
-				}
-				fmt.Printf("  %s %s\n", marker, n)
-			}
-			return false
-		}
-		loaded, err := agent.LoadByName(state.paths.agentsDir, parts[1])
-		if err != nil {
-			fmt.Println(tui.Error(err.Error()))
-			return false
-		}
-		p, err := resolveProvider(state.catalog, state.mock)(loaded)
-		if err != nil {
-			fmt.Println(tui.Error(err.Error()))
-			return false
-		}
-		state.agent = loaded
-		state.provider = p
-		state.sess = session.New(loaded.Name)
-		fmt.Println(tui.Success(fmt.Sprintf("已切换 %s · %s · %s", loaded.Name, loaded.Provider, loaded.Model)))
-		return false
+		return handleAgentCommand(parts, state)
 	case "/tools":
-		if len(parts) >= 2 {
-			a, err := agent.LoadByNameAndValidate(state.paths.agentsDir, parts[1], state.reg.Names())
-			if err != nil {
-				fmt.Println(tui.Error(err.Error()))
-				return false
-			}
-			fmt.Println(tui.Success(fmt.Sprintf("%s 工具验证通过: %v", a.Name, a.Tools)))
-			return false
-		}
-		names := state.reg.Names()
-		if len(names) == 0 {
-			fmt.Println(tui.Muted("没有已注册的工具"))
-			return false
-		}
-		fmt.Println(tui.Muted(fmt.Sprintf("已注册工具 (%d):", len(names))))
-		for _, t := range state.reg.List() {
-			fmt.Printf("  %-16s %s\n", tui.Muted(t.Name()), t.Description())
-		}
-		return false
+		return handleToolsCommand(parts, state)
 	default:
 		fmt.Println(tui.Muted("未知命令，输入 /help"))
 		return false
 	}
+}
+
+// handleAgentCommand handles the /agent command — list or switch agents.
+func handleAgentCommand(parts []string, state *chatState) bool {
+	if len(parts) < 2 {
+		names, err := agent.ListAvailable(state.paths.agentsDir)
+		if err != nil {
+			fmt.Println(tui.Error(err.Error()))
+			return false
+		}
+		if len(names) == 0 {
+			fmt.Println(tui.Muted("没有可用的 agent"))
+			return false
+		}
+		fmt.Println(tui.Muted("可用 agent:"))
+		for _, n := range names {
+			marker := " "
+			if n == state.agent.Name {
+				marker = tui.Success("●")
+			}
+			fmt.Printf("  %s %s\n", marker, n)
+		}
+		return false
+	}
+	loaded, err := agent.LoadByName(state.paths.agentsDir, parts[1])
+	if err != nil {
+		fmt.Println(tui.Error(err.Error()))
+		return false
+	}
+	p, err := resolveProvider(state.catalog, state.mock)(loaded)
+	if err != nil {
+		fmt.Println(tui.Error(err.Error()))
+		return false
+	}
+	state.agent = loaded
+	state.provider = p
+	state.sess = session.New(loaded.Name)
+	fmt.Println(tui.Success(fmt.Sprintf("已切换 %s · %s · %s", loaded.Name, loaded.Provider, loaded.Model)))
+	return false
+}
+
+// handleToolsCommand handles the /tools command — list or validate tools.
+func handleToolsCommand(parts []string, state *chatState) bool {
+	if len(parts) >= 2 {
+		a, err := agent.LoadByNameAndValidate(state.paths.agentsDir, parts[1], state.reg.Names())
+		if err != nil {
+			fmt.Println(tui.Error(err.Error()))
+			return false
+		}
+		fmt.Println(tui.Success(fmt.Sprintf("%s 工具验证通过: %v", a.Name, a.Tools)))
+		return false
+	}
+	names := state.reg.Names()
+	if len(names) == 0 {
+		fmt.Println(tui.Muted("没有已注册的工具"))
+		return false
+	}
+	fmt.Println(tui.Muted(fmt.Sprintf("已注册工具 (%d):", len(names))))
+	for _, t := range state.reg.List() {
+		fmt.Printf("  %-16s %s\n", tui.Muted(t.Name()), t.Description())
+	}
+	return false
 }

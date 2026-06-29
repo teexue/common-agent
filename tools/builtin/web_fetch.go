@@ -19,10 +19,14 @@ const (
 // WebFetch makes an HTTP GET request.
 type WebFetch struct{}
 
+// Name returns the tool name.
 func (WebFetch) Name() string { return "web_fetch" }
+// Description returns a human-readable description.
 func (WebFetch) Description() string {
 	return "Fetch content from a URL via HTTP GET. Returns the response status, headers, and body."
 }
+
+// InputSchema returns the JSON Schema for the tool's input.
 func (WebFetch) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
@@ -47,6 +51,7 @@ func (WebFetch) InputSchema() map[string]any {
 	}
 }
 
+// Execute runs the tool.
 func (WebFetch) Execute(ctx context.Context, input json.RawMessage) (tool.Result, error) {
 	var args struct {
 		URL      string            `json:"url"`

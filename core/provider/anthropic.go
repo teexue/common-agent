@@ -167,6 +167,47 @@ func (a *Anthropic) buildRequest(req Request) anthropicRequest {
 	}
 }
 
+func buildAssistantMessage(m Message) anthropicMessage {
+	blocks := make([]anthropicBlock, 0, len(m.ToolCalls)+1)
+	if m.Content != "" {
+		blocks = append(blocks, anthropicBlock{Type: "text", Text: m.Content})
+	}
+	for _, tc := range m.ToolCalls {
+		input := json.RawMessage("{}")
+		if len(tc.Arguments) > 0 {
+			input = tc.Arguments
+		}
+		blocks = append(blocks, anthropicBlock{
+			Type:  "tool_use",
+			ID:    tc.ID,
+			Name:  tc.Name,
+			Input: input,
+		})
+	}
+	return anthropicMessage{Role: "assistant", Content: blocks}
+}
+
+// appendToolResult appends a tool result message, merging consecutive tool results.
+func appendToolResult(out []anthropicMessage, m Message) []anthropicMessage {
+	// Anthropic requires all tool_result blocks for a single
+	// assistant message to be in ONE user message.
+	if len(out) > 0 && out[len(out)-1].Role == "user" {
+		last := &out[len(out)-1]
+		if len(last.Content) > 0 && last.Content[0].Type == "tool_result" {
+			last.Content = append(last.Content, anthropicBlock{
+				Type: "tool_result", ToolUseID: m.ToolCallID, Content: m.Content,
+			})
+			return out
+		}
+	}
+	return append(out, anthropicMessage{
+		Role: "user",
+		Content: []anthropicBlock{{
+			Type: "tool_result", ToolUseID: m.ToolCallID, Content: m.Content,
+		}},
+	})
+}
+
 func convertMessages(msgs []Message) (string, []anthropicMessage) {
 	var system string
 	out := make([]anthropicMessage, 0, len(msgs))
@@ -184,48 +225,9 @@ func convertMessages(msgs []Message) (string, []anthropicMessage) {
 				}},
 			})
 		case RoleAssistant:
-			blocks := make([]anthropicBlock, 0, len(m.ToolCalls)+1)
-			if m.Content != "" {
-				blocks = append(blocks, anthropicBlock{Type: "text", Text: m.Content})
-			}
-			for _, tc := range m.ToolCalls {
-				input := json.RawMessage("{}")
-				if len(tc.Arguments) > 0 {
-					input = tc.Arguments
-				}
-				blocks = append(blocks, anthropicBlock{
-					Type:  "tool_use",
-					ID:    tc.ID,
-					Name:  tc.Name,
-					Input: input,
-				})
-			}
-			out = append(out, anthropicMessage{Role: "assistant", Content: blocks})
+			out = append(out, buildAssistantMessage(m))
 		case RoleTool:
-			// Anthropic requires all tool_result blocks for a single
-			// assistant message to be in ONE user message. Merge
-			// consecutive tool results into the same message.
-			if len(out) > 0 && out[len(out)-1].Role == "user" {
-				// Check if the last user message contains tool_result blocks.
-				last := &out[len(out)-1]
-				isToolResult := len(last.Content) > 0 && last.Content[0].Type == "tool_result"
-				if isToolResult {
-					last.Content = append(last.Content, anthropicBlock{
-						Type:      "tool_result",
-						ToolUseID: m.ToolCallID,
-						Content:   m.Content,
-					})
-					continue
-				}
-			}
-			out = append(out, anthropicMessage{
-				Role: "user",
-				Content: []anthropicBlock{{
-					Type:      "tool_result",
-					ToolUseID: m.ToolCallID,
-					Content:   m.Content,
-				}},
-			})
+			out = appendToolResult(out, m)
 		}
 	}
 	return system, out
@@ -237,8 +239,8 @@ func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk
 
 	toolAcc := map[int]*ToolCall{}
 	lastToolIdx := -1
+	var inputTokens, outputTokens int
 
-	// flushLastTool emits the tool call at lastToolIdx if it has arguments.
 	flushLastTool := func() {
 		if lastToolIdx < 0 {
 			return
@@ -252,8 +254,6 @@ func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk
 		case ch <- Chunk{ToolCalls: []ToolCall{*tc}}:
 		}
 	}
-
-	var inputTokens, outputTokens int
 
 	for scanner.Scan() {
 		select {
@@ -272,66 +272,87 @@ func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk
 			continue
 		}
 
-		switch ev.Type {
-		case "message_start":
-			if ev.Usage != nil {
-				inputTokens = ev.Usage.InputTokens
-			}
-		case "content_block_start":
-			// A new content block means the previous one (if it was a tool_use) is complete.
-			flushLastTool()
-			lastToolIdx = -1
-			if ev.ContentBlock.Type == "tool_use" {
-				toolAcc[ev.Index] = &ToolCall{
-					ID:   ev.ContentBlock.ID,
-					Name: ev.ContentBlock.Name,
-				}
-				lastToolIdx = ev.Index
-			}
-		case "content_block_delta":
-			switch ev.Delta.Type {
-			case "text_delta":
-				if ev.Delta.Text != "" {
-					select {
-					case <-ctx.Done():
-						return
-					case ch <- Chunk{TextDelta: ev.Delta.Text}:
-					}
-				}
-			case "input_json_delta":
-				acc := toolAcc[ev.Index]
-				if acc != nil {
-					acc.Arguments = append(acc.Arguments, []byte(ev.Delta.PartialJSON)...)
-				}
-			}
-		case "message_delta":
-			// Capture output tokens from message_delta.
-			if ev.Usage != nil {
-				outputTokens = ev.Usage.OutputTokens
-			}
-			// Flush the last tool call before handling stop reason.
-			flushLastTool()
-			lastToolIdx = -1
-			if ev.Delta.StopReason == "tool_use" {
-				// Already flushed above.
-			}
-			if ev.Delta.StopReason == "end_turn" {
-				select {
-				case <-ctx.Done():
-					return
-				case ch <- Chunk{Done: true, InputTokens: inputTokens, OutputTokens: outputTokens}:
-				}
-				return
-			}
-		case "message_stop":
-			flushLastTool()
-			select {
-			case <-ctx.Done():
-				return
-			case ch <- Chunk{Done: true, InputTokens: inputTokens, OutputTokens: outputTokens}:
-			}
+		sec := StreamEventContext{Ctx: ctx, Ch: ch, ToolAcc: toolAcc, LastToolIdx: &lastToolIdx, FlushLastTool: flushLastTool, InputTokens: inputTokens, OutputTokens: outputTokens}
+		done, tokens := a.processStreamEvent(sec, ev)
+		if tokens != nil {
+			inputTokens, outputTokens = tokens.InputTokens, tokens.OutputTokens
+		}
+		if done {
 			return
 		}
 	}
 	flushLastTool()
+}
+
+// StreamEventContext holds state for processing Anthropic SSE events.
+type StreamEventContext struct {
+	Ctx           context.Context
+	Ch            chan<- Chunk
+	ToolAcc       map[int]*ToolCall
+	LastToolIdx   *int
+	FlushLastTool func()
+	InputTokens   int
+	OutputTokens  int
+}
+
+// processStreamEvent processes a single Anthropic SSE event. Returns (finished, tokenUpdate).
+func (a *Anthropic) processStreamEvent(sec StreamEventContext, ev anthropicStreamEvent) (bool, *Chunk) {
+	switch ev.Type {
+	case "message_start":
+		if ev.Usage != nil {
+			sec.InputTokens = ev.Usage.InputTokens
+		}
+	case "content_block_start":
+		sec.FlushLastTool()
+		*sec.LastToolIdx = -1
+		if ev.ContentBlock.Type == "tool_use" {
+			sec.ToolAcc[ev.Index] = &ToolCall{ID: ev.ContentBlock.ID, Name: ev.ContentBlock.Name}
+			*sec.LastToolIdx = ev.Index
+		}
+	case "content_block_delta":
+		if done := handleContentBlockDelta(sec, ev); done {
+			return true, nil
+		}
+	case "message_delta":
+		if ev.Usage != nil {
+			sec.OutputTokens = ev.Usage.OutputTokens
+		}
+		sec.FlushLastTool()
+		*sec.LastToolIdx = -1
+		if ev.Delta.StopReason == "end_turn" {
+			sendChunk(sec.Ctx, sec.Ch, Chunk{Done: true, InputTokens: sec.InputTokens, OutputTokens: sec.OutputTokens})
+			return true, nil
+		}
+	case "message_stop":
+		sec.FlushLastTool()
+		sendChunk(sec.Ctx, sec.Ch, Chunk{Done: true, InputTokens: sec.InputTokens, OutputTokens: sec.OutputTokens})
+		return true, nil
+	}
+	return false, &Chunk{InputTokens: sec.InputTokens, OutputTokens: sec.OutputTokens}
+}
+
+func handleContentBlockDelta(sec StreamEventContext, ev anthropicStreamEvent) bool {
+	switch ev.Delta.Type {
+	case "text_delta":
+		if ev.Delta.Text != "" {
+			select {
+			case <-sec.Ctx.Done():
+				return true
+			case sec.Ch <- Chunk{TextDelta: ev.Delta.Text}:
+			}
+		}
+	case "input_json_delta":
+		if acc := sec.ToolAcc[ev.Index]; acc != nil {
+			acc.Arguments = append(acc.Arguments, []byte(ev.Delta.PartialJSON)...)
+		}
+	}
+	return false
+}
+
+// sendChunk sends a chunk to the channel, respecting context cancellation.
+func sendChunk(ctx context.Context, ch chan<- Chunk, c Chunk) {
+	select {
+	case <-ctx.Done():
+	case ch <- c:
+	}
 }

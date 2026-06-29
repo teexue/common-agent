@@ -12,6 +12,7 @@ import type {
 
 // ─── Approval API ─────────────────────────────────────────────────
 
+/** Resolves a pending tool approval request. */
 export async function resolveApproval(
   approvalId: string,
   approved: Promise<boolean> | boolean
@@ -31,6 +32,7 @@ export async function resolveApproval(
 
 // ─── Session API ──────────────────────────────────────────────────
 
+/** Fetches the list of all sessions. */
 export async function fetchSessions(): Promise<SessionMeta[]> {
   const res = await fetch("/v1/sessions")
   if (!res.ok) {
@@ -39,6 +41,7 @@ export async function fetchSessions(): Promise<SessionMeta[]> {
   return (await res.json()) ?? []
 }
 
+/** Fetches a single session by ID with its messages. */
 export async function fetchSession(
   id: string
 ): Promise<{
@@ -57,6 +60,7 @@ export async function fetchSession(
   return res.json()
 }
 
+/** Deletes a session by ID. */
 export async function deleteSession(id: string): Promise<void> {
   const res = await fetch(`/v1/sessions/${encodeURIComponent(id)}`, {
     method: "DELETE",
@@ -67,6 +71,7 @@ export async function deleteSession(id: string): Promise<void> {
   }
 }
 
+/** Fetches replay events for a session, optionally filtered by turn range. */
 export async function fetchSessionReplay(
   id: string,
   fromTurn?: number,
@@ -101,12 +106,14 @@ export async function fetchSessionReplay(
 
 // ─── Agents API ───────────────────────────────────────────────────
 
+/** Fetches the list of all configured agents. */
 export async function fetchAgents(): Promise<AgentInfo[]> {
   const res = await fetch("/v1/agents")
   if (!res.ok) throw new Error(`Failed to fetch agents: ${res.status}`)
   return (await res.json()) ?? []
 }
 
+/** Fetches full details for a single agent by name. */
 export async function fetchAgentDetail(name: string): Promise<AgentDetail> {
   const res = await fetch(`/v1/agents/${encodeURIComponent(name)}`)
   if (!res.ok) {
@@ -116,6 +123,7 @@ export async function fetchAgentDetail(name: string): Promise<AgentDetail> {
   return res.json()
 }
 
+/** Creates or updates an agent definition from YAML. */
 export async function updateAgent(
   name: string,
   yaml: string
@@ -132,6 +140,7 @@ export async function updateAgent(
   return res.json()
 }
 
+/** Validates an agent YAML definition without persisting it. */
 export async function validateAgent(
   yaml: string
 ): Promise<{ valid: boolean; name?: string; message?: string }> {
@@ -146,6 +155,7 @@ export async function validateAgent(
   return res.json()
 }
 
+/** Deletes an agent definition by name. */
 export async function deleteAgent(name: string): Promise<void> {
   const res = await fetch(`/v1/agents/${encodeURIComponent(name)}`, {
     method: "DELETE",
@@ -159,6 +169,7 @@ export async function deleteAgent(name: string): Promise<void> {
 
 // ─── Providers API ────────────────────────────────────────────────
 
+/** Fetches the list of available LLM providers. */
 export async function fetchProviders(): Promise<ProviderInfo[]> {
   const res = await fetch("/v1/providers")
   if (!res.ok) {
@@ -167,6 +178,7 @@ export async function fetchProviders(): Promise<ProviderInfo[]> {
   return (await res.json()) ?? []
 }
 
+/** Fetches the list of configured MCP servers. */
 export async function fetchMCPServers(): Promise<MCPServerInfo[]> {
   const res = await fetch("/v1/mcp")
   if (!res.ok) {
@@ -175,6 +187,7 @@ export async function fetchMCPServers(): Promise<MCPServerInfo[]> {
   return (await res.json()) ?? []
 }
 
+/** Fetches the list of available skills. */
 export async function fetchSkills(): Promise<SkillInfo[]> {
   const res = await fetch("/v1/skills")
   if (!res.ok) {
@@ -185,6 +198,7 @@ export async function fetchSkills(): Promise<SkillInfo[]> {
 
 // ─── Tools API ────────────────────────────────────────────────────
 
+/** Fetches the list of registered tools with their schemas. */
 export async function fetchTools(): Promise<
   Array<{
     name: string
@@ -199,12 +213,14 @@ export async function fetchTools(): Promise<
 
 // ─── Health & Metrics API ─────────────────────────────────────────
 
+/** Fetches Prometheus-format metrics from the server. */
 export async function fetchMetrics(): Promise<MetricsData> {
   const res = await fetch("/metrics")
   if (!res.ok) throw new Error(`Failed to fetch metrics: ${res.status}`)
   return res.json()
 }
 
+/** Fetches the server health/readiness status. */
 export async function fetchHealth(): Promise<HealthStatus> {
   const res = await fetch("/readyz")
   const data = await res.json()

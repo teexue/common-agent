@@ -16,10 +16,14 @@ type ReadFile struct {
 	WorkDir string // sandbox root for path resolution
 }
 
+// Name returns the tool name.
 func (ReadFile) Name() string { return "read_file" }
+// Description returns a human-readable description.
 func (ReadFile) Description() string {
 	return "Read the contents of a file. Returns the file content as text."
 }
+
+// InputSchema returns the JSON Schema for the tool's input.
 func (ReadFile) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
@@ -42,6 +46,7 @@ func (ReadFile) InputSchema() map[string]any {
 	}
 }
 
+// Execute runs the tool.
 func (r ReadFile) Execute(ctx context.Context, input json.RawMessage) (tool.Result, error) {
 	var args struct {
 		Path     string `json:"path"`

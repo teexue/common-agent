@@ -17,10 +17,14 @@ type ListDirectory struct {
 	WorkDir string // sandbox root for path resolution
 }
 
+// Name returns the tool name.
 func (ListDirectory) Name() string { return "list_directory" }
+// Description returns a human-readable description.
 func (ListDirectory) Description() string {
 	return "List the immediate contents of a directory (non-recursive). Returns an array of entries with name, size, type, and modification time."
 }
+
+// InputSchema returns the JSON Schema for the tool's input.
 func (ListDirectory) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
@@ -48,6 +52,7 @@ type dirEntry struct {
 	ModTime string `json:"mod_time"`
 }
 
+// Execute runs the tool.
 func (ld ListDirectory) Execute(ctx context.Context, input json.RawMessage) (tool.Result, error) {
 	var args struct {
 		Path    string `json:"path"`

@@ -14,10 +14,14 @@ type CreateDirectory struct {
 	WorkDir string // sandbox root for path resolution
 }
 
+// Name returns the tool name.
 func (CreateDirectory) Name() string { return "create_directory" }
+// Description returns a human-readable description.
 func (CreateDirectory) Description() string {
 	return "Create a directory and any necessary parent directories. Returns the created path."
 }
+
+// InputSchema returns the JSON Schema for the tool's input.
 func (CreateDirectory) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
@@ -31,6 +35,7 @@ func (CreateDirectory) InputSchema() map[string]any {
 	}
 }
 
+// Execute runs the tool.
 func (cd CreateDirectory) Execute(ctx context.Context, input json.RawMessage) (tool.Result, error) {
 	var args struct {
 		Path string `json:"path"`

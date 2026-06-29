@@ -12,443 +12,109 @@ import { AgentEditor } from "@/components/agents/agent-editor"
 import { AgentDeleteConfirm } from "@/components/agents/agent-delete-confirm"
 import { SessionReplay } from "@/components/sessions/session-replay"
 import { useChat } from "@/hooks/use-chat"
-import { useAgentEvents } from "@/hooks/use-agent-events"
+import { useAgentManager } from "@/hooks/use-agent-manager"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
-import {
-  fetchAgents,
-  fetchSkills,
-  fetchSessions,
-  fetchSession,
-  fetchTools,
-  deleteSession,
-  resolveApproval,
-} from "@/lib/api"
-import type {
-  ConversationEntry,
-  ToolCallEntry,
-  ToolInfo,
-  AgentInfo,
-  SessionMeta,
-  SkillInfo,
-  StreamStatus,
-} from "@/types/agent"
+import { fetchSkills, fetchSessions, fetchSession, fetchTools, deleteSession, resolveApproval } from "@/lib/api"
+import type { ConversationEntry, ToolCallEntry, ToolInfo, SessionMeta, SkillInfo, StreamStatus } from "@/types/agent"
 
-// ─── App (inner, uses useTheme) ───────────────────────────────────
+function AppDialogs({ agentMgr, selectedTool, setSelectedTool, settingsOpen, setSettingsOpen, theme, handleThemeChange, agents, workDir, setWorkDir, replaySessionId, setReplaySessionId }: {
+  agentMgr: ReturnType<typeof useAgentManager>
+  selectedTool: ToolInfo | null; setSelectedTool: (t: ToolInfo | null) => void
+  settingsOpen: boolean; setSettingsOpen: (v: boolean) => void
+  theme: string; handleThemeChange: (t: string) => void
+  agents: ReturnType<typeof useAgentManager>["agents"]
+  workDir: string; setWorkDir: (v: string) => void
+  replaySessionId: string | null; setReplaySessionId: (v: string | null) => void
+}) {
+  return (
+    <>
+      <ToolDetailDialog tool={selectedTool} open={!!selectedTool} onOpenChange={(open) => { if (!open) setSelectedTool(null) }} />
+      <SettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} theme={theme} onThemeChange={handleThemeChange} agents={agents} workDir={workDir} onWorkDirChange={setWorkDir} />
+      <AgentDetailDialog agentName={agentMgr.agentDetailName} open={!!agentMgr.agentDetailName} onOpenChange={(open) => { if (!open) agentMgr.setAgentDetailName(null) }} onEdit={(name) => { agentMgr.setAgentDetailName(null); agentMgr.handleEditAgent(name) }} onDelete={(name) => { agentMgr.setAgentDetailName(null); agentMgr.handleDeleteAgent(name) }} />
+      <AgentEditor agentName={agentMgr.agentEditorName} open={agentMgr.agentEditorOpen} onOpenChange={agentMgr.setAgentEditorOpen} onSaved={agentMgr.handleAgentSaved} />
+      <AgentDeleteConfirm agentName={agentMgr.agentToDelete} open={!!agentMgr.agentToDelete} onOpenChange={(open) => { if (!open) agentMgr.setAgentToDelete(null) }} onDeleted={agentMgr.handleAgentDeleted} />
+      <SessionReplay sessionId={replaySessionId} open={!!replaySessionId} onOpenChange={(open) => { if (!open) setReplaySessionId(null) }} />
+    </>
+  )
+}
+
+function useSessions(chat: ReturnType<typeof useChat>) {
+  const [sessions, setSessions] = useState<SessionMeta[]>([])
+  const refresh = useCallback(() => { fetchSessions().then((d) => setSessions(d ?? [])).catch(() => {}) }, [])
+  useEffect(() => { refresh() }, [refresh])
+  const resume = useCallback(async (id: string) => {
+    try {
+      const sess = await fetchSession(id)
+      await chat.loadSession(id, sess.messages as Array<{ role: string; content?: string; reasoning_content?: string; tool_calls?: Array<{ id: string; name: string; arguments: unknown }>; tool_call_id?: string; name?: string }>)
+      return sess.agent
+    } catch (err) { console.error("Failed to resume session:", err); return null }
+  }, [chat.loadSession])
+  const remove = useCallback(async (id: string) => {
+    try { await deleteSession(id); if (chat.sessionId === id) chat.clear(); refresh() } catch (err) { console.error("Failed to delete session:", err) }
+  }, [chat, refresh])
+  return { sessions, refresh, resume, remove }
+}
 
 function AppInner() {
-  // Chat state from SSE hook
   const chat = useChat()
-
-  // Theme from context
   const { theme, setTheme } = useTheme()
-
-  // Router
   const location = useLocation()
   const navigate = useNavigate()
+  const sessMgr = useSessions(chat)
 
-  // UI state
-  const [agent, setAgent] = useState(() => {
-    // Initialize from URL: /agents/:name
-    const match = location.pathname.match(/^\/agents\/(.+)$/)
-    return match ? decodeURIComponent(match[1]) : ""
-  })
-  const [selectedToolCallId, setSelectedToolCallId] = useState<string | null>(
-    null
-  )
+  const [agent, setAgent] = useState(() => { const m = location.pathname.match(/^\/agents\/(.+)$/); return m ? decodeURIComponent(m[1]) : "" })
+  const [selectedToolCallId, setSelectedToolCallId] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [inspectorOpen, setInspectorOpen] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedTool, setSelectedTool] = useState<ToolInfo | null>(null)
-
-  // Agent management state
-  const [agentDetailName, setAgentDetailName] = useState<string | null>(null)
-  const [agentEditorName, setAgentEditorName] = useState<string | null>(null)
-  const [agentEditorOpen, setAgentEditorOpen] = useState(false)
-  const [agentToDelete, setAgentToDelete] = useState<string | null>(null)
-
-  // Session replay state
   const [replaySessionId, setReplaySessionId] = useState<string | null>(null)
-
-  // Working directory for file tools
-  const [workDir, setWorkDir] = useState<string>("")
-
-  // Data fetched from API
-  const [agents, setAgents] = useState<AgentInfo[]>([])
+  const [workDir, setWorkDir] = useState("")
   const [tools, setTools] = useState<ToolInfo[]>([])
   const [skills, setSkills] = useState<SkillInfo[]>([])
-  const [sessions, setSessions] = useState<SessionMeta[]>([])
 
-  // ── Fetch agents & tools on mount ──
+  const agentMgr = useAgentManager({ onAgentsChanged: useCallback(() => { setAgent((p) => { if (p && agentMgr.agents.find((a) => a.name === p)) return p; return agentMgr.agents[0]?.name ?? "" }) }, []) })
+  const { agents } = agentMgr
 
-  const refreshAgents = useCallback(() => {
-    fetchAgents()
-      .then((raw) => {
-        const data = raw ?? []
-        setAgents(data)
-        if (data.length > 0) {
-          // Keep current agent if it still exists, otherwise switch to first
-          setAgent((prev) => {
-            if (prev && data.find((a) => a.name === prev)) return prev
-            return data[0].name
-          })
-        } else {
-          setAgent("")
-        }
-      })
-      .catch(() => {
-        setAgents([])
-        setAgent("")
-      })
-  }, [])
+  useEffect(() => { fetchTools().then((d) => setTools(d ?? [])).catch(() => {}); fetchSkills().then((d) => setSkills(d ?? [])).catch(() => {}) }, [])
 
-  useEffect(() => {
-    refreshAgents()
-  }, [refreshAgents])
-
-  // Listen for agent file changes (hot-reload).
-  useAgentEvents({
-    onAgentChange: useCallback(
-      (_event) => {
-        // Refresh agent list on any change.
-        refreshAgents()
-        // TODO: show toast notification with event.type and event.name
-      },
-      [refreshAgents]
-    ),
-  })
-
-  useEffect(() => {
-    fetchTools()
-      .then((data) => setTools(data ?? []))
-      .catch(() => {
-        // Keep empty
-      })
-    fetchSkills()
-      .then((data) => setSkills(data ?? []))
-      .catch(() => {
-        // Skills endpoint may not be available
-      })
-  }, [])
-
-  // ── Fetch sessions on mount and after changes ──
-
-  const refreshSessions = useCallback(() => {
-    fetchSessions()
-      .then((data) => setSessions(data ?? []))
-      .catch(() => {
-        // Sessions endpoint may not be available
-      })
-  }, [])
-
-  useEffect(() => {
-    refreshSessions()
-  }, [refreshSessions])
-
-  // ── Derived state ──
-
-  const agentInfo =
-    agents.find((a) => a.name === agent) ?? agents[0] ?? null
-
+  const agentInfo = agents.find((a) => a.name === agent) ?? agents[0] ?? null
   const hasAgents = agents.length > 0 && agentInfo !== null
+  const status: StreamStatus = chat.isStreaming ? "streaming" : chat.error ? "error" : "idle"
 
-  const status: StreamStatus = chat.isStreaming
-    ? "streaming"
-    : chat.error
-      ? "error"
-      : "idle"
+  const handleSendMessage = useCallback((text: string) => chat.sendMessage(text, agent, workDir || undefined), [chat.sendMessage, agent, workDir])
+  const handleSelectToolCall = useCallback((id: string) => { setSelectedToolCallId((p) => (p === id ? null : id)); if (!inspectorOpen) setInspectorOpen(true) }, [inspectorOpen])
+  const handleSelectAgent = useCallback((name: string) => { setAgent(name); chat.clear(); setSelectedToolCallId(null); navigate(`/agents/${encodeURIComponent(name)}`, { replace: true }) }, [chat.clear, navigate])
+  const handleToggleTheme = useCallback(() => setTheme(theme === "dark" ? "light" : "dark"), [theme, setTheme])
+  const handleNewSession = useCallback(() => { chat.clear(); setSelectedToolCallId(null); sessMgr.refresh() }, [chat.clear, sessMgr.refresh])
+  const handleResumeSession = useCallback(async (id: string) => { const a = await sessMgr.resume(id); if (a) { setAgent(a); setSelectedToolCallId(null) } }, [sessMgr.resume])
+  const resolveToolApproval = useCallback(async (id: string, approve: boolean) => { try { await resolveApproval(id, approve) } catch (e) { console.error(e) } }, [])
+  const handleReplaySession = useCallback((id: string) => setReplaySessionId(id), [])
 
-  // ── Handlers ──
+  useKeyboardShortcuts({ onToggleSidebar: () => setSidebarCollapsed((v) => !v), onClosePanel: () => { if (inspectorOpen && selectedToolCallId) setSelectedToolCallId(null); else if (inspectorOpen) setInspectorOpen(false) } })
 
-  const handleSendMessage = useCallback(
-    (text: string) => {
-      chat.sendMessage(text, agent, workDir || undefined)
-    },
-    [chat.sendMessage, agent, workDir]
-  )
-
-  const handleSelectToolCall = useCallback(
-    (id: string) => {
-      setSelectedToolCallId((prev) => (prev === id ? null : id))
-      if (!inspectorOpen) setInspectorOpen(true)
-    },
-    [inspectorOpen]
-  )
-
-  const handleSelectAgent = useCallback(
-    (name: string) => {
-      setAgent(name)
-      chat.clear()
-      setSelectedToolCallId(null)
-      // Sync URL.
-      navigate(`/agents/${encodeURIComponent(name)}`, { replace: true })
-    },
-    [chat.clear, navigate]
-  )
-
-  const handleToggleTheme = useCallback(() => {
-    setTheme(theme === "dark" ? "light" : "dark")
-  }, [theme, setTheme])
-
-  const handleThemeChange = useCallback(
-    (t: string) => {
-      setTheme(t as "dark" | "light" | "system")
-    },
-    [setTheme]
-  )
-
-  const handleNewSession = useCallback(() => {
-    chat.clear()
-    setSelectedToolCallId(null)
-    refreshSessions()
-  }, [chat.clear, refreshSessions])
-
-  const handleResumeSession = useCallback(
-    async (sessionId: string) => {
-      try {
-        const sess = await fetchSession(sessionId)
-        await chat.loadSession(
-          sessionId,
-          sess.messages as Array<{
-            role: string
-            content?: string
-            reasoning_content?: string
-            tool_calls?: Array<{
-              id: string
-              name: string
-              arguments: unknown
-            }>
-            tool_call_id?: string
-            name?: string
-          }>
-        )
-        setAgent(sess.agent)
-        setSelectedToolCallId(null)
-      } catch (err) {
-        console.error("Failed to resume session:", err)
-      }
-    },
-    [chat.loadSession]
-  )
-
-  const handleDeleteSession = useCallback(
-    async (sessionId: string) => {
-      try {
-        await deleteSession(sessionId)
-        if (chat.sessionId === sessionId) {
-          chat.clear()
-          setSelectedToolCallId(null)
-        }
-        refreshSessions()
-      } catch (err) {
-        console.error("Failed to delete session:", err)
-      }
-    },
-    [chat, refreshSessions]
-  )
-
-  const handleApproveTool = useCallback(
-    async (approvalId: string) => {
-      try {
-        await resolveApproval(approvalId, true)
-      } catch (err) {
-        console.error("Failed to approve tool:", err)
-      }
-    },
-    []
-  )
-
-  const handleDenyTool = useCallback(
-    async (approvalId: string) => {
-      try {
-        await resolveApproval(approvalId, false)
-      } catch (err) {
-        console.error("Failed to deny tool:", err)
-      }
-    },
-    []
-  )
-
-  // Agent management handlers
-  const handleViewAgent = useCallback((name: string) => {
-    setAgentDetailName(name)
-  }, [])
-
-  const handleEditAgent = useCallback((name: string) => {
-    setAgentEditorName(name)
-    setAgentEditorOpen(true)
-  }, [])
-
-  const handleCreateAgent = useCallback(() => {
-    setAgentEditorName(null)
-    setAgentEditorOpen(true)
-  }, [])
-
-  const handleDeleteAgent = useCallback((name: string) => {
-    setAgentToDelete(name)
-  }, [])
-
-  const handleAgentSaved = useCallback(() => {
-    refreshAgents()
-  }, [refreshAgents])
-
-  const handleAgentDeleted = useCallback(() => {
-    refreshAgents()
-  }, [refreshAgents])
-
-  // Session replay handler
-  const handleReplaySession = useCallback((sessionId: string) => {
-    setReplaySessionId(sessionId)
-  }, [])
-
-  // ── Keyboard shortcuts ──
-
-  useKeyboardShortcuts({
-    onToggleSidebar: () => setSidebarCollapsed((v) => !v),
-    onClosePanel: () => {
-      if (inspectorOpen && selectedToolCallId) {
-        setSelectedToolCallId(null)
-      } else if (inspectorOpen) {
-        setInspectorOpen(false)
-      }
-    },
-  })
-
-  // ── Selected entry / tool call for inspector panel ──
-
-  const selectedToolCall: ToolCallEntry | null = selectedToolCallId
-    ? chat.messages
-        .flatMap((m) => m.toolCalls ?? [])
-        .find((tc) => tc.id === selectedToolCallId) ?? null
-    : null
-
-  const selectedEntry: ConversationEntry | null = selectedToolCallId
-    ? chat.messages.find((m) =>
-        m.toolCalls?.some((tc) => tc.id === selectedToolCallId)
-      ) ?? null
-    : null
+  const selectedToolCall: ToolCallEntry | null = selectedToolCallId ? chat.messages.flatMap((m) => m.toolCalls ?? []).find((tc) => tc.id === selectedToolCallId) ?? null : null
+  const selectedEntry: ConversationEntry | null = selectedToolCallId ? chat.messages.find((m) => m.toolCalls?.some((tc) => tc.id === selectedToolCallId)) ?? null : null
 
   return (
     <TooltipProvider delay={300}>
       <AppLayout
-        // Sidebar
-        sidebarCollapsed={sidebarCollapsed}
-        onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
-        agents={agents}
-        selectedAgent={agent}
-        onSelectAgent={handleSelectAgent}
-        tools={tools}
-        onSelectTool={setSelectedTool}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onNewSession={handleNewSession}
-        // Sessions
-        sessions={sessions}
-        activeSessionId={chat.sessionId}
-        onResumeSession={handleResumeSession}
-        onDeleteSession={handleDeleteSession}
-        onReplaySession={handleReplaySession}
-        // Agent management
-        onViewAgent={handleViewAgent}
-        onEditAgent={handleEditAgent}
-        onDeleteAgent={handleDeleteAgent}
-        onCreateAgent={handleCreateAgent}
-        skills={skills}
-        // Top bar
+        sidebarCollapsed={sidebarCollapsed} onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+        agents={agents} selectedAgent={agent} onSelectAgent={handleSelectAgent}
+        tools={tools} onSelectTool={setSelectedTool} onOpenSettings={() => setSettingsOpen(true)} onNewSession={handleNewSession}
+        sessions={sessMgr.sessions} activeSessionId={chat.sessionId} onResumeSession={handleResumeSession} onDeleteSession={sessMgr.remove} onReplaySession={handleReplaySession}
+        onViewAgent={agentMgr.handleViewAgent} onEditAgent={agentMgr.handleEditAgent} onDeleteAgent={agentMgr.handleDeleteAgent} onCreateAgent={agentMgr.handleCreateAgent} skills={skills}
         agent={agentInfo ?? { name: "common-agent", provider: "", model: "", tools: [], maxTurns: 10 }}
-        status={status}
-        inspectorOpen={inspectorOpen}
-        onToggleInspector={() => {
-          setInspectorOpen((v) => {
-            if (v) setSelectedToolCallId(null)
-            return !v
-          })
-        }}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-        // Panels
-        leftPanel={
-          <WorkspacePanel
-            messages={chat.messages}
-            isStreaming={chat.isStreaming}
-            error={chat.error}
-            onSendMessage={handleSendMessage}
-            onStop={chat.abort}
-            selectedToolCallId={selectedToolCallId}
-            onSelectToolCall={handleSelectToolCall}
-            onApproveTool={handleApproveTool}
-            onDenyTool={handleDenyTool}
-            noAgent={!hasAgents}
-            onCreateAgent={handleCreateAgent}
-            agentName={agent}
-          />
-        }
-        rightPanel={
-          <InspectorPanel entry={selectedEntry} toolCall={selectedToolCall} />
-        }
+        status={status} inspectorOpen={inspectorOpen}
+        onToggleInspector={() => { setInspectorOpen((v) => { if (v) setSelectedToolCallId(null); return !v }) }}
+        theme={theme} onToggleTheme={handleToggleTheme}
+        leftPanel={<WorkspacePanel messages={chat.messages} isStreaming={chat.isStreaming} error={chat.error} onSendMessage={handleSendMessage} onStop={chat.abort} selectedToolCallId={selectedToolCallId} onSelectToolCall={handleSelectToolCall} onApproveTool={(id) => resolveToolApproval(id, true)} onDenyTool={(id) => resolveToolApproval(id, false)} noAgent={!hasAgents} onCreateAgent={agentMgr.handleCreateAgent} agentName={agent} />}
+        rightPanel={<InspectorPanel entry={selectedEntry} toolCall={selectedToolCall} />}
       />
-
-      {/* Dialogs */}
-      <ToolDetailDialog
-        tool={selectedTool}
-        open={!!selectedTool}
-        onOpenChange={(open) => {
-          if (!open) setSelectedTool(null)
-        }}
-      />
-
-      <SettingsSheet
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        theme={theme}
-        onThemeChange={handleThemeChange}
-        agents={agents}
-        workDir={workDir}
-        onWorkDirChange={setWorkDir}
-      />
-
-      <AgentDetailDialog
-        agentName={agentDetailName}
-        open={!!agentDetailName}
-        onOpenChange={(open) => {
-          if (!open) setAgentDetailName(null)
-        }}
-        onEdit={(name) => {
-          setAgentDetailName(null)
-          handleEditAgent(name)
-        }}
-        onDelete={(name) => {
-          setAgentDetailName(null)
-          handleDeleteAgent(name)
-        }}
-      />
-
-      <AgentEditor
-        agentName={agentEditorName}
-        open={agentEditorOpen}
-        onOpenChange={setAgentEditorOpen}
-        onSaved={handleAgentSaved}
-      />
-
-      <AgentDeleteConfirm
-        agentName={agentToDelete}
-        open={!!agentToDelete}
-        onOpenChange={(open) => {
-          if (!open) setAgentToDelete(null)
-        }}
-        onDeleted={handleAgentDeleted}
-      />
-
-      <SessionReplay
-        sessionId={replaySessionId}
-        open={!!replaySessionId}
-        onOpenChange={(open) => {
-          if (!open) setReplaySessionId(null)
-        }}
-      />
+      <AppDialogs agentMgr={agentMgr} selectedTool={selectedTool} setSelectedTool={setSelectedTool} settingsOpen={settingsOpen} setSettingsOpen={setSettingsOpen} theme={theme} handleThemeChange={(t) => setTheme(t as "dark" | "light" | "system")} agents={agents} workDir={workDir} setWorkDir={setWorkDir} replaySessionId={replaySessionId} setReplaySessionId={setReplaySessionId} />
     </TooltipProvider>
   )
 }
-
-// ─── App (outer, provides ThemeProvider) ──────────────────────────
 
 export function App() {
   return (
