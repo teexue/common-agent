@@ -79,7 +79,8 @@ function updateMessage(
   return messages.map((m) => (m.id === entryId ? fn(m) : m))
 }
 
-/** Update a tool call within a message by matching name/id. */
+/** Update a tool call within a message by matching name/id.
+ *  First tries the entry with matching entryId, then falls back to searching all messages. */
 function updateToolCall(
   messages: ConversationEntry[],
   entryId: string,
@@ -87,7 +88,18 @@ function updateToolCall(
   toolCallId: string | undefined,
   fn: (tc: ToolCallEntry) => ToolCallEntry
 ): ConversationEntry[] {
-  return updateMessage(messages, entryId, (m) => ({
+  // Try the specified entry first
+  const target = messages.find((m) => m.id === entryId)
+  if (target?.toolCalls?.some((tc) => matchesToolCall(tc, toolName, toolCallId))) {
+    return updateMessage(messages, entryId, (m) => ({
+      ...m,
+      toolCalls: m.toolCalls?.map((tc) =>
+        matchesToolCall(tc, toolName, toolCallId) ? fn(tc) : tc
+      ),
+    }))
+  }
+  // Fallback: search all messages
+  return messages.map((m) => ({
     ...m,
     toolCalls: m.toolCalls?.map((tc) =>
       matchesToolCall(tc, toolName, toolCallId) ? fn(tc) : tc
@@ -179,10 +191,14 @@ function reduceToolAction(
     case "TOOL_START":
       return {
         ...state,
-        messages: updateMessage(state.messages, action.entryId, (m) => ({
-          ...m,
-          toolCalls: [...(m.toolCalls ?? []), action.toolCall],
-        })),
+        messages: [...state.messages, {
+          id: `tc-${action.toolCall.id ?? Date.now()}`,
+          role: "assistant" as const,
+          content: "",
+          toolCalls: [action.toolCall],
+          timestamp: Date.now(),
+          isStreaming: true,
+        }],
       }
     case "TOOL_RESULT":
       return {
@@ -230,10 +246,14 @@ function reduceSubAgentAction(
   if (action.type === "SUB_AGENT_START") {
     return {
       ...state,
-      messages: updateMessage(state.messages, action.entryId, (m) => ({
-        ...m,
-        toolCalls: [...(m.toolCalls ?? []), action.toolCall],
-      })),
+      messages: [...state.messages, {
+        id: `sa-${action.toolCall.id ?? Date.now()}`,
+        role: "assistant" as const,
+        content: "",
+        toolCalls: [action.toolCall],
+        timestamp: Date.now(),
+        isStreaming: true,
+      }],
     }
   }
   return {
