@@ -16,6 +16,7 @@ import (
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/provider"
+	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/tool"
 	"github.com/teexue/common-agent/tools/registry"
@@ -260,7 +261,7 @@ func TestNormalizeAgentName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			if got := NormalizeAgentName(tt.input); got != tt.want {
+			if got := service.NormalizeAgentName(tt.input); got != tt.want {
 				t.Errorf("NormalizeAgentName(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
@@ -904,6 +905,21 @@ func TestAuth_WithAPIKey_RequiresKey(t *testing.T) {
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 with correct X-API-Key, got %d", w.Code)
+	}
+}
+
+func TestAuth_WithAPIKey_CaseInsensitiveBearer(t *testing.T) {
+	srv, _ := setupTestServer(t)
+	srv.SetAPIKey("secret-key-123")
+	router := srv.Handler()
+
+	// Lowercase "bearer" should also be accepted.
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/v1/tools", nil)
+	req.Header.Set("Authorization", "bearer secret-key-123")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with lowercase bearer, got %d", w.Code)
 	}
 }
 

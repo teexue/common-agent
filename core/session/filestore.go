@@ -3,6 +3,7 @@ package session
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -143,18 +144,22 @@ func (fs *FileStore) List() ([]SessionMeta, error) {
 		}
 		data, err := os.ReadFile(filepath.Join(fs.dir, entry.Name()))
 		if err != nil {
+			slog.Warn("skipping unreadable session file", "file", entry.Name(), "error", err)
 			continue // skip unreadable files
 		}
 		var sf sessionFile
 		if err := json.Unmarshal(data, &sf); err != nil {
+			slog.Warn("skipping corrupted session file", "file", entry.Name(), "error", err)
 			continue // skip corrupted files
 		}
 		createdAt, err := parseTime(sf.CreatedAt)
 		if err != nil {
+			slog.Warn("skipping session with invalid created_at", "file", entry.Name(), "id", sf.ID, "error", err)
 			continue
 		}
 		updatedAt, err := parseTime(sf.UpdatedAt)
 		if err != nil {
+			slog.Warn("skipping session with invalid updated_at", "file", entry.Name(), "id", sf.ID, "error", err)
 			continue
 		}
 		metas = append(metas, SessionMeta{

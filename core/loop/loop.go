@@ -42,7 +42,8 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 		return nil, fmt.Errorf("session is required")
 	}
 
-	if cfg.Store != nil && cfg.SessionID != "" {
+	// Only load from store if the caller hasn't already provided a loaded session.
+	if cfg.Store != nil && cfg.SessionID != "" && len(cfg.Session.GetMessages()) == 0 {
 		loaded, err := cfg.Store.Load(cfg.SessionID)
 		if err != nil {
 			return nil, fmt.Errorf("load session %s: %w", cfg.SessionID, err)

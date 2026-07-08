@@ -73,6 +73,9 @@ type Provider interface {
 	Stream(ctx context.Context, req Request) (<-chan Chunk, error)
 }
 
+// DefaultMaxTokens is the fallback when agent configuration omits max_tokens.
+const DefaultMaxTokens = 4096
+
 // DefaultHTTPClient returns an *http.Client with a sensible timeout.
 func DefaultHTTPClient() *http.Client {
 	return &http.Client{Timeout: 120 * time.Second}

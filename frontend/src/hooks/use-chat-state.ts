@@ -191,14 +191,10 @@ function reduceToolAction(
     case "TOOL_START":
       return {
         ...state,
-        messages: [...state.messages, {
-          id: `tc-${action.toolCall.id ?? Date.now()}`,
-          role: "assistant" as const,
-          content: "",
-          toolCalls: [action.toolCall],
-          timestamp: Date.now(),
-          isStreaming: true,
-        }],
+        messages: updateMessage(state.messages, action.entryId, (m) => ({
+          ...m,
+          toolCalls: [...(m.toolCalls ?? []), action.toolCall],
+        })),
       }
     case "TOOL_RESULT":
       return {
@@ -246,14 +242,10 @@ function reduceSubAgentAction(
   if (action.type === "SUB_AGENT_START") {
     return {
       ...state,
-      messages: [...state.messages, {
-        id: `sa-${action.toolCall.id ?? Date.now()}`,
-        role: "assistant" as const,
-        content: "",
-        toolCalls: [action.toolCall],
-        timestamp: Date.now(),
-        isStreaming: true,
-      }],
+      messages: updateMessage(state.messages, action.entryId, (m) => ({
+        ...m,
+        toolCalls: [...(m.toolCalls ?? []), action.toolCall],
+      })),
     }
   }
   return {
@@ -278,17 +270,17 @@ function reduceSessionAction(
       return {
         ...state,
         isStreaming: false,
-        messages: updateMessage(state.messages, action.entryId, (m) => ({
-          ...m,
-          isStreaming: false,
-          usage:
-            action.inputTokens || action.outputTokens
-              ? {
-                  inputTokens: action.inputTokens ?? 0,
-                  outputTokens: action.outputTokens ?? 0,
-                }
+        messages: state.messages.map((m) => {
+          if (!m.isStreaming) return m
+          const isTarget = m.id === action.entryId
+          return {
+            ...m,
+            isStreaming: false,
+            usage: isTarget && (action.inputTokens || action.outputTokens)
+              ? { inputTokens: action.inputTokens ?? 0, outputTokens: action.outputTokens ?? 0 }
               : m.usage,
-        })),
+          }
+        }),
       }
     case "STREAM_ERROR":
       return { ...state, isStreaming: false, error: action.message }

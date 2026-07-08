@@ -138,7 +138,7 @@ func (a *Anthropic) buildRequest(req Request) anthropicRequest {
 	}
 	maxTokens := req.MaxTokens
 	if maxTokens <= 0 {
-		maxTokens = 4096
+		maxTokens = DefaultMaxTokens
 	}
 	return anthropicRequest{
 		Model:     req.Model,

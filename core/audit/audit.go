@@ -3,6 +3,7 @@
 package audit
 
 import (
+	"bufio"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -78,35 +79,30 @@ func (l *EventLogger) Log(rec EventRecord) error {
 }
 
 // Replay reads events for a session, optionally filtered by turn range.
+// Uses streaming reads to avoid loading the entire events file into memory.
 func (l *EventLogger) Replay(sessionID string, fromTurn, toTurn int) ([]EventRecord, error) {
 	path := filepath.Join(l.dir, sessionID+".events.jsonl")
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("read events file: %w", err)
+		return nil, fmt.Errorf("open events file: %w", err)
 	}
+	defer f.Close()
 
 	var records []EventRecord
-	start := 0
-	for start < len(data) {
-		end := start
-		for end < len(data) && data[end] != '\n' {
-			end++
-		}
-		line := data[start:end]
-		start = end + 1
-
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024) // 1 MB max line
+	for scanner.Scan() {
+		line := scanner.Bytes()
 		if len(line) == 0 {
 			continue
 		}
-
 		var rec EventRecord
 		if err := json.Unmarshal(line, &rec); err != nil {
 			continue // skip malformed lines
 		}
-
 		// Apply turn filter.
 		if fromTurn > 0 && rec.Turn < fromTurn {
 			continue
@@ -114,10 +110,11 @@ func (l *EventLogger) Replay(sessionID string, fromTurn, toTurn int) ([]EventRec
 		if toTurn > 0 && rec.Turn > toTurn {
 			continue
 		}
-
 		records = append(records, rec)
 	}
-
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("read events file: %w", err)
+	}
 	return records, nil
 }
 

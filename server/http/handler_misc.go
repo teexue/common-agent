@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -143,12 +144,14 @@ func (s *Server) handleAuditExport(c *gin.Context) {
 
 	switch format {
 	case "csv":
+		var buf bytes.Buffer
+		if err := s.auditStore.ExportCSV(filter, &buf); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": "export_error", "message": err.Error()})
+			return
+		}
 		c.Header("Content-Type", "text/csv")
 		c.Header("Content-Disposition", "attachment; filename=audit-export.csv")
-		if err := s.auditStore.ExportCSV(filter, c.Writer); err != nil {
-			// Headers already sent, can't change status code.
-			s.logger.Error("csv export error", "error", err)
-		}
+		c.Data(http.StatusOK, "text/csv", buf.Bytes())
 	default: // json
 		records, err := s.auditStore.Query(filter)
 		if err != nil {

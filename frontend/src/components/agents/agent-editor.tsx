@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { FileCode, Loader2, Plus, Save, X } from "lucide-react"
+import { CheckCircle, FileCode, Loader2, Plus, Save, ShieldQuestion, X, XCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -80,6 +80,69 @@ function BasicFields({ form, setForm, providers, isCreate }: { form: AgentFormDa
   )
 }
 
+type ToolPermission = "auto_approve" | "confirm" | "deny"
+
+function getToolPermission(form: AgentFormData, tool: string): ToolPermission {
+  if (form.autoApprove.includes(tool)) return "auto_approve"
+  if (form.alwaysDeny.includes(tool)) return "deny"
+  return "confirm"
+}
+
+function setToolPermission(form: AgentFormData, tool: string, perm: ToolPermission): AgentFormData {
+  const autoApprove = form.autoApprove.filter((t) => t !== tool)
+  const alwaysDeny = form.alwaysDeny.filter((t) => t !== tool)
+  if (perm === "auto_approve") return { ...form, autoApprove: [...autoApprove, tool], alwaysDeny }
+  if (perm === "deny") return { ...form, autoApprove, alwaysDeny: [...alwaysDeny, tool] }
+  return { ...form, autoApprove, alwaysDeny }
+}
+
+const PERM_CONFIG: Record<ToolPermission, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
+  auto_approve: { icon: CheckCircle, color: "text-success", bg: "bg-success/10", label: "自动批准" },
+  confirm: { icon: ShieldQuestion, color: "text-warning", bg: "bg-warning/10", label: "需审批" },
+  deny: { icon: XCircle, color: "text-destructive", bg: "bg-destructive/10", label: "禁止" },
+}
+
+function PermissionsSection({ form, setForm }: { form: AgentFormData; setForm: (fn: (p: AgentFormData) => AgentFormData) => void }) {
+  if (form.tools.length === 0) return null
+
+  const autoCount = form.tools.filter((t) => getToolPermission(form, t) === "auto_approve").length
+  const denyCount = form.tools.filter((t) => getToolPermission(form, t) === "deny").length
+
+  return (
+    <Field label={`权限策略 (${autoCount} 自动 / ${form.tools.length - autoCount - denyCount} 审批 / ${denyCount} 禁止)`}>
+      <div className="flex flex-col gap-1">
+        {form.tools.map((tool) => {
+          const perm = getToolPermission(form, tool)
+          return (
+            <div key={tool} className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5">
+              <span className="flex-1 truncate font-mono text-xs">{tool}</span>
+              <div className="flex gap-0.5">
+                {(Object.keys(PERM_CONFIG) as ToolPermission[]).map((p) => {
+                  const c = PERM_CONFIG[p]
+                  const active = perm === p
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setForm((f) => setToolPermission(f, tool, p))}
+                      className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] transition-colors ${
+                        active ? `${c.bg} ${c.color} font-medium` : "text-muted-foreground hover:bg-muted"
+                      }`}
+                      title={c.label}
+                    >
+                      <c.icon className="h-3 w-3" />
+                      {c.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Field>
+  )
+}
+
 export function AgentEditor({ agentName, open, onOpenChange, onSaved }: AgentEditorProps) {
   const [form, setForm] = useState<AgentFormData>(EMPTY_FORM)
   const [providers, setProviders] = useState<ProviderInfo[]>([])
@@ -115,7 +178,7 @@ export function AgentEditor({ agentName, open, onOpenChange, onSaved }: AgentEdi
         {!loading && (
           <div className="flex flex-col gap-4">
             <BasicFields form={form} setForm={setForm} providers={providers} isCreate={isCreate} />
-            <Separator /><ToolsSection form={form} setForm={setForm} availableTools={availableTools} /><Separator /><ExecConfigSection form={form} setForm={setForm} />
+            <Separator /><ToolsSection form={form} setForm={setForm} availableTools={availableTools} /><Separator /><PermissionsSection form={form} setForm={setForm} /><Separator /><ExecConfigSection form={form} setForm={setForm} />
             {error && <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-2.5 text-xs text-destructive">{error}</div>}
           </div>
         )}

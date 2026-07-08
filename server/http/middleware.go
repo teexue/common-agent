@@ -16,10 +16,10 @@ func (s *Server) authMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Check Authorization: Bearer <key>.
+		// Check Authorization: Bearer <key> (case-insensitive scheme per RFC 7235).
 		auth := c.GetHeader("Authorization")
-		if strings.HasPrefix(auth, "Bearer ") {
-			if strings.TrimPrefix(auth, "Bearer ") == s.apiKey {
+		if len(auth) > 7 && strings.EqualFold(auth[:7], "bearer ") {
+			if auth[7:] == s.apiKey {
 				c.Next()
 				return
 			}

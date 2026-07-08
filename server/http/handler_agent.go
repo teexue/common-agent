@@ -135,8 +135,3 @@ func (s *Server) handleAgentValidate(c *gin.Context) {
 	})
 }
 
-// NormalizeAgentName strips optional .yaml suffix.
-// Deprecated: Use service.NormalizeAgentName instead.
-func NormalizeAgentName(name string) string {
-	return service.NormalizeAgentName(name)
-}

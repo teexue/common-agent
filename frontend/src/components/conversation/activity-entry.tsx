@@ -13,6 +13,7 @@ interface ActivityEntryProps {
   onSelectToolCall: (id: string) => void
   onApproveTool?: (approvalId: string) => void
   onDenyTool?: (approvalId: string) => void
+  isActive?: boolean
 }
 
 function UserMessage({ entry }: { entry: ConversationEntry }) {
@@ -32,17 +33,17 @@ function UserMessage({ entry }: { entry: ConversationEntry }) {
   )
 }
 
-function AssistantHeader({ entry }: { entry: ConversationEntry }) {
+function AssistantHeader({ entry, isActive }: { entry: ConversationEntry; isActive?: boolean }) {
   return (
     <div className="flex items-center gap-2">
       <span className="font-heading text-xs text-foreground">Agent</span>
       <span className="text-[10px] text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
-      {entry.isStreaming && (
+      {isActive && (
         <span className="flex items-center gap-1 text-[10px] text-primary">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /> 生成中
         </span>
       )}
-      {entry.usage && !entry.isStreaming && (
+      {entry.usage && !isActive && (
         <span className="text-[10px] text-muted-foreground/60">
           {entry.usage.inputTokens.toLocaleString()} in / {entry.usage.outputTokens.toLocaleString()} out
         </span>
@@ -51,7 +52,7 @@ function AssistantHeader({ entry }: { entry: ConversationEntry }) {
   )
 }
 
-export function ActivityEntry({ entry, selectedToolCallId, onSelectToolCall, onApproveTool, onDenyTool }: ActivityEntryProps) {
+export function ActivityEntry({ entry, selectedToolCallId, onSelectToolCall, onApproveTool, onDenyTool, isActive }: ActivityEntryProps) {
   const [thinkingExpanded, setThinkingExpanded] = useState(false)
 
   if (entry.compactionSummary) return <CompactionBanner summary={entry.compactionSummary} />
@@ -67,11 +68,11 @@ export function ActivityEntry({ entry, selectedToolCallId, onSelectToolCall, onA
         <Bot className="h-3.5 w-3.5" />
       </div>
       <div className="min-w-0 flex-1">
-        <AssistantHeader entry={entry} />
+        <AssistantHeader entry={entry} isActive={isActive} />
 
         {hasThinking && (
           <div className="mt-2">
-            <ThinkingBlock content={entry.reasoningContent!} isStreaming={!!entry.isStreaming} isExpanded={thinkingExpanded} onToggle={() => setThinkingExpanded((v) => !v)} />
+            <ThinkingBlock content={entry.reasoningContent!} isStreaming={!!isActive} isExpanded={thinkingExpanded} onToggle={() => setThinkingExpanded((v) => !v)} />
           </div>
         )}
 
@@ -88,8 +89,8 @@ export function ActivityEntry({ entry, selectedToolCallId, onSelectToolCall, onA
         )}
 
         {hasContent && (
-          <div className={cn("mt-2.5 rounded-xl border border-border bg-card p-3.5 text-sm leading-relaxed", entry.isStreaming && "border-primary/20")}>
-            <MarkdownRenderer content={entry.content} isStreaming={!!entry.isStreaming} />
+          <div className={cn("mt-2.5 rounded-xl border border-border bg-card p-3.5 text-sm leading-relaxed", isActive && "border-primary/20")}>
+            <MarkdownRenderer content={entry.content} isStreaming={!!isActive && !hasToolCalls} />
           </div>
         )}
       </div>

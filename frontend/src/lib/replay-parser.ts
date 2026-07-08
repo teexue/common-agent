@@ -71,16 +71,19 @@ function buildReplayEntries(events: ReplayEvent[]): ReplayEntry[] {
       }
 
       case "tool_start": {
-        const toolEntry = createEntry(turn, ts)
-        toolEntry.toolCalls.push({
+        // Tool calls go into the same entry as text (same turn)
+        if (!current || current.turn !== turn) {
+          current = createEntry(turn, ts)
+          entries.push(current)
+        }
+        const tc = {
           startIndex: i,
           toolCallId: event.tool_call_id ?? "",
           name: event.tool ?? "unknown",
           input: event.input,
-        })
-        entries.push(toolEntry)
-        current = toolEntry
-        if (event.tool_call_id) toolMap.set(event.tool_call_id, toolEntry.toolCalls[0])
+        }
+        current.toolCalls.push(tc)
+        if (tc.toolCallId) toolMap.set(tc.toolCallId, tc)
         break
       }
 

@@ -9,9 +9,9 @@ import (
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/config"
+	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/tui"
-	httpapi "github.com/teexue/common-agent/server/http"
 )
 
 func runSessions(args []string, logger *slog.Logger) {
@@ -119,7 +119,7 @@ func sessionsResume(args []string, logger *slog.Logger) {
 		os.Exit(1)
 	}
 
-	a, err := agent.LoadByName(paths.agentsDir, httpapi.NormalizeAgentName(loaded.Agent))
+	a, err := agent.LoadByName(paths.agentsDir, service.NormalizeAgentName(loaded.Agent))
 	if err != nil {
 		logger.Error("load agent", "error", err)
 		os.Exit(1)

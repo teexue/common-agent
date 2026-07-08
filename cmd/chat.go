@@ -17,9 +17,9 @@ import (
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
+	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/tui"
-	httpapi "github.com/teexue/common-agent/server/http"
 	"github.com/teexue/common-agent/tools/registry"
 )
 
@@ -92,7 +92,7 @@ func newChatReadline(home string) (*readline.Instance, error) {
 }
 
 func newChatState(catalog *provider.Catalog, mock bool, paths runtimePaths, agentName string) (*chatState, error) {
-	a, err := agent.LoadByName(paths.agentsDir, httpapi.NormalizeAgentName(agentName))
+	a, err := agent.LoadByName(paths.agentsDir, service.NormalizeAgentName(agentName))
 	if err != nil {
 		return nil, err
 	}

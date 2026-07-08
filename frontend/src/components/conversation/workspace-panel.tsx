@@ -118,9 +118,10 @@ export function WorkspacePanel({ messages, isStreaming, error, onSendMessage, on
                   const isMatch = matchedIndices.has(msgIndex)
                   const matchIdx = searchResults.findIndex((r) => r.index === msgIndex)
                   const isCurrent = isMatch && matchIdx === currentMatch
+                  const isLast = msgIndex === messages.length - 1
                   return (
                     <div key={entry.id} ref={(el) => { if (el && matchIdx >= 0) matchRefs.current[matchIdx] = el }} className={isCurrent ? "ring-1 ring-primary/40 rounded-xl" : ""}>
-                      <ActivityEntry entry={entry} selectedToolCallId={selectedToolCallId} onSelectToolCall={onSelectToolCall} onApproveTool={onApproveTool} onDenyTool={onDenyTool} />
+                      <ActivityEntry entry={entry} selectedToolCallId={selectedToolCallId} onSelectToolCall={onSelectToolCall} onApproveTool={onApproveTool} onDenyTool={onDenyTool} isActive={isStreaming && isLast} />
                     </div>
                   )
                 })}

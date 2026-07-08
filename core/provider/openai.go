@@ -175,7 +175,7 @@ func convertTools(tools []ToolDefinition) []openAITool {
 func (o *OpenAI) buildRequest(req Request) openAIRequest {
 	maxTokens := req.MaxTokens
 	if maxTokens <= 0 {
-		maxTokens = 4096
+		maxTokens = DefaultMaxTokens
 	}
 	out := openAIRequest{
 		Model:         req.Model,

@@ -21,6 +21,7 @@ import (
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/provider"
+	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/tui"
 	grpcapi "github.com/teexue/common-agent/server/grpc"
@@ -230,7 +231,7 @@ func runCLI(args []string, logger *slog.Logger) {
 		name = settings.DefaultAgent
 	}
 
-	a, err := agent.LoadByName(paths.agentsDir, httpapi.NormalizeAgentName(name))
+	a, err := agent.LoadByName(paths.agentsDir, service.NormalizeAgentName(name))
 	if err != nil {
 		logger.Error("load agent", "error", err)
 		os.Exit(1)
