@@ -83,6 +83,22 @@ func (h *HealthServer) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// CheckAll runs all registered component checks and returns an error if any fail.
+// Returns nil if no checkers are registered.
+func (h *HealthServer) CheckAll(ctx context.Context) error {
+	h.mu.RLock()
+	checkers := make([]Checker, len(h.checkers))
+	copy(checkers, h.checkers)
+	h.mu.RUnlock()
+
+	for _, c := range checkers {
+		if err := c.Check(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // HandleReady handles GET /readyz — checks all registered components.
 func (h *HealthServer) HandleReady(w http.ResponseWriter, r *http.Request) {
 	h.mu.RLock()

@@ -23,6 +23,7 @@ import (
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/telemetry"
 	"github.com/teexue/common-agent/core/tui"
 	grpcapi "github.com/teexue/common-agent/server/grpc"
 	httpapi "github.com/teexue/common-agent/server/http"
@@ -139,7 +140,7 @@ func runServe(args []string, logger *slog.Logger) {
 	// Start gRPC server if --grpc-addr is set.
 	var grpcServer *grpc.Server
 	if *grpcAddr != "" {
-		grpcServer = startGRPCServer(GRPCConfig{Addr: *grpcAddr, Paths: paths, Reg: reg, Catalog: catalog, Mock: *mock, Logger: logger, SessStore: sessStore})
+		grpcServer = startGRPCServer(GRPCConfig{Addr: *grpcAddr, Paths: paths, Reg: reg, Catalog: catalog, Mock: *mock, Logger: logger, SessStore: sessStore, Health: srv.Health()})
 	}
 
 	go func() {
@@ -168,11 +169,15 @@ type GRPCConfig struct {
 	Mock      bool
 	Logger    *slog.Logger
 	SessStore session.Store
+	Health    *telemetry.HealthServer
 }
 
 // startGRPCServer creates, registers, and starts a gRPC server in a goroutine.
 func startGRPCServer(cfg GRPCConfig) *grpc.Server {
 	grpcSrv := grpcapi.NewGRPCServer(cfg.Paths.agentsDir, cfg.Reg, resolveProvider(cfg.Catalog, cfg.Mock), cfg.Logger, cfg.SessStore)
+	if cfg.Health != nil {
+		grpcSrv.SetHealth(cfg.Health)
+	}
 	srv := grpc.NewServer()
 	grpcSrv.RegisterServer(srv)
 

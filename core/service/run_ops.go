@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 
 	"github.com/teexue/common-agent/core/agent"
@@ -46,6 +47,9 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 	if err != nil {
 		return nil, fmt.Errorf("load agent: %w", err)
 	}
+
+	// Load context file from working directory (AGENTS.md > CLAUDE.md).
+	a.ProjectContext = loadContextFile(req.WorkDir)
 
 	// Inject skill tools into the registry.
 	tempToolNames := injectSkills(a, s.AgentsDir, s.Registry, s.Logger)
@@ -169,7 +173,7 @@ func injectSkills(a *agent.Agent, agentsDir string, reg *registry.Registry, log 
 	}
 
 	if len(sections) > 0 {
-		a.SystemPrompt += "\n\n# Available Skills\n\n" + joinSections(sections)
+		a.SkillsContext = "# Available Skills\n\n" + joinSections(sections)
 	}
 
 	return tempToolNames
@@ -203,4 +207,21 @@ func joinSections(sections []string) string {
 		result += s
 	}
 	return result
+}
+
+// loadContextFile loads AGENTS.md or CLAUDE.md from the working directory.
+// Priority: AGENTS.md > CLAUDE.md. Returns empty string if neither exists.
+func loadContextFile(workDir string) string {
+	if workDir == "" {
+		return ""
+	}
+	candidates := []string{"AGENTS.md", "CLAUDE.md"}
+	for _, name := range candidates {
+		path := filepath.Join(workDir, name)
+		data, err := os.ReadFile(path)
+		if err == nil && len(data) > 0 {
+			return string(data)
+		}
+	}
+	return ""
 }

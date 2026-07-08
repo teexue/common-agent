@@ -192,13 +192,13 @@ func appendToolResult(out []anthropicMessage, m Message) []anthropicMessage {
 }
 
 func convertMessages(msgs []Message) (string, []anthropicMessage) {
-	var system string
+	var systemParts []string
 	out := make([]anthropicMessage, 0, len(msgs))
 
 	for _, m := range msgs {
 		switch m.Role {
 		case RoleSystem:
-			system = m.Content
+			systemParts = append(systemParts, m.Content)
 		case RoleUser:
 			out = append(out, anthropicMessage{
 				Role: "user",
@@ -213,7 +213,7 @@ func convertMessages(msgs []Message) (string, []anthropicMessage) {
 			out = appendToolResult(out, m)
 		}
 	}
-	return system, out
+	return strings.Join(systemParts, "\n\n"), out
 }
 
 func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {

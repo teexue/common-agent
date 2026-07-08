@@ -49,6 +49,11 @@ type Agent struct {
 	Permissions   *permission.Permissions `yaml:"permissions,omitempty"`
 	MCPServers    []MCPServerConfig       `yaml:"mcp_servers,omitempty"`
 	Compaction    *CompactionConfig       `yaml:"compaction,omitempty"`
+
+	// Runtime-only context parts (not persisted in YAML).
+	// These are kept separate for prompt caching optimization.
+	ProjectContext string `yaml:"-"`
+	SkillsContext  string `yaml:"-"`
 }
 
 const (

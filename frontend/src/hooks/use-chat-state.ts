@@ -159,25 +159,51 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
 // ─── Sub-reducers ─────────────────────────────────────────────────
 
-/** Handles APPEND_TEXT and APPEND_REASONING. */
+/** Handles APPEND_TEXT and APPEND_REASONING.
+ *  Three cases:
+ *  1. Last entry is a streaming text entry (text after tools) → append to it
+ *  2. Last entry has tool calls → create new text entry below it
+ *  3. Otherwise → append to the original entryId */
 function reduceContentUpdate(
   state: ChatState,
   action: { type: "APPEND_TEXT" | "APPEND_REASONING"; entryId: string; content: string }
 ): ChatState {
-  if (action.type === "APPEND_TEXT") {
+  const lastEntry = state.messages[state.messages.length - 1]
+
+  // Case 1: last entry is a streaming text entry → append to it
+  if (lastEntry?.role === "assistant" && lastEntry.isStreaming && (!lastEntry.toolCalls || lastEntry.toolCalls.length === 0)) {
     return {
       ...state,
-      messages: updateMessage(state.messages, action.entryId, (m) => ({
+      messages: updateMessage(state.messages, lastEntry.id, (m) => ({
         ...m,
-        content: m.content + action.content,
+        content: action.type === "APPEND_TEXT" ? m.content + action.content : m.content,
+        reasoningContent: action.type === "APPEND_REASONING" ? (m.reasoningContent ?? "") + action.content : m.reasoningContent,
       })),
     }
   }
+
+  // Case 2: last entry has tool calls → create new text entry
+  if (lastEntry?.toolCalls && lastEntry.toolCalls.length > 0) {
+    return {
+      ...state,
+      messages: [...state.messages, {
+        id: `text-${Date.now()}`,
+        role: "assistant" as const,
+        content: action.type === "APPEND_TEXT" ? action.content : "",
+        reasoningContent: action.type === "APPEND_REASONING" ? action.content : "",
+        timestamp: Date.now(),
+        isStreaming: true,
+      }],
+    }
+  }
+
+  // Case 3: normal append
   return {
     ...state,
     messages: updateMessage(state.messages, action.entryId, (m) => ({
       ...m,
-      reasoningContent: (m.reasoningContent ?? "") + action.content,
+      content: action.type === "APPEND_TEXT" ? m.content + action.content : m.content,
+      reasoningContent: action.type === "APPEND_REASONING" ? (m.reasoningContent ?? "") + action.content : m.reasoningContent,
     })),
   }
 }
@@ -188,14 +214,34 @@ function reduceToolAction(
   action: ChatAction & { type: `TOOL_${string}` }
 ): ChatState {
   switch (action.type) {
-    case "TOOL_START":
+    case "TOOL_START": {
+      // Close streaming on the current text entry
+      const closed = state.messages.map((m) =>
+        m.id === action.entryId && m.isStreaming ? { ...m, isStreaming: false } : m
+      )
+      const lastEntry = closed[closed.length - 1]
+      // If last entry already has tool calls, append to it (aggregate)
+      if (lastEntry?.toolCalls && lastEntry.toolCalls.length > 0) {
+        return {
+          ...state,
+          messages: updateMessage(closed, lastEntry.id, (m) => ({
+            ...m,
+            toolCalls: [...(m.toolCalls ?? []), action.toolCall],
+          })),
+        }
+      }
+      // Otherwise create new entry for tool call(s)
       return {
         ...state,
-        messages: updateMessage(state.messages, action.entryId, (m) => ({
-          ...m,
-          toolCalls: [...(m.toolCalls ?? []), action.toolCall],
-        })),
+        messages: [...closed, {
+          id: `tc-${Date.now()}`,
+          role: "assistant" as const,
+          content: "",
+          toolCalls: [action.toolCall],
+          timestamp: Date.now(),
+        }],
       }
+    }
     case "TOOL_RESULT":
       return {
         ...state,

@@ -7,9 +7,11 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -19,6 +21,7 @@ import (
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/telemetry"
 	commonagentv1 "github.com/teexue/common-agent/proto"
 	"github.com/teexue/common-agent/tools/registry"
 )
@@ -35,7 +38,10 @@ type GRPCServer struct {
 	store       session.Store
 	svc         *service.Service
 	approver    *GRPCApprover
-	apiKey      string // when non-empty, all methods require this key
+	apiKey      string                            // when non-empty, all methods require this key
+	healthSrv   grpc_health_v1.HealthServer       // the registered health service
+	health      *telemetry.HealthServer           // optional; nil disables component checks
+	healthMu    sync.RWMutex
 }
 
 // NewGRPCServer creates a GRPCServer.
@@ -62,6 +68,14 @@ func NewGRPCServer(
 		svc:         svc,
 		approver:    NewGRPCApprover(),
 	}
+}
+
+// SetHealth sets the health server for component-level readiness checks.
+// When set, Check() reports SERVING only when all registered components are healthy.
+func (s *GRPCServer) SetHealth(h *telemetry.HealthServer) {
+	s.healthMu.Lock()
+	defer s.healthMu.Unlock()
+	s.health = h
 }
 
 // SetAPIKey enables API key authentication for all gRPC methods.
@@ -105,6 +119,16 @@ func (s *GRPCServer) checkAuth(ctx context.Context) error {
 // RegisterServer registers the GRPCServer on the given gRPC server.
 func (s *GRPCServer) RegisterServer(srv *grpc.Server) {
 	commonagentv1.RegisterAgentServiceServer(srv, s)
+
+	hs := &grpcHealthService{
+		grpcSrv:  s,
+		statuses: make(map[string]grpc_health_v1.HealthCheckResponse_ServingStatus),
+	}
+	hs.statuses[""] = grpc_health_v1.HealthCheckResponse_SERVING
+	hs.statuses[commonagentv1.AgentService_ServiceDesc.ServiceName] = grpc_health_v1.HealthCheckResponse_SERVING
+	s.healthSrv = hs
+
+	grpc_health_v1.RegisterHealthServer(srv, hs)
 }
 
 // Run executes an agent and streams events back to the client.
@@ -355,3 +379,69 @@ func (s *GRPCServer) DeleteSession(ctx context.Context, req *commonagentv1.Delet
 
 // ensure compilation
 var _ commonagentv1.AgentServiceServer = (*GRPCServer)(nil)
+var _ grpc_health_v1.HealthServer = (*grpcHealthService)(nil)
+
+// ─── gRPC Health Check Integration ────────────────────────────────
+
+// grpcHealthService implements grpc_health_v1.HealthServer with
+// component-level readiness checks from telemetry.HealthServer.
+type grpcHealthService struct {
+	grpc_health_v1.UnimplementedHealthServer
+	grpcSrv  *GRPCServer
+	mu       sync.RWMutex
+	statuses map[string]grpc_health_v1.HealthCheckResponse_ServingStatus
+}
+
+// Check returns the serving status for the requested service.
+// Before checking, it refreshes status based on registered component checkers.
+func (h *grpcHealthService) Check(ctx context.Context, req *grpc_health_v1.HealthCheckRequest) (*grpc_health_v1.HealthCheckResponse, error) {
+	h.refreshStatus(ctx)
+
+	h.mu.RLock()
+	status, ok := h.statuses[req.Service]
+	h.mu.RUnlock()
+
+	if !ok {
+		return &grpc_health_v1.HealthCheckResponse{
+			Status: grpc_health_v1.HealthCheckResponse_SERVICE_UNKNOWN,
+		}, nil
+	}
+	return &grpc_health_v1.HealthCheckResponse{Status: status}, nil
+}
+
+// Watch streams health status changes. For simplicity, it sends the current
+// status and then waits for context cancellation (no change notifications).
+func (h *grpcHealthService) Watch(req *grpc_health_v1.HealthCheckRequest, stream grpc_health_v1.Health_WatchServer) error {
+	resp, err := h.Check(stream.Context(), req)
+	if err != nil {
+		return err
+	}
+	if err := stream.Send(resp); err != nil {
+		return err
+	}
+	// Block until client disconnects (no change notifications implemented).
+	<-stream.Context().Done()
+	return stream.Context().Err()
+}
+
+// refreshStatus checks all registered telemetry components and updates
+// the gRPC health serving status accordingly.
+func (h *grpcHealthService) refreshStatus(ctx context.Context) {
+	h.grpcSrv.healthMu.RLock()
+	health := h.grpcSrv.health
+	h.grpcSrv.healthMu.RUnlock()
+
+	if health == nil {
+		return
+	}
+
+	status := grpc_health_v1.HealthCheckResponse_SERVING
+	if err := health.CheckAll(ctx); err != nil {
+		status = grpc_health_v1.HealthCheckResponse_NOT_SERVING
+	}
+
+	h.mu.Lock()
+	h.statuses[""] = status
+	h.statuses[commonagentv1.AgentService_ServiceDesc.ServiceName] = status
+	h.mu.Unlock()
+}

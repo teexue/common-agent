@@ -65,6 +65,12 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 		msgs = []provider.Message{
 			{Role: provider.RoleSystem, Content: cfg.Agent.SystemPrompt},
 		}
+		if cfg.Agent.ProjectContext != "" {
+			msgs = append(msgs, provider.Message{Role: provider.RoleSystem, Content: "# Project Context\n\n" + cfg.Agent.ProjectContext})
+		}
+		if cfg.Agent.SkillsContext != "" {
+			msgs = append(msgs, provider.Message{Role: provider.RoleSystem, Content: cfg.Agent.SkillsContext})
+		}
 		cfg.Session.SetMessages(msgs)
 	}
 	if cfg.Prompt != "" {
