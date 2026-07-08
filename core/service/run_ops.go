@@ -55,7 +55,19 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		return nil, &ServerError{Message: fmt.Sprintf("create provider: %v", err)}
 	}
 
-	sess := session.New(a.Name)
+	var sess *session.Session
+	if req.SessionID != "" {
+		if s.Store == nil {
+			return nil, &ArgError{Field: "session_id", Message: "session persistence not configured"}
+		}
+		loaded, err := s.Store.Load(req.SessionID)
+		if err != nil {
+			return nil, fmt.Errorf("load session %s: %w", req.SessionID, err)
+		}
+		sess = loaded
+	} else {
+		sess = session.New(a.Name)
+	}
 	if len(req.Messages) > 0 {
 		sess.SetMessages(req.Messages)
 	}
@@ -68,26 +80,17 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 	}
 
 	cfg := loop.Config{
-		Provider: p,
-		Registry: s.Registry,
-		Agent:    a,
-		Session:  sess,
-		Prompt:   req.Prompt,
-		Logger:   s.Logger,
-		Store:    s.Store,
-		Policy:   pol,
-		Approver: approver,
-		WorkDir:  req.WorkDir,
-	}
-
-	if req.SessionID != "" {
-		if s.Store == nil {
-			return nil, &ArgError{Field: "session_id", Message: "session persistence not configured"}
-		}
-		if _, err := s.Store.Load(req.SessionID); err != nil {
-			return nil, fmt.Errorf("load session: %w", err)
-		}
-		cfg.SessionID = req.SessionID
+		Provider:  p,
+		Registry:  s.Registry,
+		Agent:     a,
+		Session:   sess,
+		Prompt:    req.Prompt,
+		Logger:    s.Logger,
+		Store:     s.Store,
+		SessionID: req.SessionID,
+		Policy:    pol,
+		Approver:  approver,
+		WorkDir:   req.WorkDir,
 	}
 
 	return &RunResult{Config: cfg, Session: sess, TempToolNames: tempToolNames}, nil

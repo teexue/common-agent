@@ -31,6 +31,36 @@ function formatDuration(start?: number, end?: number): string | null {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
 }
 
+// 从 input 中提取关键信息用于头部展示
+function extractInputSummary(toolName: string, input: unknown): string | null {
+  if (!input || typeof input !== "object") return null
+  const obj = input as Record<string, unknown>
+
+  switch (toolName) {
+    case "read_file":
+    case "write_file":
+    case "edit_file":
+    case "create_directory":
+    case "list_directory":
+      return typeof obj.path === "string" ? obj.path : null
+    case "run_command":
+      return typeof obj.command === "string" ? obj.command : null
+    case "search_files":
+      if (typeof obj.pattern === "string") {
+        return typeof obj.path === "string" ? `${obj.pattern} in ${obj.path}` : obj.pattern
+      }
+      return null
+    case "delegate_task":
+      return typeof obj.task === "string" ? truncate(obj.task, 60) : null
+    case "web_fetch":
+      return typeof obj.url === "string" ? obj.url : null
+    case "echo":
+      return typeof obj.message === "string" ? truncate(obj.message, 40) : null
+    default:
+      return null
+  }
+}
+
 function ApprovalButtons({ approvalId, onApprove, onDeny }: { approvalId?: string; onApprove?: (id: string) => void; onDeny?: (id: string) => void }) {
   return (
     <div className="border-t border-warning/20 bg-warning/5 px-3 py-2.5">
@@ -77,6 +107,7 @@ export function ToolOperationCard({ toolCall, isSelected, onSelect, onApprove, o
   const config = STATUS_CONFIG[toolCall.status]
   const duration = formatDuration(toolCall.startTime, toolCall.endTime)
   const needsApproval = toolCall.status === "pending_approval"
+  const inputSummary = extractInputSummary(toolCall.name, toolCall.input)
 
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded}>
@@ -89,7 +120,8 @@ export function ToolOperationCard({ toolCall, isSelected, onSelect, onApprove, o
             <StatusIcon status={toolCall.status} config={config} />
           </div>
           <span className="cursor-pointer font-mono text-sm font-medium text-foreground hover:text-primary hover:underline" onClick={onSelect}>{toolCall.name}</span>
-          <div className="ml-auto flex items-center gap-1.5">
+          {inputSummary && <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">{inputSummary}</span>}
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
             {duration && <span className="font-mono text-[10px] text-muted-foreground">{duration}</span>}
             <Badge variant="secondary" className={cn("rounded-full px-1.5 py-0 text-[10px]", toolCall.status === "completed" && "bg-success/10 text-success", toolCall.status === "error" && "bg-destructive/10 text-destructive", toolCall.status === "running" && "bg-primary/10 text-primary", toolCall.status === "sub_agent_running" && "bg-blue-500/10 text-blue-500", (toolCall.status === "denied" || toolCall.status === "pending_approval") && "bg-warning/10 text-warning")}>{config.label}</Badge>
           </div>

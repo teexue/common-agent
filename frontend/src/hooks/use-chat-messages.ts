@@ -28,7 +28,7 @@ export function toBackendMessages(
           content: entry.content || "",
           reasoning_content: entry.reasoningContent || undefined,
           tool_calls: entry.toolCalls.map((tc) => ({
-            id: tc.id,
+            id: tc.toolCallId ?? tc.id,
             name: tc.name,
             arguments: tc.input ?? {},
           })),
@@ -37,7 +37,7 @@ export function toBackendMessages(
           if (tc.status === "completed" && tc.output !== undefined) {
             msgs.push({
               role: "tool",
-              tool_call_id: tc.id,
+              tool_call_id: tc.toolCallId ?? tc.id,
               name: tc.name,
               content:
                 typeof tc.output === "string"
@@ -71,6 +71,14 @@ export interface BackendMsg {
 }
 
 export function fromBackendMessages(msgs: BackendMsg[]): ConversationEntry[] {
+  // 先收集所有 tool 角色消息，按 tool_call_id 索引
+  const toolOutputs = new Map<string, string>()
+  for (const msg of msgs) {
+    if (msg.role === "tool" && msg.tool_call_id && msg.content) {
+      toolOutputs.set(msg.tool_call_id, msg.content)
+    }
+  }
+
   const entries: ConversationEntry[] = []
   for (const msg of msgs) {
     if (msg.role === "system") continue
@@ -85,22 +93,36 @@ export function fromBackendMessages(msgs: BackendMsg[]): ConversationEntry[] {
     }
 
     if (msg.role === "assistant") {
+      const toolCalls = (msg.tool_calls ?? []).map((tc) => {
+        const output = toolOutputs.get(tc.id)
+        return {
+          id: tc.id,
+          toolCallId: tc.id,
+          name: tc.name,
+          input: tc.arguments,
+          output: output ? tryParseJSON(output) : undefined,
+          status: "completed" as const,
+        }
+      })
       entries.push({
         id: `loaded-assistant-${entries.length}`,
         role: "assistant",
         content: msg.content ?? "",
         reasoningContent: msg.reasoning_content,
-        toolCalls: (msg.tool_calls ?? []).map((tc) => ({
-          id: tc.id,
-          name: tc.name,
-          input: tc.arguments,
-          status: "completed" as const,
-        })),
+        toolCalls,
         timestamp: Date.now(),
       })
     }
   }
   return entries
+}
+
+function tryParseJSON(s: string): unknown {
+  try {
+    return JSON.parse(s)
+  } catch {
+    return s
+  }
 }
 
 // ─── SSE Parser ───────────────────────────────────────────────────

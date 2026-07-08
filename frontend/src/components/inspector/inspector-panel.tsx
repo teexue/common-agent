@@ -11,6 +11,10 @@ interface InspectorPanelProps {
   toolCall: ToolCallEntry | null
 }
 
+function hasOutput(toolCall: ToolCallEntry): boolean {
+  return toolCall.output !== undefined && toolCall.output !== null && toolCall.output !== ""
+}
+
 function ToolCallDetail({ toolCall }: { toolCall: ToolCallEntry }) {
   return (
     <ScrollArea className="h-full">
@@ -27,7 +31,7 @@ function ToolCallDetail({ toolCall }: { toolCall: ToolCallEntry }) {
           </TabsList>
           <TabsContent value="input" className="mt-3"><JsonViewer data={toolCall.input} title="Input" /></TabsContent>
           <TabsContent value="output" className="mt-3">
-            {toolCall.output !== undefined ? <JsonViewer data={toolCall.output} title="Output" /> : <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">暂无输出</p>}
+            {hasOutput(toolCall) ? <JsonViewer data={toolCall.output} title="Output" /> : <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">暂无输出</p>}
           </TabsContent>
         </Tabs>
       </div>

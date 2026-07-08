@@ -100,6 +100,9 @@ function dispatchSSEEvent(
       dispatch({ type: "STREAM_ERROR", message: event.message ?? "Unknown error" })
       return true
     case "done":
+      if (event.session_id) {
+        dispatch({ type: "SET_SESSION_ID", sessionId: event.session_id })
+      }
       dispatch({
         type: "STREAM_DONE", entryId, status: event.status ?? "completed",
         turns: event.turns ?? 0, inputTokens: event.input_tokens, outputTokens: event.output_tokens,

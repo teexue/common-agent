@@ -27,6 +27,7 @@ export interface AgentEvent {
   turns?: number // done
   input_tokens?: number // done
   output_tokens?: number // done
+  session_id?: string // done
 }
 
 export interface ToolInfo {

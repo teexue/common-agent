@@ -50,6 +50,7 @@ type Event struct {
 	Turns        int    `json:"turns,omitempty"`
 	InputTokens  int    `json:"input_tokens,omitempty"`
 	OutputTokens int    `json:"output_tokens,omitempty"`
+	SessionID    string `json:"session_id,omitempty"`
 }
 
 // StreamEvents writes JSON-line events to w until done or ctx cancelled.

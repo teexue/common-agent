@@ -121,7 +121,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 	for turn := 1; turn <= maxTurns; turn++ {
 		select {
 		case <-ctx.Done():
-			emitCancelled(out, turn, totalInputTokens, totalOutputTokens)
+			emitCancelled(out, cfg.Session.ID, turn, totalInputTokens, totalOutputTokens)
 			return
 		default:
 		}
@@ -139,7 +139,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		tel.RecordRunDuration(ctx, time.Since(runStart), attribute.String("agent.name", cfg.Agent.Name))
 	}
 	forceEmit(out, event.Event{Type: event.TypeError, Code: "max_turns", Message: fmt.Sprintf("exceeded max turns %d", maxTurns)})
-	forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: maxTurns, InputTokens: totalInputTokens, OutputTokens: totalOutputTokens})
+	forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: maxTurns, InputTokens: totalInputTokens, OutputTokens: totalOutputTokens, SessionID: cfg.Session.ID})
 }
 
 type tokenDelta struct{ input, output int }
@@ -175,13 +175,13 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 	})
 	if err != nil {
 		forceEmit(tc.Out, event.Event{Type: event.TypeError, Code: "provider_error", Message: err.Error()})
-		forceEmit(tc.Out, event.Event{Type: event.TypeDone, Status: "failed", Turns: tc.Turn})
+		forceEmit(tc.Out, event.Event{Type: event.TypeDone, Status: "failed", Turns: tc.Turn, SessionID: tc.Config.Session.ID})
 		return tokenDelta{}, true
 	}
 
 	text, reasoning, toolCalls, tokens, cancelled := consumeStream(tc.Ctx, chunks, tc.Out)
 	if cancelled {
-		emitCancelled(tc.Out, tc.Turn, tokens.input, tokens.output)
+		emitCancelled(tc.Out, tc.Config.Session.ID, tc.Turn, tokens.input, tokens.output)
 		return tokens, true
 	}
 
@@ -190,7 +190,7 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 			Role: provider.RoleAssistant, Content: text, ReasoningContent: reasoning,
 		})
 		endTurn(turnSpan, tc.Tel, turnCtx, tc.Turn)
-		forceEmit(tc.Out, event.Event{Type: event.TypeDone, Status: "completed", Turns: tc.Turn, InputTokens: tokens.input, OutputTokens: tokens.output})
+		forceEmit(tc.Out, event.Event{Type: event.TypeDone, Status: "completed", Turns: tc.Turn, InputTokens: tokens.input, OutputTokens: tokens.output, SessionID: tc.Config.Session.ID})
 		return tokens, true
 	}
 
@@ -363,7 +363,7 @@ func endTurn(span trace.Span, tel *telemetry.Telemetry, ctx context.Context, tur
 	}
 }
 
-func emitCancelled(out chan<- event.Event, turn, inputTokens, outputTokens int) {
+func emitCancelled(out chan<- event.Event, sessionID string, turn, inputTokens, outputTokens int) {
 	forceEmit(out, event.Event{Type: event.TypeError, Code: "cancelled", Message: "context cancelled"})
-	forceEmit(out, event.Event{Type: event.TypeDone, Status: "cancelled", Turns: turn, InputTokens: inputTokens, OutputTokens: outputTokens})
+	forceEmit(out, event.Event{Type: event.TypeDone, Status: "cancelled", Turns: turn, InputTokens: inputTokens, OutputTokens: outputTokens, SessionID: sessionID})
 }

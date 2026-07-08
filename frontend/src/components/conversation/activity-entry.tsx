@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 import { formatTimestamp } from "@/lib/format"
 import { MarkdownRenderer } from "@/components/shared/markdown-renderer"
 import { ThinkingBlock } from "./thinking-block"
-import { ToolOperationCard } from "./tool-operation-card"
+import { ToolCallGroup } from "./tool-call-group"
 import type { ConversationEntry } from "@/types/agent"
 
 interface ActivityEntryProps {
@@ -76,10 +76,14 @@ export function ActivityEntry({ entry, selectedToolCallId, onSelectToolCall, onA
         )}
 
         {hasToolCalls && (
-          <div className={cn("flex flex-col gap-1.5", hasThinking || hasContent ? "mt-2" : "")}>
-            {entry.toolCalls!.map((tc) => (
-              <ToolOperationCard key={tc.id} toolCall={tc} isSelected={selectedToolCallId === tc.id} onSelect={() => onSelectToolCall(tc.id)} onApprove={onApproveTool} onDeny={onDenyTool} />
-            ))}
+          <div className={cn(hasThinking || hasContent ? "mt-2" : "")}>
+            <ToolCallGroup
+              toolCalls={entry.toolCalls!}
+              selectedToolCallId={selectedToolCallId}
+              onSelectToolCall={onSelectToolCall}
+              onApproveTool={onApproveTool}
+              onDenyTool={onDenyTool}
+            />
           </div>
         )}
 
