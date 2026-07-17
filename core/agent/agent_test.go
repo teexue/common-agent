@@ -284,8 +284,8 @@ func TestLoadAll(t *testing.T) {
 	if len(result.Errors) != 1 {
 		t.Fatalf("got %d errors, want 1: %+v", len(result.Errors), result.Errors)
 	}
-	if result.Errors[0].Name != "bad" {
-		t.Fatalf("error name = %q, want bad", result.Errors[0].Name)
+	if result.Errors[0].ID != "bad" {
+		t.Fatalf("error id = %q, want bad", result.Errors[0].ID)
 	}
 }
 

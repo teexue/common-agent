@@ -50,13 +50,13 @@ func (m *Manager) ConnectAll(ctx context.Context) []tool.Tool {
 	for _, cfg := range m.servers {
 		client := m.createClient(cfg)
 		if err := client.Connect(ctx); err != nil {
-			m.logger.Error("mcp server connect failed", "name", cfg.Name, "type", cfg.Type, "error", err)
+			m.logger.Error("log.mcp.connect_failed", "name", cfg.Name, "type", cfg.Type, "error", err)
 			continue
 		}
 
 		tools, err := client.ListTools(ctx)
 		if err != nil {
-			m.logger.Error("mcp list tools failed", "name", cfg.Name, "error", err)
+			m.logger.Error("log.mcp.list_tools_failed", "name", cfg.Name, "error", err)
 			client.Close()
 			continue
 		}
@@ -70,7 +70,7 @@ func (m *Manager) ConnectAll(ctx context.Context) []tool.Tool {
 		}
 		m.mu.Unlock()
 
-		m.logger.Info("mcp server connected", "name", cfg.Name, "tools", len(tools))
+		m.logger.Info("log.mcp.connected", "name", cfg.Name, "tools", len(tools))
 	}
 
 	return allTools
@@ -91,7 +91,7 @@ func (m *Manager) Close() {
 
 	for name, client := range m.clients {
 		if err := client.Close(); err != nil {
-			m.logger.Error("mcp close error", "name", name, "error", err)
+			m.logger.Error("log.mcp.close_error", "name", name, "error", err)
 		}
 	}
 	m.clients = make(map[string]Client)
@@ -174,7 +174,7 @@ func (m *Manager) Reconnect(ctx context.Context, cfg ServerConfig) {
 
 		client := m.createClient(cfg)
 		if err := client.Connect(ctx); err != nil {
-			m.logger.Warn("mcp reconnect failed", "name", cfg.Name, "error", err)
+			m.logger.Warn("log.mcp.reconnect_failed", "name", cfg.Name, "error", err)
 			delay *= 2
 			if delay > maxDelay {
 				delay = maxDelay
@@ -184,7 +184,7 @@ func (m *Manager) Reconnect(ctx context.Context, cfg ServerConfig) {
 
 		tools, err := client.ListTools(ctx)
 		if err != nil {
-			m.logger.Error("mcp list tools failed on reconnect", "name", cfg.Name, "error", err)
+			m.logger.Error("log.mcp.list_tools_reconnect_failed", "name", cfg.Name, "error", err)
 			client.Close()
 			delay *= 2
 			if delay > maxDelay {
@@ -201,7 +201,7 @@ func (m *Manager) Reconnect(ctx context.Context, cfg ServerConfig) {
 		}
 		m.mu.Unlock()
 
-		m.logger.Info("mcp server reconnected", "name", cfg.Name, "tools", len(tools))
+		m.logger.Info("log.mcp.reconnected", "name", cfg.Name, "tools", len(tools))
 		return
 	}
 }
@@ -223,7 +223,7 @@ func (m *Manager) createClient(cfg ServerConfig) Client {
 			Logger: m.logger,
 		})
 	default:
-		m.logger.Error("unknown mcp server type", "type", cfg.Type, "name", cfg.Name)
+		m.logger.Error("log.mcp.unknown_type", "type", cfg.Type, "name", cfg.Name)
 		return nil
 	}
 }

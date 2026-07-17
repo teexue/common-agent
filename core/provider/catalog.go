@@ -23,6 +23,7 @@ type Profile struct {
 	BaseURL    string
 	APIKey     string
 	APIVersion string
+	Vision     bool
 	Thinking   *ThinkingConfig
 }
 
@@ -33,6 +34,7 @@ type ProfileEntry struct {
 	APIKeyEnv    string          `yaml:"api_key_env"`
 	APIVersion   string          `yaml:"api_version"`
 	DefaultModel string          `yaml:"default_model"`
+	Vision       bool            `yaml:"vision,omitempty"`
 	Thinking     *ThinkingConfig `yaml:"thinking"`
 }
 
@@ -128,6 +130,7 @@ func (e ProfileEntry) resolve(name string, credLookup func(string) string) (Prof
 		BaseURL:    baseURL,
 		APIKey:     apiKey,
 		APIVersion: apiVersion,
+		Vision:     e.Vision,
 		Thinking:   e.Thinking,
 	}, nil
 }
@@ -156,6 +159,7 @@ type ProviderInfo struct {
 	Type         string `json:"type"`
 	BaseURL      string `json:"base_url"`
 	DefaultModel string `json:"default_model"`
+	Vision       bool   `json:"vision"`
 }
 
 // Entries returns all configured providers as ProviderInfo (without API keys).
@@ -167,6 +171,7 @@ func (c *Catalog) Entries() []ProviderInfo {
 			Type:         string(entry.Type),
 			BaseURL:      entry.BaseURL,
 			DefaultModel: entry.DefaultModel,
+			Vision:       entry.Vision,
 		})
 	}
 	return infos

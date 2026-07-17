@@ -1,3 +1,9 @@
+import i18n from "@/i18n"
+
+function dateLocale(): string {
+  return i18n.language?.startsWith("zh") ? "zh-CN" : "en"
+}
+
 export function formatJson(data: unknown): string {
   try {
     return JSON.stringify(data, null, 2)
@@ -7,7 +13,7 @@ export function formatJson(data: unknown): string {
 }
 
 export function formatTimestamp(ts: number): string {
-  return new Date(ts).toLocaleTimeString("zh-CN", {
+  return new Date(ts).toLocaleTimeString(dateLocale(), {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -33,12 +39,12 @@ export function formatRelativeTime(dateStr: string): string {
   const diffHour = Math.floor(diffMin / 60)
   const diffDay = Math.floor(diffHour / 24)
 
-  if (diffSec < 60) return "刚刚"
-  if (diffMin < 60) return `${diffMin} 分钟前`
-  if (diffHour < 24) return `${diffHour} 小时前`
-  if (diffDay < 7) return `${diffDay} 天前`
+  if (diffSec < 60) return i18n.t("format.justNow")
+  if (diffMin < 60) return i18n.t("format.minutesAgo", { count: diffMin })
+  if (diffHour < 24) return i18n.t("format.hoursAgo", { count: diffHour })
+  if (diffDay < 7) return i18n.t("format.daysAgo", { count: diffDay })
 
-  return date.toLocaleDateString("zh-CN", {
+  return date.toLocaleDateString(dateLocale(), {
     month: "short",
     day: "numeric",
   })

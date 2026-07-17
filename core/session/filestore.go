@@ -34,6 +34,7 @@ func NewFileStore(dir string) (*FileStore, error) {
 type sessionFile struct {
 	ID        string            `json:"id"`
 	Agent     string            `json:"agent"`
+	Title     string            `json:"title,omitempty"`
 	Messages  []json.RawMessage `json:"messages"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 	CreatedAt string            `json:"created_at"`
@@ -49,6 +50,7 @@ func (fs *FileStore) Save(sess *Session) error {
 	sf := sessionFile{
 		ID:        sess.ID,
 		Agent:     sess.Agent,
+		Title:     sess.Title,
 		Metadata:  sess.Metadata,
 		CreatedAt: sess.CreatedAt.Format("2006-01-02T15:04:05.000Z07:00"),
 		UpdatedAt: sess.UpdatedAt.Format("2006-01-02T15:04:05.000Z07:00"),
@@ -120,6 +122,7 @@ func (fs *FileStore) Load(id string) (*Session, error) {
 	return &Session{
 		ID:        sf.ID,
 		Agent:     sf.Agent,
+		Title:     sf.Title,
 		Messages:  msgs,
 		Metadata:  sf.Metadata,
 		CreatedAt: createdAt,
@@ -144,27 +147,32 @@ func (fs *FileStore) List() ([]SessionMeta, error) {
 		}
 		data, err := os.ReadFile(filepath.Join(fs.dir, entry.Name()))
 		if err != nil {
-			slog.Warn("skipping unreadable session file", "file", entry.Name(), "error", err)
+			slog.Warn("log.session.skip_unreadable", "file", entry.Name(), "error", err)
 			continue // skip unreadable files
 		}
 		var sf sessionFile
 		if err := json.Unmarshal(data, &sf); err != nil {
-			slog.Warn("skipping corrupted session file", "file", entry.Name(), "error", err)
+			slog.Warn("log.session.skip_corrupted", "file", entry.Name(), "error", err)
 			continue // skip corrupted files
 		}
 		createdAt, err := parseTime(sf.CreatedAt)
 		if err != nil {
-			slog.Warn("skipping session with invalid created_at", "file", entry.Name(), "id", sf.ID, "error", err)
+			slog.Warn("log.session.skip_invalid_created_at", "file", entry.Name(), "id", sf.ID, "error", err)
 			continue
 		}
 		updatedAt, err := parseTime(sf.UpdatedAt)
 		if err != nil {
-			slog.Warn("skipping session with invalid updated_at", "file", entry.Name(), "id", sf.ID, "error", err)
+			slog.Warn("log.session.skip_invalid_updated_at", "file", entry.Name(), "id", sf.ID, "error", err)
 			continue
+		}
+		title := sf.Title
+		if title == "" {
+			title = titleFromMessages(sf.Messages)
 		}
 		metas = append(metas, SessionMeta{
 			ID:        sf.ID,
 			Agent:     sf.Agent,
+			Title:     title,
 			Metadata:  sf.Metadata,
 			CreatedAt: createdAt,
 			UpdatedAt: updatedAt,
@@ -217,4 +225,22 @@ func parseTime(s string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, fmt.Errorf("cannot parse time: %q", s)
+}
+
+// titleFromMessages derives a title from the first user message content.
+// Used as a fallback for sessions persisted before Title was introduced.
+func titleFromMessages(msgs []json.RawMessage) string {
+	for _, raw := range msgs {
+		var m struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		}
+		if err := json.Unmarshal(raw, &m); err != nil {
+			continue
+		}
+		if m.Role == string(provider.RoleUser) {
+			return TitleFromPrompt(m.Content)
+		}
+	}
+	return ""
 }

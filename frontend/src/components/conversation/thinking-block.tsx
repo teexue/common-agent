@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { Brain, ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,6 +21,7 @@ export function ThinkingBlock({
   isExpanded,
   onToggle,
 }: ThinkingBlockProps) {
+  const { t } = useTranslation()
   const tokens = estimateTokens(content)
 
   return (
@@ -40,7 +42,7 @@ export function ThinkingBlock({
           <ChevronRight className="h-3 w-3" />
         )}
         <span className="font-mono text-[10px]">
-          {isStreaming ? "思考中..." : `思考 · ~${tokens} tokens`}
+          {isStreaming ? t("status.thinking") : t("status.thinkingTokens", { tokens })}
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent>

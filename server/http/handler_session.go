@@ -14,12 +14,12 @@ import (
 
 func (s *Server) handleSessionsList(c *gin.Context) {
 	if s.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "session_error", "message": "session persistence not configured"})
+		respondError(c, http.StatusServiceUnavailable, "session_error", "api.error.session_not_configured")
 		return
 	}
 	metas, err := s.svc.ListSessions()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "session_error", "message": err.Error()})
+		respondErrorDetails(c, http.StatusInternalServerError, "session_error", "api.error.session_error", err.Error())
 		return
 	}
 	if metas == nil {
@@ -30,23 +30,24 @@ func (s *Server) handleSessionsList(c *gin.Context) {
 
 func (s *Server) handleSessionsGet(c *gin.Context) {
 	if s.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "session_error", "message": "session persistence not configured"})
+		respondError(c, http.StatusServiceUnavailable, "session_error", "api.error.session_not_configured")
 		return
 	}
 	id := c.Param("id")
 	sess, err := s.svc.LoadSession(id)
 	if err != nil {
 		if errors.Is(err, session.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "session not found"})
+			respondError(c, http.StatusNotFound, "not_found", "api.error.session_not_found")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "session_error", "message": err.Error()})
+		respondErrorDetails(c, http.StatusInternalServerError, "session_error", "api.error.session_error", err.Error())
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":         sess.ID,
 		"agent":      sess.Agent,
+		"title":      sess.GetTitle(),
 		"messages":   sess.GetMessages(),
 		"metadata":   sess.GetMetadata(),
 		"created_at": sess.CreatedAt,
@@ -56,16 +57,16 @@ func (s *Server) handleSessionsGet(c *gin.Context) {
 
 func (s *Server) handleSessionsDelete(c *gin.Context) {
 	if s.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "session_error", "message": "session persistence not configured"})
+		respondError(c, http.StatusServiceUnavailable, "session_error", "api.error.session_not_configured")
 		return
 	}
 	id := c.Param("id")
 	if err := s.svc.DeleteSession(id); err != nil {
 		if errors.Is(err, session.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "session not found"})
+			respondError(c, http.StatusNotFound, "not_found", "api.error.session_not_found")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "session_error", "message": err.Error()})
+		respondErrorDetails(c, http.StatusInternalServerError, "session_error", "api.error.session_error", err.Error())
 		return
 	}
 
@@ -75,7 +76,7 @@ func (s *Server) handleSessionsDelete(c *gin.Context) {
 func (s *Server) handleSessionReplay(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "session id is required"})
+		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.session_id_required")
 		return
 	}
 
@@ -90,7 +91,7 @@ func (s *Server) handleSessionReplay(c *gin.Context) {
 
 	records, err := s.eventLogger.Replay(id, fromTurn, toTurn)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "replay_error", "message": err.Error()})
+		respondErrorDetails(c, http.StatusInternalServerError, "replay_error", "api.error.replay_error", err.Error())
 		return
 	}
 

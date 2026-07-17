@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Trans, useTranslation } from "react-i18next"
 import { AlertCircle, Download, FileJson, FileText, Plus, Search, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ActivityEntry } from "./activity-entry"
-import { InputBar } from "./input-bar"
+import { InputBar, type ImageAttachment } from "./input-bar"
 import { SearchBar } from "./search-bar"
 import { useAutoScroll } from "@/hooks/use-auto-scroll"
 import { exportToMarkdown, exportToJson, downloadFile } from "@/lib/export"
+import { optimizePrompt } from "@/lib/api"
 import type { ConversationEntry } from "@/types/agent"
 
 interface WorkspacePanelProps {
   messages: ConversationEntry[]
   isStreaming: boolean
   error: string | null
-  onSendMessage: (text: string) => void
+  onSendMessage: (text: string, images: ImageAttachment[]) => void
   onStop?: () => void
   selectedToolCallId: string | null
   onSelectToolCall: (id: string) => void
@@ -23,9 +25,11 @@ interface WorkspacePanelProps {
   noAgent?: boolean
   onCreateAgent?: () => void
   agentName?: string
+  visionEnabled?: boolean
 }
 
 function EmptyState({ noAgent, onCreateAgent }: { noAgent?: boolean; onCreateAgent?: () => void }) {
+  const { t } = useTranslation()
   return (
     <div className="flex h-full min-h-[calc(100vh-10rem)] items-center justify-center px-6">
       <div className="max-w-sm text-center">
@@ -35,14 +39,23 @@ function EmptyState({ noAgent, onCreateAgent }: { noAgent?: boolean; onCreateAge
         </div>
         {noAgent ? (
           <>
-            <p className="font-heading text-base text-foreground">尚未配置 Agent</p>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">创建一个 Agent YAML 配置文件来开始使用。可以通过左侧 Agent 列表的「+」按钮创建，或运行 <code className="rounded bg-muted px-1 py-0.5 font-mono">agent-server config init</code> 进行初始化。</p>
-            {onCreateAgent && <Button variant="outline" size="sm" className="mt-4 gap-1.5 rounded-xl text-xs" onClick={onCreateAgent}><Plus className="h-3.5 w-3.5" /> 创建 Agent</Button>}
+            <p className="font-heading text-base text-foreground">{t("conversation.noAgentTitle")}</p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              <Trans
+                i18nKey="conversation.noAgentDesc"
+                components={{ code: <code className="rounded bg-muted px-1 py-0.5 font-mono" /> }}
+              />
+            </p>
+            {onCreateAgent && (
+              <Button variant="outline" size="sm" className="mt-4 gap-1.5 rounded-xl text-xs" onClick={onCreateAgent}>
+                <Plus className="h-3.5 w-3.5" /> {t("common.createAgent")}
+              </Button>
+            )}
           </>
         ) : (
           <>
-            <p className="font-heading text-base text-foreground">Agent 工作区</p>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">发送指令开始与 Agent 交互。选择左侧场景可切换不同的工具组合与模型配置。</p>
+            <p className="font-heading text-base text-foreground">{t("conversation.workspaceTitle")}</p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{t("conversation.workspaceDesc")}</p>
           </>
         )}
       </div>
@@ -51,6 +64,7 @@ function EmptyState({ noAgent, onCreateAgent }: { noAgent?: boolean; onCreateAge
 }
 
 function Toolbar({ searchOpen, onToggleSearch, messages, agentName }: { searchOpen: boolean; onToggleSearch: () => void; messages: ConversationEntry[]; agentName: string }) {
+  const { t } = useTranslation()
   return (
     <div className="flex justify-end gap-1">
       <Button variant={searchOpen ? "secondary" : "ghost"} size="icon-xs" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground" onClick={onToggleSearch}>
@@ -61,8 +75,12 @@ function Toolbar({ searchOpen, onToggleSearch, messages, agentName }: { searchOp
           <Download className="h-3.5 w-3.5" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40 rounded-xl">
-          <DropdownMenuItem onClick={() => downloadFile(exportToMarkdown(messages, agentName), `${agentName}-${Date.now()}.md`, "text/markdown")} className="gap-2 text-xs"><FileText className="h-3.5 w-3.5" /> 导出 Markdown</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => downloadFile(exportToJson(messages, agentName), `${agentName}-${Date.now()}.json`, "application/json")} className="gap-2 text-xs"><FileJson className="h-3.5 w-3.5" /> 导出 JSON</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => downloadFile(exportToMarkdown(messages, agentName), `${agentName}-${Date.now()}.md`, "text/markdown")} className="gap-2 text-xs">
+            <FileText className="h-3.5 w-3.5" /> {t("conversation.exportMarkdown")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => downloadFile(exportToJson(messages, agentName), `${agentName}-${Date.now()}.json`, "application/json")} className="gap-2 text-xs">
+            <FileJson className="h-3.5 w-3.5" /> {t("conversation.exportJson")}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -98,9 +116,20 @@ function useMessageSearch(messages: ConversationEntry[]) {
   return { searchOpen, setSearchOpen, searchQuery, setSearchQuery, currentMatch, searchResults, matchedIndices, matchRefs, handlePrev, handleNext, handleClear }
 }
 
-export function WorkspacePanel({ messages, isStreaming, error, onSendMessage, onStop, selectedToolCallId, onSelectToolCall, onApproveTool, onDenyTool, noAgent, onCreateAgent, agentName = "agent" }: WorkspacePanelProps) {
+export function WorkspacePanel({ messages, isStreaming, error, onSendMessage, onStop, selectedToolCallId, onSelectToolCall, onApproveTool, onDenyTool, noAgent, onCreateAgent, agentName = "agent", visionEnabled }: WorkspacePanelProps) {
   const { containerRef, handleScroll } = useAutoScroll(messages)
   const isEmpty = messages.length === 0 && !error
+  const [optimizing, setOptimizing] = useState(false)
+
+  const handleOptimize = useCallback(async (text: string) => {
+    setOptimizing(true)
+    try {
+      const result = await optimizePrompt(text, agentName)
+      return result.optimized_prompt
+    } finally {
+      setOptimizing(false)
+    }
+  }, [agentName])
   const { searchOpen, setSearchOpen, setSearchQuery, currentMatch, searchResults, matchedIndices, matchRefs, handlePrev, handleNext, handleClear } = useMessageSearch(messages)
 
   return (
@@ -131,7 +160,7 @@ export function WorkspacePanel({ messages, isStreaming, error, onSendMessage, on
           </div>
         </ScrollArea>
       </div>
-      <InputBar onSend={onSendMessage} onStop={onStop} disabled={noAgent ?? false} isStreaming={isStreaming} />
+      <InputBar onSend={onSendMessage} onStop={onStop} onOptimize={handleOptimize} disabled={noAgent ?? false} isStreaming={isStreaming} visionEnabled={visionEnabled} optimizing={optimizing} />
     </div>
   )
 }

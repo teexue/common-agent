@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { JsonViewer } from "@/components/artifact/json-viewer"
 import { Wrench } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import type { ToolInfo } from "@/types/agent"
 
 interface ToolDetailDialogProps {
@@ -21,6 +22,7 @@ export function ToolDetailDialog({
   open,
   onOpenChange,
 }: ToolDetailDialogProps) {
+  const { t } = useTranslation()
   if (!tool) return null
 
   return (
@@ -36,7 +38,7 @@ export function ToolDetailDialog({
               variant="secondary"
               className="rounded-md px-1.5 py-0 text-[10px]"
             >
-              工具
+              {t("tools.badge")}
             </Badge>
           </DialogTitle>
         </DialogHeader>
@@ -50,7 +52,7 @@ export function ToolDetailDialog({
 
           <div>
             <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              参数 Schema
+              {t("tools.paramSchema")}
             </h4>
             <JsonViewer data={tool.parameters} />
           </div>

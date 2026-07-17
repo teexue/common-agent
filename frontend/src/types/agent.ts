@@ -37,6 +37,7 @@ export interface ToolInfo {
 }
 
 export interface AgentInfo {
+  id: string
   name: string
   provider: string
   model: string
@@ -45,8 +46,9 @@ export interface AgentInfo {
   systemPrompt?: string
 }
 
-// Full agent detail (from GET /v1/agents/:name)
+// Full agent detail (from GET /v1/agents/:id)
 export interface AgentDetail {
+  id: string
   name: string
   provider: string
   model: string
@@ -113,6 +115,7 @@ export type StreamStatus = "idle" | "streaming" | "error" | "done"
 export interface SessionMeta {
   id: string
   agent: string
+  title?: string
   metadata?: Record<string, string>
   created_at: string
   updated_at: string
@@ -125,6 +128,7 @@ export interface ProviderInfo {
   type: string // "openai" | "anthropic"
   base_url: string
   default_model: string
+  vision: boolean
 }
 
 // Skill info (mirrors Go SkillInfo)
@@ -174,6 +178,50 @@ export interface ComponentHealth {
 export interface HealthStatus {
   status: "up" | "down"
   details?: ComponentHealth[]
+}
+
+export interface JobSchedule {
+  type: "cron" | "interval" | "once"
+  cron?: string
+  interval?: string
+  at?: string
+}
+
+export interface JobInfo {
+  id: string
+  name: string
+  enabled: boolean
+  agent: string
+  prompt: string
+  workdir?: string
+  schedule: JobSchedule
+  session_mode: "new_each_run" | "continue"
+  session_id?: string
+  policy: {
+    max_runs: number
+    timeout?: string
+    overlap: "skip" | "queue"
+  }
+  status: {
+    next_run_at?: string
+    last_run_at?: string
+    last_status?: string
+    last_error?: string
+    run_count: number
+    running?: boolean
+  }
+  created_at: string
+  updated_at: string
+}
+
+export interface JobRunRecord {
+  id: string
+  job_id: string
+  session_id?: string
+  status: string
+  error?: string
+  started_at: string
+  ended_at: string
 }
 
 // Session replay types (mirrors Go audit.EventRecord)

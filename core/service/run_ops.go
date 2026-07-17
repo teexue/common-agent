@@ -18,11 +18,12 @@ import (
 
 // RunRequest is the transport-agnostic DTO for a run request.
 type RunRequest struct {
-	Agent     string             `json:"agent"`
-	Prompt    string             `json:"prompt"`
-	SessionID string             `json:"session_id,omitempty"`
-	Messages  []provider.Message `json:"messages,omitempty"`
-	WorkDir   string             `json:"workdir,omitempty"`
+	Agent     string              `json:"agent"`
+	Prompt    string              `json:"prompt"`
+	SessionID string              `json:"session_id,omitempty"`
+	Messages  []provider.Message  `json:"messages,omitempty"`
+	WorkDir   string              `json:"workdir,omitempty"`
+	Images    []provider.ContentPart `json:"images,omitempty"`
 }
 
 // RunResult holds the outcome of a run preparation.
@@ -43,7 +44,7 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		return nil, &ArgError{Field: "prompt", Message: "prompt is required"}
 	}
 
-	a, err := agent.LoadByName(s.AgentsDir, NormalizeAgentName(req.Agent))
+	a, err := agent.Resolve(s.AgentsDir, NormalizeAgentName(req.Agent))
 	if err != nil {
 		return nil, fmt.Errorf("load agent: %w", err)
 	}
@@ -70,7 +71,8 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		}
 		sess = loaded
 	} else {
-		sess = session.New(a.Name)
+		sess = session.New(a.ID)
+		sess.EnsureTitle(req.Prompt)
 	}
 	if len(req.Messages) > 0 {
 		sess.SetMessages(req.Messages)
@@ -95,6 +97,7 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		Policy:    pol,
 		Approver:  approver,
 		WorkDir:   req.WorkDir,
+		Images:    req.Images,
 	}
 
 	return &RunResult{Config: cfg, Session: sess, TempToolNames: tempToolNames}, nil
@@ -144,7 +147,7 @@ func injectSkills(a *agent.Agent, agentsDir string, reg *registry.Registry, log 
 	loader := skill.NewLoader(skillsDir)
 	allSkills, err := loader.LoadAll()
 	if err != nil {
-		log.Warn("some skills failed to load", "error", err)
+		log.Warn("log.skill.load_partial", "error", err)
 	}
 	if len(allSkills) == 0 {
 		return nil
@@ -164,7 +167,7 @@ func injectSkills(a *agent.Agent, agentsDir string, reg *registry.Registry, log 
 		if sk.LegacyManifest != nil {
 			for _, t := range skill.Tools(sk) {
 				if err := reg.Register(t); err != nil {
-					log.Warn("register skill tool", "tool", t.Name(), "error", err)
+					log.Warn("log.skill.register_tool", "tool", t.Name(), "error", err)
 					continue
 				}
 				tempToolNames = append(tempToolNames, t.Name())
@@ -192,7 +195,7 @@ func filterSkills(a *agent.Agent, all []*skill.Skill, log *slog.Logger) []*skill
 		if sk, ok := byName[name]; ok {
 			selected = append(selected, sk)
 		} else {
-			log.Warn("skill not found", "agent", a.Name, "skill", name)
+			log.Warn("log.skill.not_found", "agent", a.Name, "skill", name)
 		}
 	}
 	return selected

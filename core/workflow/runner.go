@@ -97,11 +97,11 @@ func (r *Runner) executeNode(ctx context.Context, nodeID string, executor NodeEx
 	// Build input from predecessors.
 	input := r.buildInput(nodeID, result)
 
-	r.logger.Info("executing workflow node", "id", nodeID, "type", node.Type)
+	r.logger.Info("log.workflow.executing_node", "id", nodeID, "type", node.Type)
 
 	output, err := executor(ctx, node, input)
 	if err != nil {
-		r.logger.Error("workflow node failed", "id", nodeID, "error", err)
+		r.logger.Error("log.workflow.node_failed", "id", nodeID, "error", err)
 		return fmt.Errorf("node %q: %w", nodeID, err)
 	}
 

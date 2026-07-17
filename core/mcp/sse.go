@@ -29,9 +29,9 @@ type SSEClient struct {
 
 // SSEConfig configures an SSEClient.
 type SSEConfig struct {
-	Name    string       // display name
-	URL     string       // SSE endpoint URL
-	Logger  *slog.Logger // optional logger
+	Name       string       // display name
+	URL        string       // SSE endpoint URL
+	Logger     *slog.Logger // optional logger
 	HTTPClient *http.Client // optional HTTP client
 }
 
@@ -84,7 +84,7 @@ func (c *SSEClient) Connect(ctx context.Context) error {
 		return fmt.Errorf("initialized notification: %w", err)
 	}
 
-	c.logger.Info("mcp sse server connected", "name", c.name)
+	c.logger.Info("log.mcp.sse.connected", "name", c.name)
 	return nil
 }
 
@@ -137,7 +137,7 @@ func (c *SSEClient) Close() error {
 	if c.cancelFn != nil {
 		c.cancelFn()
 	}
-	c.logger.Info("mcp sse server disconnected", "name", c.name)
+	c.logger.Info("log.mcp.sse.disconnected", "name", c.name)
 	return nil
 }
 
@@ -214,14 +214,14 @@ func (c *SSEClient) sendNotification(ctx context.Context, method string, params 
 func (c *SSEClient) listenSSE(ctx context.Context) {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.url, nil)
 	if err != nil {
-		c.logger.Error("mcp sse connect failed", "name", c.name, "error", err)
+		c.logger.Error("log.mcp.sse.connect_failed", "name", c.name, "error", err)
 		return
 	}
 	req.Header.Set("Accept", "text/event-stream")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		c.logger.Error("mcp sse connect failed", "name", c.name, "error", err)
+		c.logger.Error("log.mcp.sse.connect_failed", "name", c.name, "error", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -231,7 +231,7 @@ func (c *SSEClient) listenSSE(ctx context.Context) {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if err != io.EOF && ctx.Err() == nil {
-				c.logger.Debug("mcp sse read error", "name", c.name, "error", err)
+				c.logger.Debug("log.mcp.sse.read_error", "name", c.name, "error", err)
 			}
 			return
 		}

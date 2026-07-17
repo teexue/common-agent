@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Bot, ChevronDown, ChevronRight, Minimize2, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatTimestamp } from "@/lib/format"
@@ -17,6 +18,7 @@ interface ActivityEntryProps {
 }
 
 function UserMessage({ entry }: { entry: ConversationEntry }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-start gap-3 px-1">
       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -24,7 +26,7 @@ function UserMessage({ entry }: { entry: ConversationEntry }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-heading text-xs text-foreground">你</span>
+          <span className="font-heading text-xs text-foreground">{t("common.you")}</span>
           <span className="text-[10px] text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
         </div>
         <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{entry.content}</p>
@@ -34,13 +36,14 @@ function UserMessage({ entry }: { entry: ConversationEntry }) {
 }
 
 function AssistantHeader({ entry, isActive }: { entry: ConversationEntry; isActive?: boolean }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center gap-2">
       <span className="font-heading text-xs text-foreground">Agent</span>
       <span className="text-[10px] text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
       {isActive && (
         <span className="flex items-center gap-1 text-[10px] text-primary">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /> 生成中
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /> {t("status.generating")}
         </span>
       )}
       {entry.usage && !isActive && (
@@ -99,12 +102,13 @@ export function ActivityEntry({ entry, selectedToolCallId, onSelectToolCall, onA
 }
 
 function CompactionBanner({ summary }: { summary: string }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   return (
     <div className="mx-1 rounded-xl border border-amber-200/50 bg-amber-50/50 dark:border-amber-800/30 dark:bg-amber-950/20">
       <button onClick={() => setExpanded((v) => !v)} className="flex w-full items-center gap-2 px-3 py-2 text-left">
         <Minimize2 className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-        <span className="flex-1 text-xs font-medium text-amber-700 dark:text-amber-300">上下文已压缩</span>
+        <span className="flex-1 text-xs font-medium text-amber-700 dark:text-amber-300">{t("conversation.compaction")}</span>
         {expanded ? <ChevronDown className="h-3 w-3 text-amber-500" /> : <ChevronRight className="h-3 w-3 text-amber-500" />}
       </button>
       {expanded && (

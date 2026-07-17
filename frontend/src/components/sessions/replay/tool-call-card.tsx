@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { CheckCircle, ChevronDown, ChevronRight, Clock, Loader2, XCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -13,6 +14,7 @@ interface ToolCallCardProps {
 }
 
 export function ToolCallCard({ node, compact, highlight, eventIndex, onJump }: ToolCallCardProps) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
 
   const statusIcon = {
@@ -58,7 +60,7 @@ export function ToolCallCard({ node, compact, highlight, eventIndex, onJump }: T
         <div className="border-t border-border px-2.5 py-2 space-y-2">
           {node.input != null && (
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">输入</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t("common.input")}</span>
               <pre className="mt-0.5 max-h-28 overflow-auto rounded bg-muted/50 p-1.5 font-mono text-[10px] text-muted-foreground">
                 {JSON.stringify(node.input, null, 2)}
               </pre>
@@ -66,7 +68,7 @@ export function ToolCallCard({ node, compact, highlight, eventIndex, onJump }: T
           )}
           {node.output != null && (
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">输出</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t("common.output")}</span>
               <pre className="mt-0.5 max-h-28 overflow-auto rounded bg-muted/50 p-1.5 font-mono text-[10px] text-muted-foreground">
                 {JSON.stringify(node.output, null, 2)}
               </pre>

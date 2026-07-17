@@ -30,7 +30,7 @@ func forceEmit(out chan<- event.Event, ev event.Event) {
 	select {
 	case out <- ev:
 	case <-timer.C:
-		slog.Warn("forceEmit timed out, dropping terminal event",
+		slog.Warn("log.event.force_emit_timeout",
 			slog.String("event_type", string(ev.Type)),
 			slog.String("status", ev.Status),
 			slog.String("code", ev.Code),

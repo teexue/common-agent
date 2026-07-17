@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/teexue/common-agent/core/i18n"
 	"golang.org/x/term"
 )
 
@@ -37,7 +38,7 @@ func selectOption(label string, items []string, defaultIdx int) (string, error) 
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title(label).
-				Description("↑↓ 选择 · Enter 确认").
+				Description(i18n.T("wizard.prompt.select_hint")).
 				Options(opts...).
 				Value(&choice),
 		),
@@ -102,7 +103,7 @@ func fallbackSelect(label string, items []string, defaultIdx int) (string, error
 		}
 		fmt.Printf("  %s [%d] %s\n", mark, i+1, item)
 	}
-	fmt.Printf("选择 [1-%d，默认 %d]: ", len(items), defaultIdx+1)
+	fmt.Print(i18n.T("wizard.prompt.fallback_select", "max", len(items), "default", defaultIdx+1))
 	in := bufio.NewReader(os.Stdin)
 	line, _ := in.ReadString('\n')
 	line = strings.TrimSpace(line)
@@ -118,9 +119,9 @@ func fallbackSelect(label string, items []string, defaultIdx int) (string, error
 
 func fallbackInput(label, defaultVal string) string {
 	if defaultVal != "" {
-		fmt.Printf("%s [%s]: ", label, defaultVal)
+		fmt.Print(i18n.T("wizard.prompt.fallback_input_default", "label", label, "default", defaultVal))
 	} else {
-		fmt.Printf("%s: ", label)
+		fmt.Print(i18n.T("wizard.prompt.fallback_input", "label", label))
 	}
 	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	line = strings.TrimSpace(line)
@@ -130,14 +131,15 @@ func fallbackInput(label, defaultVal string) string {
 	return line
 }
 
-// selectOrInput shows a list; choosing "自定义..." opens a text prompt.
+// selectOrInput shows a list; choosing the custom option opens a text prompt.
 func selectOrInput(label string, options []string, defaultIdx int, customLabel string) (string, error) {
-	items := append(append([]string{}, options...), "自定义...")
+	custom := i18n.T("wizard.option.custom")
+	items := append(append([]string{}, options...), custom)
 	choice, err := selectOption(label, items, defaultIdx)
 	if err != nil {
 		return "", err
 	}
-	if choice != "自定义..." {
+	if choice != custom {
 		return choice, nil
 	}
 	return inputString(customLabel, "")

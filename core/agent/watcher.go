@@ -69,7 +69,7 @@ func (w *Watcher) Start() error {
 	w.mu.Unlock()
 
 	go w.loop()
-	w.logger.Info("agent watcher started", "dir", w.dir)
+	w.logger.Info("log.agent_watcher.started", "dir", w.dir)
 	return nil
 }
 
@@ -89,7 +89,7 @@ func (w *Watcher) Stop() {
 		w.watcher.Close()
 		w.watcher = nil
 	}
-	w.logger.Info("agent watcher stopped")
+	w.logger.Info("log.agent_watcher.stopped")
 }
 
 func (w *Watcher) loop() {
@@ -106,7 +106,7 @@ func (w *Watcher) loop() {
 			if !ok {
 				return
 			}
-			w.logger.Error("agent watcher error", "error", err)
+			w.logger.Error("log.agent_watcher.error", "error", err)
 		}
 	}
 }
@@ -143,7 +143,7 @@ func (w *Watcher) handleEvent(event fsnotify.Event) {
 		Path: event.Name,
 	}
 
-	w.logger.Debug("agent file changed", "name", agentName, "type", changeType, "op", event.Op.String())
+	w.logger.Debug("log.agent_watcher.file_changed", "name", agentName, "type", changeType, "op", event.Op.String())
 
 	if w.handler != nil {
 		w.handler(change)

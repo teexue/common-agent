@@ -71,13 +71,20 @@ type anthropicMessage struct {
 }
 
 type anthropicBlock struct {
-	Type      string          `json:"type"`
-	Text      string          `json:"text,omitempty"`
-	ID        string          `json:"id,omitempty"`
-	Name      string          `json:"name,omitempty"`
-	Input     json.RawMessage `json:"input,omitempty"`
-	ToolUseID string          `json:"tool_use_id,omitempty"`
-	Content   string          `json:"content,omitempty"`
+	Type      string           `json:"type"`
+	Text      string           `json:"text,omitempty"`
+	ID        string           `json:"id,omitempty"`
+	Name      string           `json:"name,omitempty"`
+	Input     json.RawMessage  `json:"input,omitempty"`
+	ToolUseID string           `json:"tool_use_id,omitempty"`
+	Content   string           `json:"content,omitempty"`
+	Source    *anthropicSource `json:"source,omitempty"` // for type="image"
+}
+
+type anthropicSource struct {
+	Type      string `json:"type"`       // "base64"
+	MediaType string `json:"media_type"` // "image/png", "image/jpeg", etc.
+	Data      string `json:"data"`       // base64-encoded image data
 }
 
 type anthropicTool struct {
@@ -200,13 +207,33 @@ func convertMessages(msgs []Message) (string, []anthropicMessage) {
 		case RoleSystem:
 			systemParts = append(systemParts, m.Content)
 		case RoleUser:
-			out = append(out, anthropicMessage{
-				Role: "user",
-				Content: []anthropicBlock{{
-					Type: "text",
-					Text: m.Content,
-				}},
-			})
+			if len(m.ContentParts) > 0 {
+				blocks := make([]anthropicBlock, 0, len(m.ContentParts))
+				for _, p := range m.ContentParts {
+					if p.Type == "text" {
+						blocks = append(blocks, anthropicBlock{Type: "text", Text: p.Text})
+					} else if p.Type == "image_url" && p.ImageURL != nil {
+						mediaType, data := parseDataURI(p.ImageURL.URL)
+						blocks = append(blocks, anthropicBlock{
+							Type: "image",
+							Source: &anthropicSource{
+								Type:      "base64",
+								MediaType: mediaType,
+								Data:      data,
+							},
+						})
+					}
+				}
+				out = append(out, anthropicMessage{Role: "user", Content: blocks})
+			} else {
+				out = append(out, anthropicMessage{
+					Role: "user",
+					Content: []anthropicBlock{{
+						Type: "text",
+						Text: m.Content,
+					}},
+				})
+			}
 		case RoleAssistant:
 			out = append(out, buildAssistantMessage(m))
 		case RoleTool:
@@ -214,6 +241,23 @@ func convertMessages(msgs []Message) (string, []anthropicMessage) {
 		}
 	}
 	return strings.Join(systemParts, "\n\n"), out
+}
+
+// parseDataURI extracts media type and base64 data from a data URI.
+// Returns ("image/png", "base64data") for "data:image/png;base64,abc..."
+// Falls back to ("image/png", url) if not a data URI.
+func parseDataURI(url string) (string, string) {
+	if strings.HasPrefix(url, "data:") {
+		// data:image/png;base64,abc...
+		parts := strings.SplitN(url, ",", 2)
+		if len(parts) == 2 {
+			header := parts[0] // data:image/png;base64
+			data := parts[1]
+			mediaType := strings.TrimPrefix(strings.SplitN(header, ";", 2)[0], "data:")
+			return mediaType, data
+		}
+	}
+	return "image/png", url
 }
 
 func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {

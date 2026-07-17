@@ -25,6 +25,9 @@ func Home(ensure bool) (string, error) {
 		if err := os.MkdirAll(SessionsDir(dir), 0o755); err != nil {
 			return "", fmt.Errorf("create sessions dir: %w", err)
 		}
+		if err := os.MkdirAll(JobsDir(dir), 0o755); err != nil {
+			return "", fmt.Errorf("create jobs dir: %w", err)
+		}
 	}
 	return dir, nil
 }
@@ -52,4 +55,9 @@ func AgentsDir(home string) string {
 // SessionsDir returns the sessions directory under home.
 func SessionsDir(home string) string {
 	return filepath.Join(home, "sessions")
+}
+
+// JobsDir returns the jobs directory under home.
+func JobsDir(home string) string {
+	return filepath.Join(home, "jobs")
 }

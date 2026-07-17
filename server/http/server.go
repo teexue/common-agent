@@ -12,6 +12,8 @@ import (
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/audit"
+	"github.com/teexue/common-agent/core/config"
+	"github.com/teexue/common-agent/core/job"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
@@ -25,18 +27,20 @@ type Server struct {
 	skillsDir   string
 	registry    *registry.Registry
 	newProvider func(a *agent.Agent) (provider.Provider, error)
-	staticFS    fs.FS               // optional embedded frontend; nil disables static serving
+	staticFS    fs.FS // optional embedded frontend; nil disables static serving
 	logger      *slog.Logger
-	store       session.Store       // optional session persistence; nil disables session endpoints
-	svc         *service.Service    // shared business logic
-	approver    *HTTPApprover       // handles tool approval flow
-	eventLogger *audit.EventLogger  // optional event logging; nil disables replay
-	catalog     *provider.Catalog   // optional provider catalog; nil disables provider listing
-	auditStore  *audit.AuditStore   // optional audit store; nil disables audit export
+	store       session.Store      // optional session persistence; nil disables session endpoints
+	svc         *service.Service   // shared business logic
+	approver    *HTTPApprover      // handles tool approval flow
+	eventLogger *audit.EventLogger // optional event logging; nil disables replay
+	catalog     *provider.Catalog          // optional provider catalog; nil disables provider listing
+	creds       *config.CredentialStore    // optional credentials for provider upsert/reload
+	auditStore  *audit.AuditStore          // optional audit store; nil disables audit export
 	health      *telemetry.HealthServer
-	watcher     *agent.Watcher    // watches agents dir for changes
-	shutdownCtx context.Context   // cancelled on server shutdown; nil = no shutdown propagation
-	apiKey      string            // when non-empty, all /v1/ routes require this key
+	watcher     *agent.Watcher  // watches agents dir for changes
+	shutdownCtx context.Context // cancelled on server shutdown; nil = no shutdown propagation
+	apiKey      string          // when non-empty, all /v1/ routes require this key
+	scheduler   *job.Scheduler  // optional job scheduler
 
 	// changeCh broadcasts agent file change events to SSE subscribers.
 	changeCh chan agentChange
@@ -50,6 +54,7 @@ type ServerConfig struct {
 	StaticFS    fs.FS
 	Logger      *slog.Logger
 	Store       session.Store
+	Jobs        job.Store
 }
 
 // NewServer creates an HTTP server wiring.
@@ -66,6 +71,7 @@ func NewServer(cfg ServerConfig) *Server {
 		NewProvider: cfg.NewProvider,
 		Logger:      logger,
 		Store:       cfg.Store,
+		Jobs:        cfg.Jobs,
 	})
 	return &Server{
 		agentsDir:   cfg.AgentsDir,
@@ -80,6 +86,21 @@ func NewServer(cfg ServerConfig) *Server {
 		health:      telemetry.NewHealthServer(),
 		changeCh:    make(chan agentChange, 16),
 	}
+}
+
+// SetJobStore sets the job store and optionally starts a scheduler.
+func (s *Server) SetJobStore(store job.Store) {
+	s.svc.Jobs = store
+}
+
+// SetScheduler attaches a job scheduler for run-now and background ticks.
+func (s *Server) SetScheduler(sched *job.Scheduler) {
+	s.scheduler = sched
+}
+
+// Service returns the shared business service.
+func (s *Server) Service() *service.Service {
+	return s.svc
 }
 
 // SetStore sets the session store and updates the shared service.
@@ -108,8 +129,19 @@ func (s *Server) SetAPIKey(key string) {
 }
 
 // SetCatalog sets the provider catalog for listing available providers.
+// Also rewires Service.NewProvider so subsequent runs use the latest catalog.
 func (s *Server) SetCatalog(c *provider.Catalog) {
 	s.catalog = c
+	if c != nil && s.svc != nil {
+		s.svc.NewProvider = func(a *agent.Agent) (provider.Provider, error) {
+			return c.ResolveForAgent(a.Provider)
+		}
+	}
+}
+
+// SetCredentialStore sets the credential store used when saving provider API keys.
+func (s *Server) SetCredentialStore(cs *config.CredentialStore) {
+	s.creds = cs
 }
 
 // StartWatcher begins watching the agents directory for file changes.
@@ -134,7 +166,7 @@ func (s *Server) StartWatcher() {
 		}
 	})
 	if err := s.watcher.Start(); err != nil {
-		s.logger.Error("failed to start agent watcher", "error", err)
+		s.logger.Error("log.agent_watcher.start_failed", "error", err)
 	}
 }
 
@@ -158,12 +190,13 @@ func (s *Server) Health() *telemetry.HealthServer {
 // Handler returns the root Gin engine.
 func (s *Server) Handler() *gin.Engine {
 	if s.apiKey == "" {
-		s.logger.Warn("API key not set — all /v1/ endpoints are unauthenticated; pass --api-key to secure")
+		s.logger.Warn("log.http.api_key_not_set")
 	}
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(LocaleMiddleware())
 	r.Use(s.bodySizeLimit(10 << 20)) // 10 MB
 
 	// Health endpoints — always public, no auth required.
@@ -175,15 +208,31 @@ func (s *Server) Handler() *gin.Engine {
 	v1 := r.Group("/v1", s.authMiddleware())
 	v1.POST("/agents/run", s.handleRun)
 	v1.POST("/agents/approve", s.handleApprove)
+	v1.POST("/agents/optimize", s.handleOptimizePrompt)
 	v1.GET("/tools", s.handleTools)
 	v1.GET("/agents", s.handleAgents)
-	v1.GET("/agents/:name", s.handleAgentGet)
-	v1.PUT("/agents/:name", s.handleAgentPut)
-	v1.DELETE("/agents/:name", s.handleAgentDelete)
+	v1.POST("/agents", s.handleAgentCreate)
+	v1.GET("/agents/:id", s.handleAgentGet)
+	v1.PUT("/agents/:id", s.handleAgentPut)
+	v1.DELETE("/agents/:id", s.handleAgentDelete)
 	v1.POST("/agents/validate", s.handleAgentValidate)
 	v1.GET("/mcp", s.handleMCPList)
 	v1.GET("/skills", s.handleSkillsList)
+	v1.GET("/fs/list", s.handleFSList)
 	v1.GET("/events", s.handleEvents)
+
+	// Job endpoints (when job store is configured).
+	if s.svc.Jobs != nil {
+		v1.GET("/jobs", s.handleJobsList)
+		v1.POST("/jobs", s.handleJobsCreate)
+		v1.GET("/jobs/:id", s.handleJobsGet)
+		v1.PUT("/jobs/:id", s.handleJobsUpdate)
+		v1.DELETE("/jobs/:id", s.handleJobsDelete)
+		v1.POST("/jobs/:id/pause", s.handleJobsPause)
+		v1.POST("/jobs/:id/resume", s.handleJobsResume)
+		v1.POST("/jobs/:id/run", s.handleJobsRun)
+		v1.GET("/jobs/:id/runs", s.handleJobsRuns)
+	}
 
 	// Conditional endpoints (auth middleware applies via group).
 	if s.store != nil {
@@ -198,6 +247,8 @@ func (s *Server) Handler() *gin.Engine {
 
 	if s.catalog != nil {
 		v1.GET("/providers", s.handleProvidersList)
+		v1.POST("/providers", s.handleProviderUpsert)
+		v1.DELETE("/providers/:name", s.handleProviderDelete)
 	}
 
 	if s.auditStore != nil {

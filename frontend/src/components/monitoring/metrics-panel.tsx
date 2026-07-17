@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Activity, Cpu, Database, HardDrive, Loader2, Users } from "lucide-react"
 import { fetchMetrics } from "@/lib/api"
 import type { MetricsData } from "@/types/agent"
+import type { TFunction } from "i18next"
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B"
@@ -18,28 +20,29 @@ function formatUptime(seconds: number): string {
   return `${h}h ${m}m`
 }
 
-function buildMetricCards(m: MetricsData) {
+function buildMetricCards(m: MetricsData, t: TFunction) {
   return [
     { icon: Activity, label: "Goroutines", value: String(m.goroutines), color: "text-primary", bg: "bg-primary/10" },
-    { icon: HardDrive, label: "堆内存 (已分配)", value: formatBytes(m.heap_alloc_bytes), color: "text-blue-500", bg: "bg-blue-500/10" },
-    { icon: Database, label: "堆内存 (系统)", value: formatBytes(m.heap_sys_bytes), color: "text-violet-500", bg: "bg-violet-500/10" },
-    { icon: Users, label: "活跃会话", value: String(m.active_sessions), color: "text-success", bg: "bg-success/10" },
-    { icon: Cpu, label: "运行时间", value: formatUptime(m.uptime_seconds), color: "text-amber-500", bg: "bg-amber-500/10" },
+    { icon: HardDrive, label: t("monitoring.heapAlloc"), value: formatBytes(m.heap_alloc_bytes), color: "text-blue-500", bg: "bg-blue-500/10" },
+    { icon: Database, label: t("monitoring.heapSys"), value: formatBytes(m.heap_sys_bytes), color: "text-violet-500", bg: "bg-violet-500/10" },
+    { icon: Users, label: t("monitoring.activeSessions"), value: String(m.active_sessions), color: "text-success", bg: "bg-success/10" },
+    { icon: Cpu, label: t("monitoring.uptime"), value: formatUptime(m.uptime_seconds), color: "text-amber-500", bg: "bg-amber-500/10" },
   ]
 }
 
 function AgentStats({ agents }: { agents: Record<string, { runs: number; avg_ms: number; last_status: string }> }) {
+  const { t } = useTranslation()
   const entries = Object.entries(agents)
   if (entries.length === 0) return null
   return (
     <div>
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Agent 统计</p>
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{t("monitoring.agentStats")}</p>
       <div className="space-y-1.5">
         {entries.map(([name, stats]) => (
           <div key={name} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
             <span className="text-xs font-medium text-foreground truncate">{name}</span>
             <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono">
-              <span>{stats.runs} 次</span>
+              <span>{t("monitoring.runs", { count: stats.runs })}</span>
               <span>{stats.avg_ms > 0 ? `${(stats.avg_ms / 1000).toFixed(1)}s` : "-"}</span>
               <span className={stats.last_status === "completed" ? "text-success" : stats.last_status === "failed" ? "text-destructive" : ""}>
                 {stats.last_status === "completed" ? "✓" : stats.last_status === "failed" ? "✗" : "-"}
@@ -53,6 +56,7 @@ function AgentStats({ agents }: { agents: Record<string, { runs: number; avg_ms:
 }
 
 export function MetricsPanel() {
+  const { t } = useTranslation()
   const [metrics, setMetrics] = useState<MetricsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -74,7 +78,7 @@ export function MetricsPanel() {
   if (error) return <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive">{error}</div>
   if (!metrics) return null
 
-  const cards = buildMetricCards(metrics)
+  const cards = buildMetricCards(metrics, t)
 
   return (
     <div className="space-y-4">

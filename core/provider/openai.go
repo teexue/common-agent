@@ -65,11 +65,22 @@ type openAIRequest struct {
 
 type openAIMessage struct {
 	Role             string           `json:"role"`
-	Content          string           `json:"content,omitempty"`
+	Content          any              `json:"content,omitempty"` // string or []openAIContentPart
 	ReasoningContent string           `json:"reasoning_content,omitempty"`
 	ToolCalls        []openAIToolCall `json:"tool_calls,omitempty"`
 	ToolCallID       string           `json:"tool_call_id,omitempty"`
 	Name             string           `json:"name,omitempty"`
+}
+
+type openAIContentPart struct {
+	Type     string       `json:"type"`
+	Text     string       `json:"text,omitempty"`
+	ImageURL *openAIImage `json:"image_url,omitempty"`
+}
+
+type openAIImage struct {
+	URL    string `json:"url"`
+	Detail string `json:"detail,omitempty"`
 }
 
 type openAITool struct {
@@ -134,10 +145,22 @@ func convertOpenAIMessages(msgs []Message) []openAIMessage {
 	for _, m := range msgs {
 		msg := openAIMessage{
 			Role:             string(m.Role),
-			Content:          m.Content,
 			ReasoningContent: m.ReasoningContent,
 			ToolCallID:       m.ToolCallID,
 			Name:             m.Name,
+		}
+		if len(m.ContentParts) > 0 {
+			parts := make([]openAIContentPart, 0, len(m.ContentParts))
+			for _, p := range m.ContentParts {
+				part := openAIContentPart{Type: p.Type, Text: p.Text}
+				if p.ImageURL != nil {
+					part.ImageURL = &openAIImage{URL: p.ImageURL.URL, Detail: p.ImageURL.Detail}
+				}
+				parts = append(parts, part)
+			}
+			msg.Content = parts
+		} else {
+			msg.Content = m.Content
 		}
 		if len(m.ToolCalls) > 0 {
 			msg.ToolCalls = make([]openAIToolCall, 0, len(m.ToolCalls))

@@ -66,12 +66,12 @@ func executeTool(tc ToolExecContext) json.RawMessage {
 func prepareInput(args json.RawMessage, log *slog.Logger) json.RawMessage {
 	var input any
 	if err := json.Unmarshal(args, &input); err != nil {
-		log.Warn("unmarshal tool arguments", "error", err)
+		log.Warn("log.tool.unmarshal_args", "error", err)
 		input = string(args)
 	}
 	inputJSON, err := json.Marshal(input)
 	if err != nil {
-		log.Warn("marshal tool input", "error", err)
+		log.Warn("log.tool.marshal_input", "error", err)
 		return args
 	}
 	return inputJSON
@@ -109,7 +109,7 @@ func checkPermission(ctx context.Context, pol permission.Policy, approver Approv
 func fireOnToolStartHook(hooks *hook.Chain, call provider.ToolCall, log *slog.Logger) {
 	if hooks != nil {
 		if err := hooks.OnToolStart(context.Background(), hook.ToolStartInfo{Name: call.Name, Arguments: call.Arguments}); err != nil {
-			log.Warn("hook OnToolStart error", "tool", call.Name, "error", err)
+			log.Warn("log.hook.tool_start_error", "tool", call.Name, "error", err)
 		}
 	}
 }

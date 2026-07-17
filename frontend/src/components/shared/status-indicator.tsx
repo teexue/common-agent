@@ -1,31 +1,36 @@
+import { useTranslation } from "react-i18next"
 import type { StreamStatus } from "@/types/agent"
 import { cn } from "@/lib/utils"
+import type { TFunction } from "i18next"
 
-const statusConfig: Record<
+function getStatusConfig(t: TFunction): Record<
   StreamStatus,
   { dot: string; label: string; className?: string }
-> = {
-  idle: {
-    dot: "bg-muted-foreground/30",
-    label: "空闲",
-  },
-  streaming: {
-    dot: "bg-primary",
-    label: "运行中",
-    className: "animate-pulse",
-  },
-  error: {
-    dot: "bg-destructive",
-    label: "错误",
-  },
-  done: {
-    dot: "bg-success",
-    label: "完成",
-  },
+> {
+  return {
+    idle: {
+      dot: "bg-muted-foreground/30",
+      label: t("status.idle"),
+    },
+    streaming: {
+      dot: "bg-primary",
+      label: t("status.running"),
+      className: "animate-pulse",
+    },
+    error: {
+      dot: "bg-destructive",
+      label: t("status.error"),
+    },
+    done: {
+      dot: "bg-success",
+      label: t("status.done"),
+    },
+  }
 }
 
 export function StatusIndicator({ status }: { status: StreamStatus }) {
-  const config = statusConfig[status]
+  const { t } = useTranslation()
+  const config = getStatusConfig(t)[status]
   return (
     <div className="flex items-center gap-1.5">
       <div

@@ -16,6 +16,12 @@ import (
 	"github.com/teexue/common-agent/core/service"
 )
 
+// ImageAttachment is an uploaded image in the run request.
+type ImageAttachment struct {
+	DataURL string `json:"data_url"`
+	Name    string `json:"name,omitempty"`
+}
+
 // RunRequest is the HTTP DTO for POST /v1/agents/run.
 type RunRequest struct {
 	Agent     string             `json:"agent"`
@@ -23,13 +29,23 @@ type RunRequest struct {
 	SessionID string             `json:"session_id,omitempty"`
 	Messages  []provider.Message `json:"messages,omitempty"`
 	WorkDir   string             `json:"workdir,omitempty"`
+	Images    []ImageAttachment  `json:"images,omitempty"`
 }
 
 func (s *Server) handleRun(c *gin.Context) {
 	var req RunRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_json", "message": err.Error()})
+		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
 		return
+	}
+
+	// Convert images to provider content parts.
+	var images []provider.ContentPart
+	for _, img := range req.Images {
+		images = append(images, provider.ContentPart{
+			Type:     "image_url",
+			ImageURL: &provider.ImageURL{URL: img.DataURL},
+		})
 	}
 
 	result, err := s.svc.PrepareRun(c.Request.Context(), service.RunRequest{
@@ -38,17 +54,21 @@ func (s *Server) handleRun(c *gin.Context) {
 		SessionID: req.SessionID,
 		Messages:  req.Messages,
 		WorkDir:   req.WorkDir,
+		Images:    images,
 	}, s.approver)
 	if err != nil {
 		code := "run_error"
+		msgKey := "api.error.run_error"
 		status := http.StatusBadRequest
 		if _, ok := err.(*service.ArgError); ok {
 			code = "invalid_request"
+			msgKey = "api.error.invalid_request"
 		} else if _, ok := err.(*service.ServerError); ok {
 			code = "provider_error"
+			msgKey = "api.error.provider_error"
 			status = http.StatusInternalServerError
 		}
-		c.JSON(status, gin.H{"code": code, "message": err.Error()})
+		respondErrorDetails(c, status, code, msgKey, err.Error())
 		return
 	}
 
@@ -67,7 +87,7 @@ func (s *Server) handleRun(c *gin.Context) {
 
 	events, err := loop.Run(runCtx, result.Config)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "run_error", "message": err.Error()})
+		respondErrorDetails(c, http.StatusInternalServerError, "run_error", "api.error.run_error", err.Error())
 		return
 	}
 
@@ -81,11 +101,11 @@ func (s *Server) streamEvents(c *gin.Context, events <-chan event.Event, agentNa
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "stream_error", "message": "streaming unsupported"})
+		respondError(c, http.StatusInternalServerError, "stream_error", "api.error.streaming_unsupported")
 		return
 	}
 
-	s.logger.Info("agent run started", "session_id", sessionID, "agent", agentName)
+	s.logger.Info("log.agent.run_started", "session_id", sessionID, "agent", agentName)
 	runStart := time.Now()
 	s.health.AgentMetrics.RecordRunStart(agentName)
 

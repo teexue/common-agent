@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/teexue/common-agent/core/config"
+	"github.com/teexue/common-agent/core/i18n"
 )
 
 func runTemplates(args []string) {
@@ -20,32 +21,27 @@ func runTemplates(args []string) {
 	case "install":
 		runTemplatesInstall(args[1:])
 	default:
-		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", args[0])
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.unknown_subcommand", "name", args[0]))
 		printTemplatesUsage()
 		os.Exit(1)
 	}
 }
 
 func printTemplatesUsage() {
-	fmt.Println("Usage: agent-server templates <subcommand>")
-	fmt.Println()
-	fmt.Println("Subcommands:")
-	fmt.Println("  list               List available agent templates")
-	fmt.Println("  install [name...]  Install templates (default: all)")
-	fmt.Println()
+	fmt.Print(i18n.T("cli.usage.templates"))
 }
 
 func runTemplatesList() {
-	fmt.Println("Available agent templates:")
+	fmt.Println(i18n.T("cli.templates.available_header"))
 	fmt.Println()
-	for _, t := range config.Templates {
+	for _, t := range config.LocalizedTemplates() {
 		fmt.Printf("  %-20s %s\n", t.Name, t.Description)
 	}
 }
 
 func runTemplatesInstall(args []string) {
 	fs := flag.NewFlagSet("templates install", flag.ExitOnError)
-	homeFlag := fs.String("home", "", "config home (default ~/.common-agent)")
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home"))
 	_ = fs.Parse(args)
 
 	home := *homeFlag
@@ -53,7 +49,7 @@ func runTemplatesInstall(args []string) {
 		var err error
 		home, err = config.Home(true)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			fmt.Fprintln(os.Stderr, i18n.T("cli.error.generic", "error", err.Error()))
 			os.Exit(1)
 		}
 	}
@@ -63,10 +59,10 @@ func runTemplatesInstall(args []string) {
 	if len(remaining) > 0 {
 		for _, name := range remaining {
 			if err := config.InstallTemplate(home, name, false); err != nil {
-				fmt.Fprintf(os.Stderr, "error installing %q: %v\n", name, err)
+				fmt.Fprintln(os.Stderr, i18n.T("cli.templates.install_error", "name", name, "error", err.Error()))
 				continue
 			}
-			fmt.Printf("Installed: %s\n", name)
+			fmt.Println(i18n.T("cli.templates.installed", "name", name))
 		}
 		return
 	}
@@ -74,14 +70,14 @@ func runTemplatesInstall(args []string) {
 	// Otherwise install all templates.
 	installed, skipped, err := config.InstallAllTemplates(home)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.generic", "error", err.Error()))
 		os.Exit(1)
 	}
 
 	for _, name := range installed {
-		fmt.Printf("Installed: %s\n", name)
+		fmt.Println(i18n.T("cli.templates.installed", "name", name))
 	}
 	for _, name := range skipped {
-		fmt.Printf("Skipped (exists): %s\n", name)
+		fmt.Println(i18n.T("cli.templates.skipped_exists", "name", name))
 	}
 }

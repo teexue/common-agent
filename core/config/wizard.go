@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/tui"
 	"gopkg.in/yaml.v3"
@@ -18,24 +19,29 @@ type ProviderSpec struct {
 	APIKeyEnv    string
 	APIVersion   string
 	DefaultModel string
+	Vision       bool
 	ThinkingType string
 	ThinkingKeep string
 }
 
 type providerPreset struct {
-	Label       string
-	Name        string
-	Type        provider.Kind
-	BaseURL     string
-	APIKeyEnv   string
-	Models      []string
-	APIVersion  string
+	LabelKey     string
+	Name         string
+	Type         provider.Kind
+	BaseURL      string
+	APIKeyEnv    string
+	Models       []string
+	APIVersion   string
 	NeedThinking bool
+}
+
+func (p providerPreset) label() string {
+	return i18n.T(p.LabelKey)
 }
 
 var providerPresets = []providerPreset{
 	{
-		Label:        "Moonshot (Kimi)",
+		LabelKey:     "wizard.provider.moonshot",
 		Name:         "moonshot",
 		Type:         provider.KindOpenAI,
 		BaseURL:      "https://api.moonshot.cn/v1",
@@ -44,21 +50,21 @@ var providerPresets = []providerPreset{
 		NeedThinking: true,
 	},
 	{
-		Label:        "OpenAI",
-		Name:         "openai",
-		Type:         provider.KindOpenAI,
-		BaseURL:      "https://api.openai.com/v1",
-		APIKeyEnv:    "OPENAI_API_KEY",
-		Models:       []string{"gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"},
+		LabelKey:  "wizard.provider.openai",
+		Name:      "openai",
+		Type:      provider.KindOpenAI,
+		BaseURL:   "https://api.openai.com/v1",
+		APIKeyEnv: "OPENAI_API_KEY",
+		Models:    []string{"gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"},
 	},
 	{
-		Label:       "Anthropic",
-		Name:        "anthropic",
-		Type:        provider.KindAnthropic,
-		BaseURL:     "https://api.anthropic.com",
-		APIKeyEnv:   "ANTHROPIC_API_KEY",
-		Models:      []string{"claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"},
-		APIVersion:  "2023-06-01",
+		LabelKey:   "wizard.provider.anthropic",
+		Name:       "anthropic",
+		Type:       provider.KindAnthropic,
+		BaseURL:    "https://api.anthropic.com",
+		APIKeyEnv:  "ANTHROPIC_API_KEY",
+		Models:     []string{"claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"},
+		APIVersion: "2023-06-01",
 	},
 }
 
@@ -69,19 +75,19 @@ func InitInteractive(home string) error {
 	}
 
 	tui.PrintWelcome("setup", "config", "wizard")
-	fmt.Println(tui.Muted("配置目录: " + home))
+	fmt.Println(tui.Muted(i18n.T("wizard.config_dir", "path", home)))
 
 	spec, agentName, apiKeyEnv, err := RunProviderWizard()
 	if err != nil {
 		return err
 	}
 
-	apiKey, err := InputSecret("API Key")
+	apiKey, err := InputSecret(i18n.T("wizard.input.api_key"))
 	if err != nil {
 		return err
 	}
 	if strings.TrimSpace(apiKey) == "" {
-		return fmt.Errorf("API Key 不能为空")
+		return fmt.Errorf("%s", i18n.T("wizard.error.api_key_required"))
 	}
 
 	if err := UpsertProvider(home, spec); err != nil {
@@ -119,9 +125,9 @@ tool_execution:
 		return err
 	}
 
-	fmt.Println("\n配置完成")
-	fmt.Println(tui.Success("配置已写入 " + home))
-	fmt.Println(tui.Muted("运行: agent-server chat"))
+	fmt.Println(i18n.T("wizard.done"))
+	fmt.Println(tui.Success(i18n.T("wizard.config_written", "path", home)))
+	fmt.Println(tui.Muted(i18n.T("wizard.run_chat_hint")))
 	return nil
 }
 
@@ -130,11 +136,12 @@ tool_execution:
 func RunProviderWizard() (ProviderSpec, string, string, error) {
 	labels := make([]string, 0, len(providerPresets)+1)
 	for _, p := range providerPresets {
-		labels = append(labels, p.Label)
+		labels = append(labels, p.label())
 	}
-	labels = append(labels, "自定义...")
+	customLabel := i18n.T("wizard.option.custom")
+	labels = append(labels, customLabel)
 
-	choice, err := selectOption("选择服务商", labels, 0)
+	choice, err := selectOption(i18n.T("wizard.select.provider"), labels, 0)
 	if err != nil {
 		return ProviderSpec{}, "", "", err
 	}
@@ -142,12 +149,12 @@ func RunProviderWizard() (ProviderSpec, string, string, error) {
 	var spec ProviderSpec
 	var apiKeyEnv string
 
-	if choice == "自定义..." {
+	if choice == customLabel {
 		spec, apiKeyEnv, err = customProviderWizard()
 	} else {
 		var preset providerPreset
 		for _, p := range providerPresets {
-			if p.Label == choice {
+			if p.label() == choice {
 				preset = p
 				break
 			}
@@ -158,7 +165,7 @@ func RunProviderWizard() (ProviderSpec, string, string, error) {
 		return ProviderSpec{}, "", "", err
 	}
 
-	agentName, err := selectOrInput("默认 Agent", []string{"demo"}, 0, "Agent 名称")
+	agentName, err := selectOrInput(i18n.T("wizard.select.default_agent"), []string{"demo"}, 0, i18n.T("wizard.input.agent_name"))
 	if err != nil {
 		return ProviderSpec{}, "", "", err
 	}
@@ -167,7 +174,7 @@ func RunProviderWizard() (ProviderSpec, string, string, error) {
 }
 
 func presetProviderWizard(p providerPreset) (ProviderSpec, string, error) {
-	model, err := selectOrInput("选择模型", p.Models, 0, "模型名称")
+	model, err := selectOrInput(i18n.T("wizard.select.model"), p.Models, 0, i18n.T("wizard.input.model_name"))
 	if err != nil {
 		return ProviderSpec{}, "", err
 	}
@@ -187,12 +194,13 @@ func presetProviderWizard(p providerPreset) (ProviderSpec, string, error) {
 		}
 	}
 
-	fmt.Printf("\n已选: provider=%s type=%s model=%s\n", spec.Name, spec.Type, spec.DefaultModel)
+	fmt.Print(i18n.T("wizard.summary.selected", "provider", spec.Name, "type", spec.Type, "model", spec.DefaultModel))
+	fmt.Println()
 	return spec, p.APIKeyEnv, nil
 }
 
 func configureThinking(spec *ProviderSpec) error {
-	thinking, err := selectOption("Thinking 模式（Agent 建议 disabled）", []string{"disabled", "enabled"}, 0)
+	thinking, err := selectOption(i18n.T("wizard.select.thinking_mode"), []string{"disabled", "enabled"}, 0)
 	if err != nil {
 		return err
 	}
@@ -200,7 +208,8 @@ func configureThinking(spec *ProviderSpec) error {
 	if thinking != "enabled" {
 		return nil
 	}
-	keep, err := selectOption("保留历史 reasoning", []string{"不保留", "all"}, 0)
+	noKeep := i18n.T("wizard.option.no_keep")
+	keep, err := selectOption(i18n.T("wizard.select.keep_reasoning"), []string{noKeep, "all"}, 0)
 	if err != nil {
 		return err
 	}
@@ -211,27 +220,27 @@ func configureThinking(spec *ProviderSpec) error {
 }
 
 func customProviderWizard() (ProviderSpec, string, error) {
-	name, err := inputString("Provider 名称", "my-provider")
+	name, err := inputString(i18n.T("wizard.input.provider_name"), "my-provider")
 	if err != nil {
 		return ProviderSpec{}, "", err
 	}
 
-	pType, err := selectOption("API 类型", []string{"openai", "anthropic"}, 0)
+	pType, err := selectOption(i18n.T("wizard.select.api_type"), []string{"openai", "anthropic"}, 0)
 	if err != nil {
 		return ProviderSpec{}, "", err
 	}
 
-	baseURL, err := inputString("Base URL", "https://api.example.com/v1")
+	baseURL, err := inputString(i18n.T("wizard.input.base_url"), "https://api.example.com/v1")
 	if err != nil {
 		return ProviderSpec{}, "", err
 	}
 
-	apiKeyEnv, err := inputString("API Key 变量名", strings.ToUpper(name)+"_API_KEY")
+	apiKeyEnv, err := inputString(i18n.T("wizard.input.api_key_env"), strings.ToUpper(name)+"_API_KEY")
 	if err != nil {
 		return ProviderSpec{}, "", err
 	}
 
-	model, err := inputString("默认模型", "")
+	model, err := inputString(i18n.T("wizard.input.default_model"), "")
 	if err != nil {
 		return ProviderSpec{}, "", err
 	}
@@ -245,7 +254,7 @@ func customProviderWizard() (ProviderSpec, string, error) {
 	}
 
 	if spec.Type == provider.KindAnthropic {
-		version, err := selectOption("Anthropic API Version", []string{"2023-06-01"}, 0)
+		version, err := selectOption(i18n.T("wizard.select.api_version"), []string{"2023-06-01"}, 0)
 		if err != nil {
 			return ProviderSpec{}, "", err
 		}
@@ -253,11 +262,12 @@ func customProviderWizard() (ProviderSpec, string, error) {
 	}
 
 	if spec.Type == provider.KindOpenAI {
-		thinking, err := selectOption("Thinking 模式", []string{"disabled", "enabled", "不设置"}, 2)
+		notSet := i18n.T("wizard.option.not_set")
+		thinking, err := selectOption(i18n.T("wizard.select.thinking_mode_custom"), []string{"disabled", "enabled", notSet}, 2)
 		if err != nil {
 			return ProviderSpec{}, "", err
 		}
-		if thinking != "不设置" {
+		if thinking != notSet {
 			spec.ThinkingType = thinking
 		}
 	}
@@ -266,10 +276,8 @@ func customProviderWizard() (ProviderSpec, string, error) {
 }
 
 // UpsertProvider adds or updates a provider in providers.yaml.
+// For updates, empty APIKeyEnv preserves the existing value.
 func UpsertProvider(home string, spec ProviderSpec) error {
-	if err := spec.validate(); err != nil {
-		return err
-	}
 	if err := ensureHome(home); err != nil {
 		return err
 	}
@@ -286,12 +294,30 @@ func UpsertProvider(home string, spec ProviderSpec) error {
 		return fmt.Errorf("read providers: %w", err)
 	}
 
+	// For updates, preserve existing api_key_env if not provided.
+	if existing, ok := providers[spec.Name]; ok {
+		if spec.APIKeyEnv == "" {
+			spec.APIKeyEnv = existing.APIKeyEnv
+		}
+		if spec.Type == "" {
+			spec.Type = existing.Type
+		}
+		if spec.DefaultModel == "" {
+			spec.DefaultModel = existing.DefaultModel
+		}
+	}
+
+	if err := spec.validate(); err != nil {
+		return err
+	}
+
 	entry := provider.ProfileEntry{
 		Type:         spec.Type,
 		BaseURL:      spec.BaseURL,
 		APIKeyEnv:    spec.APIKeyEnv,
 		APIVersion:   spec.APIVersion,
 		DefaultModel: spec.DefaultModel,
+		Vision:       spec.Vision,
 	}
 	if spec.ThinkingType != "" {
 		entry.Thinking = &provider.ThinkingConfig{Type: spec.ThinkingType, Keep: spec.ThinkingKeep}
@@ -305,18 +331,46 @@ func UpsertProvider(home string, spec ProviderSpec) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-func (s ProviderSpec) validate() error {
-	if s.Name == "" {
+// DeleteProvider removes a provider from providers.yaml.
+func DeleteProvider(home string, name string) error {
+	if name == "" {
 		return fmt.Errorf("provider name is required")
 	}
+	path := ProvidersFile(home)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read providers: %w", err)
+	}
+	var file provider.CatalogFile
+	if err := yaml.Unmarshal(data, &file); err != nil {
+		return fmt.Errorf("parse providers: %w", err)
+	}
+	if file.Providers == nil {
+		return fmt.Errorf("provider %q not found", name)
+	}
+	if _, ok := file.Providers[name]; !ok {
+		return fmt.Errorf("provider %q not found", name)
+	}
+	delete(file.Providers, name)
+	out, err := yaml.Marshal(file)
+	if err != nil {
+		return fmt.Errorf("marshal providers: %w", err)
+	}
+	return os.WriteFile(path, out, 0o644)
+}
+
+func (s ProviderSpec) validate() error {
+	if s.Name == "" {
+		return fmt.Errorf("%s", i18n.T("wizard.error.provider_name_required"))
+	}
 	if s.Type != provider.KindAnthropic && s.Type != provider.KindOpenAI {
-		return fmt.Errorf("type must be anthropic or openai")
+		return fmt.Errorf("%s", i18n.T("wizard.error.type_invalid"))
 	}
 	if s.APIKeyEnv == "" {
-		return fmt.Errorf("api_key_env is required")
+		return fmt.Errorf("%s", i18n.T("wizard.error.api_key_env_required"))
 	}
 	if s.DefaultModel == "" {
-		return fmt.Errorf("model is required")
+		return fmt.Errorf("%s", i18n.T("wizard.error.model_required"))
 	}
 	return nil
 }

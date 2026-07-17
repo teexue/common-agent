@@ -1,5 +1,6 @@
 /** Form data shape for the Agent editor. */
 export interface AgentFormData {
+  id: string
   name: string
   provider: string
   model: string
@@ -14,6 +15,7 @@ export interface AgentFormData {
 }
 
 export const EMPTY_FORM: AgentFormData = {
+  id: "",
   name: "",
   provider: "",
   model: "",
@@ -29,12 +31,16 @@ export const EMPTY_FORM: AgentFormData = {
 
 /** Converts AgentFormData to a YAML string for the backend. */
 export function formDataToYaml(form: AgentFormData): string {
-  const lines: string[] = [
+  const lines: string[] = []
+  if (form.id) {
+    lines.push(`id: ${form.id}`)
+  }
+  lines.push(
     `name: ${form.name}`,
     `version: 1`,
     `provider: ${form.provider}`,
     `model: ${form.model}`,
-  ]
+  )
 
   if (form.systemPrompt) {
     lines.push(`system_prompt: |`)

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/teexue/common-agent/core/config"
+	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/provider"
 )
 
@@ -54,14 +55,14 @@ func bootstrapRuntime(paths runtimePaths, useMock bool, logger *slog.Logger) (*p
 	if err != nil {
 		return nil, nil, fmt.Errorf("load providers from %s: %w (run: agent-server config init)", paths.providers, err)
 	}
-	logger.Debug("runtime ready", "home", paths.home, "providers", paths.providers)
+	logger.Debug("log.runtime.ready", "home", paths.home, "providers", paths.providers)
 	return catalog, creds, nil
 }
 
 func printPaths(paths runtimePaths) {
-	fmt.Printf("home:       %s\n", paths.home)
-	fmt.Printf("providers:  %s\n", paths.providers)
-	fmt.Printf("agents:     %s\n", paths.agentsDir)
-	fmt.Printf("settings:   %s\n", config.SettingsFile(paths.home))
-	fmt.Printf("credentials:%s\n", config.CredentialsFile(paths.home))
+	fmt.Println(i18n.T("cli.paths.home", "path", paths.home))
+	fmt.Println(i18n.T("cli.paths.providers", "path", paths.providers))
+	fmt.Println(i18n.T("cli.paths.agents", "path", paths.agentsDir))
+	fmt.Println(i18n.T("cli.paths.settings", "path", config.SettingsFile(paths.home)))
+	fmt.Println(i18n.T("cli.paths.credentials", "path", config.CredentialsFile(paths.home)))
 }

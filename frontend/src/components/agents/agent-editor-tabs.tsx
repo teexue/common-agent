@@ -1,0 +1,321 @@
+import { useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
+import {
+  CheckCircle,
+  Search,
+  ShieldQuestion,
+  XCircle,
+} from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import type { AgentFormData } from "@/lib/agent-yaml"
+import type { ProviderInfo, ToolInfo } from "@/types/agent"
+import type { TFunction } from "i18next"
+
+function Field({
+  label, hint, children,
+}: {
+  label: string
+  hint?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-[11px] font-medium text-foreground">{label}</Label>
+      {children}
+      {hint && <p className="text-[10px] leading-relaxed text-muted-foreground">{hint}</p>}
+    </div>
+  )
+}
+
+function SectionCard({
+  title, description, children,
+}: {
+  title: string
+  description?: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="rounded-2xl border border-border bg-card p-5">
+      <div className="mb-4">
+        <h2 className="text-sm font-medium text-foreground">{title}</h2>
+        {description && <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{description}</p>}
+      </div>
+      <div className="flex flex-col gap-4">{children}</div>
+    </section>
+  )
+}
+
+type ToolPermission = "auto_approve" | "confirm" | "deny"
+
+function getToolPermission(form: AgentFormData, tool: string): ToolPermission {
+  if (form.autoApprove.includes(tool)) return "auto_approve"
+  if (form.alwaysDeny.includes(tool)) return "deny"
+  return "confirm"
+}
+
+function setToolPermission(form: AgentFormData, tool: string, perm: ToolPermission): AgentFormData {
+  const autoApprove = form.autoApprove.filter((x) => x !== tool)
+  const alwaysDeny = form.alwaysDeny.filter((x) => x !== tool)
+  if (perm === "auto_approve") return { ...form, autoApprove: [...autoApprove, tool], alwaysDeny }
+  if (perm === "deny") return { ...form, autoApprove, alwaysDeny: [...alwaysDeny, tool] }
+  return { ...form, autoApprove, alwaysDeny }
+}
+
+function getPermConfig(t: TFunction) {
+  return {
+    auto_approve: { icon: CheckCircle, color: "text-success", bg: "bg-success/10", label: t("agent.permAuto") },
+    confirm: { icon: ShieldQuestion, color: "text-warning", bg: "bg-warning/10", label: t("agent.permConfirm") },
+    deny: { icon: XCircle, color: "text-destructive", bg: "bg-destructive/10", label: t("agent.permDeny") },
+  } as const
+}
+
+export function BasicTab({
+  form, setForm, providers, isCreate,
+}: {
+  form: AgentFormData
+  setForm: React.Dispatch<React.SetStateAction<AgentFormData>>
+  providers: ProviderInfo[]
+  isCreate: boolean
+}) {
+  const { t } = useTranslation()
+  const currentProvider = providers.find((p) => p.name === form.provider)
+
+  return (
+    <div className="space-y-4">
+      <SectionCard title={t("agent.sectionIdentity")} description={t("agent.sectionIdentityDesc")}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label={t("agent.name")} hint={t("agent.nameHint")}>
+            <Input
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="my-agent"
+              className="h-9 rounded-xl text-sm"
+            />
+          </Field>
+          {!isCreate && form.id && (
+            <Field label={t("agent.id")} hint={t("agent.idHint")}>
+              <Input value={form.id} disabled className="h-9 rounded-xl font-mono text-sm text-muted-foreground" />
+            </Field>
+          )}
+          <Field label={t("agent.provider")}>
+            <Select
+              value={form.provider ? { value: form.provider, label: form.provider } : null}
+              onValueChange={(v) => {
+                if (!v || typeof v !== "object" || !("value" in v)) return
+                const name = (v as { value: string }).value
+                const def = providers.find((p) => p.name === name)
+                setForm((p) => ({ ...p, provider: name, model: def?.default_model || p.model }))
+              }}
+            >
+              <SelectTrigger className="h-9 w-full rounded-xl"><SelectValue placeholder={t("agent.selectProvider")} /></SelectTrigger>
+              <SelectContent className="rounded-xl">
+                {providers.map((p) => (
+                  <SelectItem key={p.name} value={{ value: p.name, label: `${p.name} (${p.type})` }}>
+                    {p.name} <span className="text-muted-foreground">({p.type})</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+        <Field label={t("agent.model")} hint={currentProvider ? t("agent.recommended", { model: currentProvider.default_model }) : undefined}>
+          <Input
+            value={form.model}
+            onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
+            placeholder={currentProvider?.default_model || t("agent.modelName")}
+            className="h-9 rounded-xl font-mono text-sm"
+          />
+        </Field>
+      </SectionCard>
+
+      <SectionCard title={t("agent.systemPrompt")} description={t("agent.systemPromptDesc")}>
+        <Textarea
+          value={form.systemPrompt}
+          onChange={(e) => setForm((f) => ({ ...f, systemPrompt: e.target.value }))}
+          placeholder="You are a helpful assistant."
+          className="min-h-40 rounded-xl font-mono text-sm leading-relaxed resize-y"
+        />
+      </SectionCard>
+    </div>
+  )
+}
+
+export function ToolsTab({
+  form, setForm, tools,
+}: {
+  form: AgentFormData
+  setForm: React.Dispatch<React.SetStateAction<AgentFormData>>
+  tools: ToolInfo[]
+}) {
+  const { t } = useTranslation()
+  const [query, setQuery] = useState("")
+  const permConfig = getPermConfig(t)
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return tools
+    return tools.filter((tool) => tool.name.toLowerCase().includes(q) || tool.description.toLowerCase().includes(q))
+  }, [tools, query])
+
+  const toggleTool = (name: string) => {
+    setForm((prev) => {
+      if (prev.tools.includes(name)) {
+        return {
+          ...prev,
+          tools: prev.tools.filter((x) => x !== name),
+          autoApprove: prev.autoApprove.filter((x) => x !== name),
+          alwaysDeny: prev.alwaysDeny.filter((x) => x !== name),
+        }
+      }
+      return { ...prev, tools: [...prev.tools, name] }
+    })
+  }
+
+  return (
+    <div className="space-y-4">
+      <SectionCard title={t("agent.sectionTools")} description={t("agent.sectionToolsDesc")}>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("agent.searchTools")}
+              className="h-9 rounded-xl pl-8 text-sm"
+            />
+          </div>
+          <Badge variant="secondary" className="rounded-md px-2 py-1 text-[10px]">
+            {t("agent.selectedCount", { count: form.tools.length })}
+          </Badge>
+        </div>
+
+        {filtered.length === 0 ? (
+          <p className="py-8 text-center text-xs text-muted-foreground">{t("agent.noToolsMatch")}</p>
+        ) : (
+          <div className="max-h-[28rem] space-y-1.5 overflow-y-auto pr-1">
+            {filtered.map((tool) => {
+              const selected = form.tools.includes(tool.name)
+              const perm = getToolPermission(form, tool.name)
+              return (
+                <div
+                  key={tool.name}
+                  className={`rounded-xl border px-3 py-2.5 transition-colors ${selected ? "border-primary/30 bg-primary/5" : "border-border bg-background hover:bg-muted/40"}`}
+                >
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleTool(tool.name)}
+                      className="mt-1 h-3.5 w-3.5 rounded border-border accent-primary"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-xs font-medium text-foreground">{tool.name}</p>
+                      <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">{tool.description}</p>
+                    </div>
+                  </label>
+                  {selected && (
+                    <div className="mt-2 flex flex-wrap gap-1 border-t border-border/60 pt-2 pl-6">
+                      {(Object.keys(permConfig) as ToolPermission[]).map((p) => {
+                        const c = permConfig[p]
+                        const active = perm === p
+                        return (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setForm((f) => setToolPermission(f, tool.name, p))}
+                            className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] transition-colors ${
+                              active ? `${c.bg} ${c.color} font-medium` : "text-muted-foreground hover:bg-muted"
+                            }`}
+                          >
+                            <c.icon className="h-3 w-3" /> {c.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </SectionCard>
+    </div>
+  )
+}
+
+export function RuntimeTab({
+  form, setForm,
+}: {
+  form: AgentFormData
+  setForm: React.Dispatch<React.SetStateAction<AgentFormData>>
+}) {
+  const { t } = useTranslation()
+  const parallelLabel = t("common.parallel")
+  const serialLabel = t("common.serial")
+
+  return (
+    <div className="space-y-4">
+      <SectionCard title={t("agent.sectionRuntime")} description={t("agent.sectionRuntimeDesc")}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label={t("agent.maxTurns")} hint={t("agent.maxTurnsHint")}>
+            <Input
+              type="number"
+              value={form.maxTurns}
+              onChange={(e) => setForm((f) => ({ ...f, maxTurns: Number(e.target.value) }))}
+              className="h-9 rounded-xl font-mono text-sm"
+              min={1}
+              max={100}
+            />
+          </Field>
+          <Field label={t("agent.maxTokens")} hint={t("agent.maxTokensHint")}>
+            <Input
+              type="number"
+              value={form.maxTokens}
+              onChange={(e) => setForm((f) => ({ ...f, maxTokens: Number(e.target.value) }))}
+              className="h-9 rounded-xl font-mono text-sm"
+              min={256}
+            />
+          </Field>
+          <Field label={t("agent.execMode")} hint={t("agent.execModeHint")}>
+            <Select
+              value={{ value: form.execMode, label: form.execMode === "parallel" ? parallelLabel : serialLabel }}
+              onValueChange={(v) => {
+                if (v && typeof v === "object" && "value" in v) {
+                  setForm((f) => ({ ...f, execMode: (v as { value: string }).value as "parallel" | "serial" }))
+                }
+              }}
+            >
+              <SelectTrigger className="h-9 w-full rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value={{ value: "parallel", label: parallelLabel }}>{parallelLabel}</SelectItem>
+                <SelectItem value={{ value: "serial", label: serialLabel }}>{serialLabel}</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label={t("agent.maxParallel")} hint={t("agent.maxParallelHint")}>
+            <Input
+              type="number"
+              value={form.maxParallel}
+              onChange={(e) => setForm((f) => ({ ...f, maxParallel: Number(e.target.value) }))}
+              className="h-9 rounded-xl font-mono text-sm"
+              min={1}
+              max={16}
+              disabled={form.execMode === "serial"}
+            />
+          </Field>
+        </div>
+      </SectionCard>
+    </div>
+  )
+}
+

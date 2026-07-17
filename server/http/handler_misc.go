@@ -5,11 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
+	"gopkg.in/yaml.v3"
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/audit"
+	"github.com/teexue/common-agent/core/config"
+	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/skill"
 )
 
@@ -66,16 +73,158 @@ func (s *Server) handleTools(c *gin.Context) {
 
 func (s *Server) handleProvidersList(c *gin.Context) {
 	if s.catalog == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "no_catalog", "message": "provider catalog not configured"})
+		respondError(c, http.StatusServiceUnavailable, "no_catalog", "api.error.no_catalog")
 		return
 	}
 	c.JSON(http.StatusOK, s.catalog.Entries())
 }
 
+// ProviderUpsertRequest is the DTO for POST/PUT /v1/providers.
+type ProviderUpsertRequest struct {
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	BaseURL      string `json:"base_url,omitempty"`
+	APIKey       string `json:"api_key,omitempty"`
+	APIKeyEnv    string `json:"api_key_env,omitempty"`
+	APIVersion   string `json:"api_version,omitempty"`
+	DefaultModel string `json:"default_model,omitempty"`
+	Vision       bool   `json:"vision,omitempty"`
+}
+
+func (s *Server) handleProviderUpsert(c *gin.Context) {
+	var req ProviderUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		return
+	}
+	if req.Name == "" {
+		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request")
+		return
+	}
+
+	home := filepath.Dir(s.agentsDir)
+	if req.APIKeyEnv == "" {
+		if existing, ok := existingProviderAPIKeyEnv(home, req.Name); ok {
+			req.APIKeyEnv = existing
+		} else {
+			req.APIKeyEnv = defaultAPIKeyEnv(req.Name)
+		}
+	}
+
+	spec := config.ProviderSpec{
+		Name:         req.Name,
+		Type:         provider.Kind(req.Type),
+		BaseURL:      req.BaseURL,
+		APIKeyEnv:    req.APIKeyEnv,
+		APIVersion:   req.APIVersion,
+		DefaultModel: req.DefaultModel,
+		Vision:       req.Vision,
+	}
+	if err := config.UpsertProvider(home, spec); err != nil {
+		respondErrorDetails(c, http.StatusBadRequest, "provider_error", "api.error.provider_error", err.Error())
+		return
+	}
+
+	if req.APIKey != "" {
+		if s.creds == nil {
+			cs, err := config.NewCredentialStore(home)
+			if err != nil {
+				respondErrorDetails(c, http.StatusInternalServerError, "provider_error", "api.error.provider_error", err.Error())
+				return
+			}
+			s.creds = cs
+		}
+		if err := s.creds.Set(req.APIKeyEnv, req.APIKey); err != nil {
+			respondErrorDetails(c, http.StatusBadRequest, "provider_error", "api.error.provider_error", err.Error())
+			return
+		}
+	}
+
+	// Reload catalog.
+	if err := s.reloadCatalog(); err != nil {
+		s.logger.Warn("reload catalog after upsert", "error", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "name": req.Name, "api_key_env": req.APIKeyEnv})
+}
+
+func defaultAPIKeyEnv(name string) string {
+	var b strings.Builder
+	for _, r := range strings.ToUpper(name) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	s := strings.Trim(b.String(), "_")
+	if s == "" {
+		s = "PROVIDER"
+	}
+	return s + "_API_KEY"
+}
+
+func existingProviderAPIKeyEnv(home, name string) (string, bool) {
+	data, err := os.ReadFile(config.ProvidersFile(home))
+	if err != nil {
+		return "", false
+	}
+	var file provider.CatalogFile
+	if err := yaml.Unmarshal(data, &file); err != nil {
+		return "", false
+	}
+	entry, ok := file.Providers[name]
+	if !ok || entry.APIKeyEnv == "" {
+		return "", false
+	}
+	return entry.APIKeyEnv, true
+}
+
+func (s *Server) handleProviderDelete(c *gin.Context) {
+	name := c.Param("name")
+	if name == "" {
+		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request")
+		return
+	}
+
+	home := filepath.Dir(s.agentsDir)
+	if err := config.DeleteProvider(home, name); err != nil {
+		respondErrorDetails(c, http.StatusBadRequest, "provider_error", "api.error.provider_error", err.Error())
+		return
+	}
+
+	// Reload catalog.
+	if err := s.reloadCatalog(); err != nil {
+		s.logger.Warn("reload catalog after delete", "error", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"deleted": name})
+}
+
+func (s *Server) reloadCatalog() error {
+	home := filepath.Dir(s.agentsDir)
+	var lookup func(string) string
+	if s.creds != nil {
+		lookup = s.creds.Lookup
+	} else {
+		cs, err := config.NewCredentialStore(home)
+		if err == nil {
+			s.creds = cs
+			lookup = cs.Lookup
+		}
+	}
+	cat, err := provider.LoadCatalog(config.ProvidersFile(home), lookup)
+	if err != nil {
+		return err
+	}
+	s.SetCatalog(cat)
+	return nil
+}
+
 func (s *Server) handleMCPList(c *gin.Context) {
 	result, err := agent.LoadAll(s.agentsDir)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "agent_error", "message": err.Error()})
+		respondErrorDetails(c, http.StatusInternalServerError, "agent_error", "api.error.agent_error", err.Error())
 		return
 	}
 
@@ -102,7 +251,7 @@ func (s *Server) handleSkillsList(c *gin.Context) {
 	loader := skill.NewLoader(s.skillsDir)
 	skills, err := loader.LoadAll()
 	if err != nil {
-		s.logger.Warn("some skills failed to load", "error", err)
+		s.logger.Warn("log.skill.load_partial", "error", err)
 	}
 
 	result := make([]SkillInfo, 0, len(skills))
@@ -131,7 +280,7 @@ func (s *Server) handleSkillsList(c *gin.Context) {
 
 func (s *Server) handleAuditExport(c *gin.Context) {
 	if s.auditStore == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "no_audit", "message": "audit store not configured"})
+		respondError(c, http.StatusServiceUnavailable, "no_audit", "api.error.no_audit")
 		return
 	}
 
@@ -146,7 +295,7 @@ func (s *Server) handleAuditExport(c *gin.Context) {
 	case "csv":
 		var buf bytes.Buffer
 		if err := s.auditStore.ExportCSV(filter, &buf); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"code": "export_error", "message": err.Error()})
+			respondErrorDetails(c, http.StatusInternalServerError, "export_error", "api.error.export_error", err.Error())
 			return
 		}
 		c.Header("Content-Type", "text/csv")
@@ -155,7 +304,7 @@ func (s *Server) handleAuditExport(c *gin.Context) {
 	default: // json
 		records, err := s.auditStore.Query(filter)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"code": "query_error", "message": err.Error()})
+			respondErrorDetails(c, http.StatusInternalServerError, "query_error", "api.error.query_error", err.Error())
 			return
 		}
 		c.JSON(http.StatusOK, records)
@@ -170,7 +319,7 @@ func (s *Server) handleEvents(c *gin.Context) {
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "stream_error", "message": "streaming unsupported"})
+		respondError(c, http.StatusInternalServerError, "stream_error", "api.error.streaming_unsupported")
 		return
 	}
 
@@ -195,17 +344,17 @@ func (s *Server) handleEvents(c *gin.Context) {
 func (s *Server) handleApprove(c *gin.Context) {
 	var req ApproveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_json", "message": err.Error()})
+		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
 		return
 	}
 	if req.ApprovalID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "approval_id is required"})
+		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.approval_id_required")
 		return
 	}
 
 	resolved := s.approver.ResolveApproval(req.ApprovalID, req.Approved)
 	if !resolved {
-		c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "no pending approval for approval_id"})
+		respondError(c, http.StatusNotFound, "not_found", "api.error.approval_not_found")
 		return
 	}
 

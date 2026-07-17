@@ -1,9 +1,11 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { ChevronDown, ChevronRight, Check, X, Loader2, Wrench } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { truncate } from "@/lib/format"
 import { ToolOperationCard } from "./tool-operation-card"
 import type { ToolCallEntry } from "@/types/agent"
+import type { TFunction } from "i18next"
 
 interface ToolCallGroupProps {
   toolCalls: ToolCallEntry[]
@@ -13,17 +15,17 @@ interface ToolCallGroupProps {
   onDenyTool?: (approvalId: string) => void
 }
 
-function getGroupStatus(toolCalls: ToolCallEntry[]): { label: string; icon: typeof Check; color: string } {
+function getGroupStatus(toolCalls: ToolCallEntry[], t: TFunction): { label: string; icon: typeof Check; color: string } {
   const hasRunning = toolCalls.some((tc) => tc.status === "running" || tc.status === "sub_agent_running")
   const hasPendingApproval = toolCalls.some((tc) => tc.status === "pending_approval")
   const hasError = toolCalls.some((tc) => tc.status === "error")
   const allCompleted = toolCalls.every((tc) => tc.status === "completed")
 
-  if (hasRunning) return { label: "执行中", icon: Loader2, color: "text-primary" }
-  if (hasPendingApproval) return { label: "待审批", icon: Wrench, color: "text-warning" }
-  if (hasError) return { label: "有错误", icon: X, color: "text-destructive" }
-  if (allCompleted) return { label: "全部完成", icon: Check, color: "text-success" }
-  return { label: "等待中", icon: Wrench, color: "text-muted-foreground" }
+  if (hasRunning) return { label: t("conversation.groupRunning"), icon: Loader2, color: "text-primary" }
+  if (hasPendingApproval) return { label: t("conversation.groupPendingApproval"), icon: Wrench, color: "text-warning" }
+  if (hasError) return { label: t("conversation.groupError"), icon: X, color: "text-destructive" }
+  if (allCompleted) return { label: t("conversation.groupAllDone"), icon: Check, color: "text-success" }
+  return { label: t("conversation.groupWaiting"), icon: Wrench, color: "text-muted-foreground" }
 }
 
 function formatToolSummary(toolCalls: ToolCallEntry[]): string {
@@ -44,9 +46,9 @@ function formatToolSummary(toolCalls: ToolCallEntry[]): string {
 }
 
 export function ToolCallGroup({ toolCalls, selectedToolCallId, onSelectToolCall, onApproveTool, onDenyTool }: ToolCallGroupProps) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
 
-  // 单个 tool call 时保持原样
   if (toolCalls.length === 1) {
     return (
       <ToolOperationCard
@@ -59,13 +61,12 @@ export function ToolCallGroup({ toolCalls, selectedToolCallId, onSelectToolCall,
     )
   }
 
-  const status = getGroupStatus(toolCalls)
+  const status = getGroupStatus(toolCalls, t)
   const StatusIcon = status.icon
   const selectedTc = toolCalls.find((tc) => tc.id === selectedToolCallId)
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
-      {/* 聚合头部 */}
       <button
         className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/50 transition-colors"
         onClick={() => setExpanded((v) => !v)}
@@ -78,7 +79,7 @@ export function ToolCallGroup({ toolCalls, selectedToolCallId, onSelectToolCall,
         </div>
         <div className="flex-1 min-w-0">
           <span className="text-sm font-medium text-foreground">
-            {toolCalls.length} 个工具调用
+            {t("conversation.toolCallsCount", { count: toolCalls.length })}
           </span>
           <span className="ml-2 text-xs text-muted-foreground truncate">
             {formatToolSummary(toolCalls)}
@@ -87,7 +88,6 @@ export function ToolCallGroup({ toolCalls, selectedToolCallId, onSelectToolCall,
         <span className={cn("text-xs font-medium", status.color)}>{status.label}</span>
       </button>
 
-      {/* 展开的详情 */}
       {expanded && (
         <div className="border-t border-border px-2 py-1.5 flex flex-col gap-1.5">
           {toolCalls.map((tc) => (
@@ -103,7 +103,6 @@ export function ToolCallGroup({ toolCalls, selectedToolCallId, onSelectToolCall,
         </div>
       )}
 
-      {/* 选中的 tool call 始终显示（即使折叠） */}
       {!expanded && selectedTc && (
         <div className="border-t border-primary/20 px-2 py-1.5">
           <ToolOperationCard

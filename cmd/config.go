@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/teexue/common-agent/core/config"
+	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/provider"
 )
 
@@ -33,22 +34,12 @@ func runConfig(args []string) {
 }
 
 func configUsage() {
-	fmt.Fprintf(os.Stderr, `Usage:
-  agent-server config init [--home ~/.common-agent]
-  agent-server config show [--home ~/.common-agent]
-  agent-server config path
-  agent-server config set-key MOONSHOT_API_KEY sk-...
-  agent-server config set default-agent demo [--home ...]
-  agent-server config set provider             # interactive wizard
-  agent-server config set provider moonshot \  # scripted mode
-    --type openai --base-url https://api.moonshot.cn/v1 \
-    --api-key-env MOONSHOT_API_KEY --model kimi-k2.6 [--thinking disabled]
-`)
+	fmt.Fprint(os.Stderr, i18n.T("cli.usage.config"))
 }
 
 func runConfigInit(args []string) {
 	fs := flag.NewFlagSet("config init", flag.ExitOnError)
-	homeFlag := fs.String("home", "", "config home (default ~/.common-agent)")
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home"))
 	_ = fs.Parse(args)
 
 	home, err := config.Home(true)
@@ -72,7 +63,7 @@ func runConfigInit(args []string) {
 
 func runConfigShow(args []string) {
 	fs := flag.NewFlagSet("config show", flag.ExitOnError)
-	homeFlag := fs.String("home", "", "config home")
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home_short"))
 	_ = fs.Parse(args)
 
 	paths, err := resolvePaths(*homeFlag)
@@ -87,7 +78,8 @@ func runConfigShow(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Printf("\ndefault_agent: %s\n", settings.DefaultAgent)
+	fmt.Print(i18n.T("cli.config.default_agent", "name", settings.DefaultAgent))
+	fmt.Println()
 
 	creds, err := config.NewCredentialStore(paths.home)
 	if err != nil {
@@ -96,7 +88,7 @@ func runConfigShow(args []string) {
 	}
 	credKeys := creds.Keys()
 	if len(credKeys) > 0 {
-		fmt.Println("\ncredentials (keys only):")
+		fmt.Println(i18n.T("cli.config.credentials_header"))
 		for _, k := range credKeys {
 			fmt.Printf("  - %s\n", k)
 		}
@@ -104,10 +96,11 @@ func runConfigShow(args []string) {
 
 	catalog, err := provider.LoadCatalog(paths.providers, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "\nproviders: not configured (%v)\n", err)
+		fmt.Fprint(os.Stderr, i18n.T("cli.config.providers_not_configured", "error", err.Error()))
+		fmt.Fprintln(os.Stderr)
 		return
 	}
-	fmt.Println("\nproviders:")
+	fmt.Println(i18n.T("cli.config.providers_header"))
 	for _, name := range catalog.Names() {
 		fmt.Printf("  - %s\n", name)
 	}
@@ -126,11 +119,11 @@ func runConfigPath(args []string) {
 
 func runConfigSetKey(args []string) {
 	fs := flag.NewFlagSet("config set-key", flag.ExitOnError)
-	homeFlag := fs.String("home", "", "config home")
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home_short"))
 	_ = fs.Parse(args)
 
 	if len(fs.Args()) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: agent-server config set-key ENV_NAME API_KEY")
+		fmt.Fprintln(os.Stderr, i18n.T("cli.usage.config_set_key"))
 		os.Exit(1)
 	}
 	paths, err := resolvePaths(*homeFlag)
@@ -138,7 +131,7 @@ func runConfigSetKey(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-		creds, err := config.NewCredentialStore(paths.home)
+	creds, err := config.NewCredentialStore(paths.home)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -147,12 +140,12 @@ func runConfigSetKey(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Printf("saved %s to %s\n", fs.Args()[0], config.CredentialsFile(paths.home))
+	fmt.Println(i18n.T("cli.config.key_saved", "env", fs.Args()[0], "path", config.CredentialsFile(paths.home)))
 }
 
 func runConfigSet(args []string) {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: agent-server config set default-agent NAME | provider NAME ...")
+		fmt.Fprintln(os.Stderr, i18n.T("cli.usage.config_set"))
 		os.Exit(1)
 	}
 	switch args[0] {
@@ -161,17 +154,17 @@ func runConfigSet(args []string) {
 	case "provider":
 		runConfigSetProvider(args[1:])
 	default:
-		fmt.Fprintln(os.Stderr, "unknown config set target:", args[0])
+		fmt.Fprintln(os.Stderr, i18n.T("cli.config.unknown_set_target", "target", args[0]))
 		os.Exit(1)
 	}
 }
 
 func runConfigSetDefaultAgent(args []string) {
 	fs := flag.NewFlagSet("config set default-agent", flag.ExitOnError)
-	homeFlag := fs.String("home", "", "config home")
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home_short"))
 	_ = fs.Parse(args)
 	if len(fs.Args()) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: agent-server config set default-agent NAME")
+		fmt.Fprintln(os.Stderr, i18n.T("cli.usage.config_set_default_agent"))
 		os.Exit(1)
 	}
 	paths, err := resolvePaths(*homeFlag)
@@ -183,7 +176,7 @@ func runConfigSetDefaultAgent(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println("default agent updated")
+	fmt.Println(i18n.T("cli.config.default_agent_updated"))
 }
 
 func runConfigSetProvider(args []string) {
@@ -221,7 +214,7 @@ func runConfigSetProvider(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Printf("provider %q updated in %s\n", spec.Name, config.ProvidersFile(paths.home))
+	fmt.Println(i18n.T("cli.config.provider_updated", "name", spec.Name, "path", config.ProvidersFile(paths.home)))
 
 	// Prompt for API key if not already set.
 	creds, err := config.NewCredentialStore(paths.home)
@@ -230,7 +223,7 @@ func runConfigSetProvider(args []string) {
 		os.Exit(1)
 	}
 	if creds.Lookup(apiKeyEnv) == "" {
-		apiKey, err := config.InputSecret("API Key")
+		apiKey, err := config.InputSecret(i18n.T("wizard.input.api_key"))
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -240,25 +233,25 @@ func runConfigSetProvider(args []string) {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)
 			}
-			fmt.Printf("saved %s to %s\n", apiKeyEnv, config.CredentialsFile(paths.home))
+			fmt.Println(i18n.T("cli.config.key_saved", "env", apiKeyEnv, "path", config.CredentialsFile(paths.home)))
 		}
 	}
 }
 
 func runConfigSetProviderFlags(args []string) {
 	fs := flag.NewFlagSet("config set provider", flag.ExitOnError)
-	homeFlag := fs.String("home", "", "config home")
-	pType := fs.String("type", "openai", "provider type: anthropic|openai")
-	baseURL := fs.String("base-url", "", "API base URL")
-	apiKeyEnv := fs.String("api-key-env", "", "environment variable name for API key")
-	apiVersion := fs.String("api-version", "", "anthropic API version")
-	model := fs.String("model", "", "default model name")
-	thinking := fs.String("thinking", "", "thinking mode: enabled|disabled")
-	thinkingKeep := fs.String("thinking-keep", "", "thinking keep: all")
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home_short"))
+	pType := fs.String("type", "openai", i18n.T("cli.flag.provider_type"))
+	baseURL := fs.String("base-url", "", i18n.T("cli.flag.base_url"))
+	apiKeyEnv := fs.String("api-key-env", "", i18n.T("cli.flag.api_key_env"))
+	apiVersion := fs.String("api-version", "", i18n.T("cli.flag.api_version"))
+	model := fs.String("model", "", i18n.T("cli.flag.model"))
+	thinking := fs.String("thinking", "", i18n.T("cli.flag.thinking"))
+	thinkingKeep := fs.String("thinking-keep", "", i18n.T("cli.flag.thinking_keep"))
 	_ = fs.Parse(args)
 
 	if len(fs.Args()) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: agent-server config set provider NAME [flags]")
+		fmt.Fprintln(os.Stderr, i18n.T("cli.usage.config_set_provider"))
 		os.Exit(1)
 	}
 	paths, err := resolvePaths(*homeFlag)
@@ -284,5 +277,5 @@ func runConfigSetProviderFlags(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Printf("provider %q updated in %s\n", spec.Name, config.ProvidersFile(paths.home))
+	fmt.Println(i18n.T("cli.config.provider_updated", "name", spec.Name, "path", config.ProvidersFile(paths.home)))
 }

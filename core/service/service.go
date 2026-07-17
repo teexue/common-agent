@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/teexue/common-agent/core/agent"
+	"github.com/teexue/common-agent/core/job"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/tools/registry"
@@ -19,6 +20,7 @@ type Service struct {
 	NewProvider func(a *agent.Agent) (provider.Provider, error)
 	Logger      *slog.Logger
 	Store       session.Store
+	Jobs        job.Store
 }
 
 // New creates a Service instance.
@@ -33,6 +35,7 @@ func New(cfg ServiceConfig) *Service {
 		NewProvider: cfg.NewProvider,
 		Logger:      logger,
 		Store:       cfg.Store,
+		Jobs:        cfg.Jobs,
 	}
 }
 
@@ -43,4 +46,5 @@ type ServiceConfig struct {
 	NewProvider func(a *agent.Agent) (provider.Provider, error)
 	Logger      *slog.Logger
 	Store       session.Store
+	Jobs        job.Store
 }

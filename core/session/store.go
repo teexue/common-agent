@@ -13,6 +13,7 @@ var ErrNotFound = errors.New("session not found")
 type SessionMeta struct {
 	ID        string            `json:"id"`
 	Agent     string            `json:"agent"`
+	Title     string            `json:"title,omitempty"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 	CreatedAt time.Time         `json:"created_at"`
 	UpdatedAt time.Time         `json:"updated_at"`

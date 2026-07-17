@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/teexue/common-agent/core/i18n"
 )
 
 // Template represents a built-in agent template.
@@ -13,11 +15,17 @@ type Template struct {
 	Content     string
 }
 
-// Templates is the list of built-in agent templates.
-var Templates = []Template{
+// templateDef is an internal template with an i18n description key.
+type templateDef struct {
+	Name        string
+	DescKey     string
+	Content     string
+}
+
+var templateDefs = []templateDef{
 	{
-		Name:        "chat-assistant",
-		Description: "通用对话助手 — 适合日常问答和简单任务",
+		Name:    "chat-assistant",
+		DescKey: "template.chat_assistant.description",
 		Content: `name: chat-assistant
 version: 1
 provider: moonshot
@@ -36,8 +44,8 @@ tool_execution:
 `,
 	},
 	{
-		Name:        "code-reviewer",
-		Description: "代码审查助手 — 可读取和搜索代码文件",
+		Name:    "code-reviewer",
+		DescKey: "template.code_reviewer.description",
 		Content: `name: code-reviewer
 version: 1
 provider: moonshot
@@ -64,8 +72,8 @@ tool_execution:
 `,
 	},
 	{
-		Name:        "data-analyst",
-		Description: "数据分析助手 — 可执行命令和处理数据文件",
+		Name:    "data-analyst",
+		DescKey: "template.data_analyst.description",
 		Content: `name: data-analyst
 version: 1
 provider: moonshot
@@ -100,8 +108,8 @@ permissions:
 `,
 	},
 	{
-		Name:        "devops",
-		Description: "运维助手 — 可执行命令、管理文件、排查问题",
+		Name:    "devops",
+		DescKey: "template.devops.description",
 		Content: `name: devops
 version: 1
 provider: moonshot
@@ -140,8 +148,8 @@ permissions:
 `,
 	},
 	{
-		Name:        "software-dev",
-		Description: "软件开发助手 — 可读写代码、执行命令、搜索重构、创建项目",
+		Name:    "software-dev",
+		DescKey: "template.software_dev.description",
 		Content: `name: software-dev
 version: 1
 provider: moonshot
@@ -189,10 +197,28 @@ permissions:
 	},
 }
 
+// Templates returns built-in agent templates with localized descriptions.
+func Templates() []Template {
+	return LocalizedTemplates()
+}
+
+// LocalizedTemplates returns templates with Description set via i18n.T.
+func LocalizedTemplates() []Template {
+	out := make([]Template, len(templateDefs))
+	for i, d := range templateDefs {
+		out[i] = Template{
+			Name:        d.Name,
+			Description: i18n.T(d.DescKey),
+			Content:     d.Content,
+		}
+	}
+	return out
+}
+
 // TemplateNames returns the names of all available templates.
 func TemplateNames() []string {
-	names := make([]string, len(Templates))
-	for i, t := range Templates {
+	names := make([]string, len(templateDefs))
+	for i, t := range templateDefs {
 		names[i] = t.Name
 	}
 	return names
@@ -200,9 +226,14 @@ func TemplateNames() []string {
 
 // GetTemplate returns a template by name, or nil if not found.
 func GetTemplate(name string) *Template {
-	for i := range Templates {
-		if Templates[i].Name == name {
-			return &Templates[i]
+	for _, d := range templateDefs {
+		if d.Name == name {
+			t := Template{
+				Name:        d.Name,
+				Description: i18n.T(d.DescKey),
+				Content:     d.Content,
+			}
+			return &t
 		}
 	}
 	return nil
@@ -238,7 +269,7 @@ func InstallTemplate(home, templateName string, overwrite bool) error {
 // InstallAllTemplates writes all built-in templates to the agents directory.
 // Skips templates that already exist.
 func InstallAllTemplates(home string) (installed []string, skipped []string, err error) {
-	for _, tmpl := range Templates {
+	for _, tmpl := range templateDefs {
 		agentsDir := AgentsDir(home)
 		path := filepath.Join(agentsDir, tmpl.Name+".yaml")
 		if _, statErr := os.Stat(path); statErr == nil {

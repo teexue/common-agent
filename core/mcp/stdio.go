@@ -106,7 +106,7 @@ func (c *StdioClient) Connect(ctx context.Context) error {
 		return fmt.Errorf("initialized notification: %w", err)
 	}
 
-	c.logger.Info("mcp server connected", "name", c.name)
+	c.logger.Info("log.mcp.stdio.connected", "name", c.name)
 	return nil
 }
 
@@ -163,7 +163,7 @@ func (c *StdioClient) Close() error {
 	if c.cmd != nil && c.cmd.Process != nil {
 		_ = c.cmd.Wait()
 	}
-	c.logger.Info("mcp server disconnected", "name", c.name)
+	c.logger.Info("log.mcp.stdio.disconnected", "name", c.name)
 	return nil
 }
 
@@ -234,7 +234,7 @@ func (c *StdioClient) readLoop() {
 		line, err := c.stdout.ReadBytes('\n')
 		if err != nil {
 			if err != io.EOF {
-				c.logger.Debug("mcp read error", "name", c.name, "error", err)
+				c.logger.Debug("log.mcp.stdio.read_error", "name", c.name, "error", err)
 			}
 			return
 		}
@@ -242,7 +242,7 @@ func (c *StdioClient) readLoop() {
 		// Try to parse as a response (has "id" field).
 		var resp Response
 		if err := json.Unmarshal(line, &resp); err != nil {
-			c.logger.Debug("mcp parse error", "name", c.name, "error", err)
+			c.logger.Debug("log.mcp.stdio.parse_error", "name", c.name, "error", err)
 			continue
 		}
 

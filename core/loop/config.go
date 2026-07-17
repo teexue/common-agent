@@ -63,6 +63,9 @@ type Config struct {
 	// When empty, tools use their registered default.
 	WorkDir string
 
+	// Images are attached to the user prompt as multimodal content parts.
+	Images []provider.ContentPart
+
 	// Telemetry for OpenTelemetry tracing and metrics. Optional.
 	Telemetry *telemetry.Telemetry
 }

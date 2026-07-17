@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import {
   AlertCircle,
   Bot,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { AuditNode, TurnNode } from "@/types/replay"
+import type { TFunction } from "i18next"
 import { ToolCallCard } from "./tool-call-card"
 
 interface AuditTreeNodeProps {
@@ -22,6 +24,7 @@ interface AuditTreeNodeProps {
 }
 
 export function AuditTreeNode({ turnNode, currentIndex, onSeek }: AuditTreeNodeProps) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(true)
 
   const visibleCount = turnNode.nodes.filter((n) => nodeEventIndex(n) <= currentIndex).length
@@ -48,7 +51,7 @@ export function AuditTreeNode({ turnNode, currentIndex, onSeek }: AuditTreeNodeP
             ? <CheckCircle className="h-3 w-3 text-success" />
             : <span className="text-[10px] font-bold text-primary">{turnNode.turn}</span>}
         </div>
-        <span className="flex-1 text-xs font-medium">轮次 {turnNode.turn}</span>
+        <span className="flex-1 text-xs font-medium">{t("replay.turn", { turn: turnNode.turn })}</span>
         <span className="text-[10px] text-muted-foreground">
           {visibleCount}/{turnNode.nodes.length}
         </span>
@@ -77,6 +80,7 @@ function AuditLeafNode({ node, active, highlight, onSeek }: {
   highlight: boolean
   onSeek: (index: number) => void
 }) {
+  const { t } = useTranslation()
   const idx = nodeEventIndex(node)
 
   if (node.type === "tool_call") {
@@ -112,8 +116,7 @@ function AuditLeafNode({ node, active, highlight, onSeek }: {
     )
   }
 
-  // system node
-  const sysConfig = systemNodeConfig(node.kind)
+  const sysConfig = systemNodeConfig(node.kind, t)
   return (
     <button
       onClick={() => onSeek(idx)}
@@ -135,14 +138,14 @@ function nodeEventIndex(node: AuditNode): number {
   return node.eventIndex
 }
 
-function systemNodeConfig(kind: string): { icon: typeof Bot; color: string; label: string } {
+function systemNodeConfig(kind: string, t: TFunction): { icon: typeof Bot; color: string; label: string } {
   switch (kind) {
-    case "compaction": return { icon: Zap, color: "text-amber-500", label: "上下文压缩" }
-    case "sub_agent_start": return { icon: GitBranch, color: "text-blue-500", label: "子 Agent 启动" }
-    case "sub_agent_end": return { icon: GitMerge, color: "text-success", label: "子 Agent 结束" }
-    case "error": return { icon: AlertCircle, color: "text-destructive", label: "错误" }
-    case "done": return { icon: CheckCircle, color: "text-muted-foreground", label: "完成" }
-    case "approval_required": return { icon: Shield, color: "text-warning", label: "待审批" }
+    case "compaction": return { icon: Zap, color: "text-amber-500", label: t("replay.compaction") }
+    case "sub_agent_start": return { icon: GitBranch, color: "text-blue-500", label: t("replay.subAgentStart") }
+    case "sub_agent_end": return { icon: GitMerge, color: "text-success", label: t("replay.subAgentEnd") }
+    case "error": return { icon: AlertCircle, color: "text-destructive", label: t("replay.error") }
+    case "done": return { icon: CheckCircle, color: "text-muted-foreground", label: t("replay.done") }
+    case "approval_required": return { icon: Shield, color: "text-warning", label: t("replay.pendingApproval") }
     default: return { icon: Bot, color: "text-muted-foreground", label: kind }
   }
 }

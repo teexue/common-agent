@@ -7,15 +7,17 @@ import (
 	"strings"
 
 	"github.com/teexue/common-agent/core/agent"
+	"gopkg.in/yaml.v3"
 )
 
 // AgentSummary is the lightweight representation of an agent for list endpoints.
 type AgentSummary struct {
-	Name      string   `json:"name"`
-	Provider  string   `json:"provider"`
-	Model     string   `json:"model"`
-	Tools     []string `json:"tools"`
-	MaxTurns  int      `json:"max_turns"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Provider string   `json:"provider"`
+	Model    string   `json:"model"`
+	Tools    []string `json:"tools"`
+	MaxTurns int      `json:"max_turns"`
 }
 
 // ListAgents loads all agents and returns summaries. Errors per-agent are logged
@@ -23,15 +25,16 @@ type AgentSummary struct {
 func (s *Service) ListAgents() []AgentSummary {
 	result, err := agent.LoadAll(s.AgentsDir)
 	if err != nil {
-		s.Logger.Warn("load all agents", "error", err)
+		s.Logger.Warn("log.agent.load_all", "error", err)
 		return nil
 	}
 	for _, e := range result.Errors {
-		s.Logger.Warn("agent load error", "error", e)
+		s.Logger.Warn("log.agent.load_error", "error", e)
 	}
 	out := make([]AgentSummary, len(result.Agents))
 	for i, a := range result.Agents {
 		out[i] = AgentSummary{
+			ID:       a.ID,
 			Name:     a.Name,
 			Provider: a.Provider,
 			Model:    a.Model,
@@ -42,20 +45,43 @@ func (s *Service) ListAgents() []AgentSummary {
 	return out
 }
 
-// GetAgent loads a single agent by name. Returns os.ErrNotExist if not found.
-func (s *Service) GetAgent(name string) (*agent.Agent, error) {
-	name = NormalizeAgentName(name)
-	if name == "" {
-		return nil, fmt.Errorf("agent name is required")
+// GetAgent loads a single agent by id or display name.
+func (s *Service) GetAgent(ref string) (*agent.Agent, error) {
+	ref = NormalizeAgentName(ref)
+	if ref == "" {
+		return nil, fmt.Errorf("agent id is required")
 	}
-	return agent.LoadByName(s.AgentsDir, name)
+	return agent.Resolve(s.AgentsDir, ref)
 }
 
-// SaveAgent validates and persists an agent YAML file.
-func (s *Service) SaveAgent(name string, yamlContent []byte) error {
-	name = NormalizeAgentName(name)
-	if name == "" {
-		return fmt.Errorf("agent name is required")
+// CreateAgent validates and persists a new agent, assigning an id when missing.
+func (s *Service) CreateAgent(yamlContent []byte) (*agent.Agent, error) {
+	if len(yamlContent) == 0 {
+		return nil, fmt.Errorf("agent YAML content is required")
+	}
+	a, err := agent.LoadFromBytes(yamlContent)
+	if err != nil {
+		return nil, fmt.Errorf("invalid agent YAML: %w", err)
+	}
+	if a.ID == "" {
+		a.ID = agent.NewID()
+	}
+	if err := s.ensureUniqueName(a.ID, a.Name); err != nil {
+		return nil, err
+	}
+	if err := s.writeAgent(a); err != nil {
+		return nil, err
+	}
+	s.Logger.Info("log.agent.created", "id", a.ID, "name", a.Name)
+	return a, nil
+}
+
+// SaveAgent validates and persists an agent YAML file under agents/{id}.yaml.
+// The display name may differ from the id (rename-safe).
+func (s *Service) SaveAgent(id string, yamlContent []byte) error {
+	id = NormalizeAgentName(id)
+	if id == "" {
+		return fmt.Errorf("agent id is required")
 	}
 	if len(yamlContent) == 0 {
 		return fmt.Errorf("agent YAML content is required")
@@ -64,32 +90,71 @@ func (s *Service) SaveAgent(name string, yamlContent []byte) error {
 	if err != nil {
 		return fmt.Errorf("invalid agent YAML: %w", err)
 	}
-	if a.Name != name {
-		return fmt.Errorf("agent name %q does not match URL %q", a.Name, name)
+	if a.ID == "" {
+		a.ID = id
 	}
-	path := filepath.Join(s.AgentsDir, name+".yaml")
-	if err := os.WriteFile(path, yamlContent, 0o644); err != nil {
-		return fmt.Errorf("write agent file: %w", err)
+	if a.ID != id {
+		return fmt.Errorf("agent id %q does not match URL %q", a.ID, id)
 	}
-	s.Logger.Info("agent saved", "name", name)
+	if err := s.ensureUniqueName(a.ID, a.Name); err != nil {
+		return err
+	}
+	if err := s.writeAgent(a); err != nil {
+		return err
+	}
+	s.Logger.Info("log.agent.saved", "id", a.ID, "name", a.Name)
 	return nil
 }
 
-// DeleteAgent removes an agent YAML file. Returns os.ErrNotExist if not found.
-func (s *Service) DeleteAgent(name string) error {
-	name = NormalizeAgentName(name)
-	if name == "" {
-		return fmt.Errorf("agent name is required")
+func (s *Service) writeAgent(a *agent.Agent) error {
+	if err := os.MkdirAll(s.AgentsDir, 0o755); err != nil {
+		return fmt.Errorf("create agents dir: %w", err)
 	}
-	path := filepath.Join(s.AgentsDir, name+".yaml")
+	data, err := yaml.Marshal(a)
+	if err != nil {
+		return fmt.Errorf("marshal agent: %w", err)
+	}
+	path := filepath.Join(s.AgentsDir, a.ID+".yaml")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write agent file: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) ensureUniqueName(id, name string) error {
+	result, err := agent.LoadAll(s.AgentsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, other := range result.Agents {
+		if other.ID == id {
+			continue
+		}
+		if other.Name == name {
+			return fmt.Errorf("agent name %q already used by id %q", name, other.ID)
+		}
+	}
+	return nil
+}
+
+// DeleteAgent removes an agent YAML file by id. Returns os.ErrNotExist if not found.
+func (s *Service) DeleteAgent(id string) error {
+	id = NormalizeAgentName(id)
+	if id == "" {
+		return fmt.Errorf("agent id is required")
+	}
+	path := filepath.Join(s.AgentsDir, id+".yaml")
 	if err := os.Remove(path); err != nil {
 		return err
 	}
-	s.Logger.Info("agent deleted", "name", name)
+	s.Logger.Info("log.agent.deleted", "id", id)
 	return nil
 }
 
-// NormalizeAgentName strips .yaml suffix and normalizes the agent name.
+// NormalizeAgentName strips .yaml suffix and normalizes an agent id or name ref.
 func NormalizeAgentName(name string) string {
 	return strings.TrimSuffix(strings.TrimSpace(name), ".yaml")
 }

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import {
   ChevronLeft,
   ChevronRight,
@@ -38,6 +39,8 @@ export function ReplayToolbar({
   onSpeedChange,
   onSeekProgress,
 }: ReplayToolbarProps) {
+  const { t } = useTranslation()
+
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const ratio = (e.clientX - rect.left) / rect.width
@@ -51,7 +54,7 @@ export function ReplayToolbar({
         size="icon"
         className="h-7 w-7"
         onClick={onReset}
-        title="重置"
+        title={t("replay.reset")}
       >
         <RotateCcw className="h-3.5 w-3.5" />
       </Button>
@@ -61,7 +64,7 @@ export function ReplayToolbar({
         size="icon"
         className="h-7 w-7"
         onClick={onStepBack}
-        title="后退"
+        title={t("replay.back")}
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
@@ -71,7 +74,7 @@ export function ReplayToolbar({
         size="icon"
         className="h-7 w-7"
         onClick={onToggle}
-        title={isPlaying ? "暂停" : "播放"}
+        title={isPlaying ? t("replay.pause") : t("replay.play")}
       >
         {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
       </Button>
@@ -81,7 +84,7 @@ export function ReplayToolbar({
         size="icon"
         className="h-7 w-7"
         onClick={onStepForward}
-        title="前进"
+        title={t("replay.forward")}
       >
         <ChevronRight className="h-4 w-4" />
       </Button>

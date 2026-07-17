@@ -24,14 +24,28 @@ type ToolCall struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
+// ContentPart represents a multimodal content block (text or image).
+type ContentPart struct {
+	Type     string `json:"type"`                // "text" | "image_url"
+	Text     string `json:"text,omitempty"`      // for type="text"
+	ImageURL *ImageURL `json:"image_url,omitempty"` // for type="image_url"
+}
+
+// ImageURL holds an image reference (data URL or HTTP URL).
+type ImageURL struct {
+	URL    string `json:"url"`
+	Detail string `json:"detail,omitempty"` // "low" | "high" | "auto"
+}
+
 // Message is a conversation turn.
 type Message struct {
-	Role              Role       `json:"role"`
-	Content           string     `json:"content,omitempty"`
-	ReasoningContent  string     `json:"reasoning_content,omitempty"`
-	ToolCalls         []ToolCall `json:"tool_calls,omitempty"`
-	ToolCallID        string     `json:"tool_call_id,omitempty"`
-	Name              string     `json:"name,omitempty"`
+	Role              Role          `json:"role"`
+	Content           string        `json:"content,omitempty"`
+	ContentParts      []ContentPart `json:"content_parts,omitempty"` // multimodal; when set, takes precedence over Content
+	ReasoningContent  string        `json:"reasoning_content,omitempty"`
+	ToolCalls         []ToolCall    `json:"tool_calls,omitempty"`
+	ToolCallID        string        `json:"tool_call_id,omitempty"`
+	Name              string        `json:"name,omitempty"`
 }
 
 // ToolDefinition describes a tool for the LLM.

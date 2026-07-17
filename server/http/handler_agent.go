@@ -15,6 +15,7 @@ import (
 
 // AgentListItem is the HTTP DTO for GET /v1/agents.
 type AgentListItem struct {
+	ID       string   `json:"id"`
 	Name     string   `json:"name"`
 	Provider string   `json:"provider"`
 	Model    string   `json:"model"`
@@ -22,8 +23,9 @@ type AgentListItem struct {
 	MaxTurns int      `json:"max_turns"`
 }
 
-// AgentDetail is the HTTP DTO for GET /v1/agents/:name.
+// AgentDetail is the HTTP DTO for GET /v1/agents/:id.
 type AgentDetail struct {
+	ID            string                  `json:"id"`
 	Name          string                  `json:"name"`
 	Provider      string                  `json:"provider"`
 	Model         string                  `json:"model"`
@@ -40,6 +42,7 @@ func (s *Server) handleAgents(c *gin.Context) {
 	items := make([]AgentListItem, len(summaries))
 	for i, a := range summaries {
 		items[i] = AgentListItem{
+			ID:       a.ID,
 			Name:     a.Name,
 			Provider: a.Provider,
 			Model:    a.Model,
@@ -51,18 +54,19 @@ func (s *Server) handleAgents(c *gin.Context) {
 }
 
 func (s *Server) handleAgentGet(c *gin.Context) {
-	name := c.Param("name")
-	a, err := s.svc.GetAgent(name)
+	id := c.Param("id")
+	a, err := s.svc.GetAgent(id)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "agent not found"})
+			respondError(c, http.StatusNotFound, "not_found", "api.error.agent_not_found")
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"code": "agent_error", "message": err.Error()})
+		respondErrorDetails(c, http.StatusBadRequest, "agent_error", "api.error.agent_error", err.Error())
 		return
 	}
 
 	c.JSON(http.StatusOK, AgentDetail{
+		ID:            a.ID,
 		Name:          a.Name,
 		Provider:      a.Provider,
 		Model:         a.Model,
@@ -75,40 +79,54 @@ func (s *Server) handleAgentGet(c *gin.Context) {
 	})
 }
 
-func (s *Server) handleAgentPut(c *gin.Context) {
-	name := c.Param("name")
+func (s *Server) handleAgentCreate(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": err.Error()})
+		respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request", err.Error())
+		return
+	}
+	a, err := s.svc.CreateAgent(body)
+	if err != nil {
+		respondErrorDetails(c, http.StatusBadRequest, "save_error", "api.error.save_error", err.Error())
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"status": "ok", "id": a.ID, "name": a.Name})
+}
+
+func (s *Server) handleAgentPut(c *gin.Context) {
+	id := c.Param("id")
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request", err.Error())
 		return
 	}
 
-	if err := s.svc.SaveAgent(name, body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "save_error", "message": err.Error()})
+	if err := s.svc.SaveAgent(id, body); err != nil {
+		respondErrorDetails(c, http.StatusBadRequest, "save_error", "api.error.save_error", err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "name": service.NormalizeAgentName(name)})
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "id": service.NormalizeAgentName(id)})
 }
 
 func (s *Server) handleAgentDelete(c *gin.Context) {
-	name := c.Param("name")
-	if err := s.svc.DeleteAgent(name); err != nil {
+	id := c.Param("id")
+	if err := s.svc.DeleteAgent(id); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			c.JSON(http.StatusNotFound, gin.H{"code": "not_found", "message": "agent not found"})
+			respondError(c, http.StatusNotFound, "not_found", "api.error.agent_not_found")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "delete_error", "message": err.Error()})
+		respondErrorDetails(c, http.StatusInternalServerError, "delete_error", "api.error.delete_error", err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "name": service.NormalizeAgentName(name)})
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "id": service.NormalizeAgentName(id)})
 }
 
 func (s *Server) handleAgentValidate(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "cannot read body"})
+		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.cannot_read_body")
 		return
 	}
 
@@ -131,7 +149,7 @@ func (s *Server) handleAgentValidate(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"valid": true,
+		"id":    a.ID,
 		"name":  a.Name,
 	})
 }
-

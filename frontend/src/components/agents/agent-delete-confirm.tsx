@@ -1,29 +1,31 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { AlertTriangle, Loader2, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { deleteAgent } from "@/lib/api"
 
 interface AgentDeleteConfirmProps {
-  agentName: string | null
+  agentId: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
   onDeleted?: () => void
 }
 
-export function AgentDeleteConfirm({ agentName, open, onOpenChange, onDeleted }: AgentDeleteConfirmProps) {
+export function AgentDeleteConfirm({ agentId, open, onOpenChange, onDeleted }: AgentDeleteConfirmProps) {
+  const { t } = useTranslation()
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleDelete = async () => {
-    if (!agentName) return
+    if (!agentId) return
     setDeleting(true); setError(null)
     try {
-      await deleteAgent(agentName)
+      await deleteAgent(agentId)
       onDeleted?.()
       onOpenChange(false)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "删除失败")
+      setError(err instanceof Error ? err.message : t("agent.errDelete"))
     } finally {
       setDeleting(false)
     }
@@ -33,20 +35,21 @@ export function AgentDeleteConfirm({ agentName, open, onOpenChange, onDeleted }:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm border-border bg-card">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 font-heading text-sm tracking-tight">
-            <AlertTriangle className="h-4 w-4 text-destructive" /> 删除 Agent
+          <DialogTitle className="flex items-center gap-2 text-sm">
+            <AlertTriangle className="h-4 w-4 text-destructive" /> {t("agent.deleteTitle")}
           </DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
-            确定要删除 Agent <span className="font-mono font-medium text-foreground">{agentName}</span> 吗？此操作不可撤销。
-          </p>
-          {error && <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-2.5 text-xs text-destructive">{error}</div>}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" className="rounded-lg text-xs" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button variant="destructive" size="sm" className="gap-1.5 rounded-lg text-xs" onClick={handleDelete} disabled={deleting}>
-            {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} 删除
+        <p className="text-xs text-muted-foreground">
+          {t("agent.deleteConfirm", { name: agentId })}
+        </p>
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" size="sm" className="h-8 rounded-xl text-xs" onClick={() => onOpenChange(false)} disabled={deleting}>
+            {t("common.cancel")}
+          </Button>
+          <Button variant="destructive" size="sm" className="h-8 gap-1.5 rounded-xl text-xs" onClick={handleDelete} disabled={deleting}>
+            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            {t("common.delete")}
           </Button>
         </DialogFooter>
       </DialogContent>

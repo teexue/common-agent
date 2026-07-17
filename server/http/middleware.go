@@ -31,7 +31,7 @@ func (s *Server) authMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusUnauthorized, gin.H{"code": "unauthorized", "message": "invalid or missing API key"})
+		respondError(c, http.StatusUnauthorized, "unauthorized", "api.error.unauthorized")
 		c.Abort()
 	}
 }

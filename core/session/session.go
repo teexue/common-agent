@@ -3,8 +3,10 @@ package session
 import (
 	"crypto/rand"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/teexue/common-agent/core/provider"
 )
@@ -16,6 +18,7 @@ type Session struct {
 	mu        sync.RWMutex
 	ID        string
 	Agent     string
+	Title     string
 	Messages  []provider.Message
 	Metadata  map[string]string
 	CreatedAt time.Time
@@ -73,6 +76,26 @@ func (s *Session) Clear() {
 	s.touch()
 }
 
+// GetTitle returns the session title.
+func (s *Session) GetTitle() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.Title
+}
+
+// EnsureTitle sets the title from prompt if the session has no title yet.
+func (s *Session) EnsureTitle(prompt string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.Title != "" {
+		return
+	}
+	if title := TitleFromPrompt(prompt); title != "" {
+		s.Title = title
+		s.touch()
+	}
+}
+
 // GetMetadata returns a copy of the metadata map.
 func (s *Session) GetMetadata() map[string]string {
 	s.mu.RLock()
@@ -93,6 +116,23 @@ func (s *Session) SetMetadata(key, value string) {
 	}
 	s.Metadata[key] = value
 	s.touch()
+}
+
+// titleMaxRunes is the maximum display length for an auto-generated title.
+const titleMaxRunes = 40
+
+// TitleFromPrompt derives a short session title from the first user prompt.
+func TitleFromPrompt(prompt string) string {
+	s := strings.TrimSpace(prompt)
+	if s == "" {
+		return ""
+	}
+	s = strings.Join(strings.Fields(s), " ")
+	if utf8.RuneCountInString(s) <= titleMaxRunes {
+		return s
+	}
+	runes := []rune(s)
+	return string(runes[:titleMaxRunes]) + "…"
 }
 
 func newID(prefix string) string {

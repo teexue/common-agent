@@ -6,9 +6,18 @@ import (
 	"testing"
 
 	"github.com/teexue/common-agent/core/event"
+	"github.com/teexue/common-agent/core/i18n"
 )
 
 func TestRendererToolFlow(t *testing.T) {
+	bundle, err := i18n.NewBundle(i18n.LocaleEn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev := i18n.Global()
+	i18n.SetGlobal(bundle)
+	t.Cleanup(func() { i18n.SetGlobal(prev) })
+
 	var buf bytes.Buffer
 	r := NewRenderer(&buf, DefaultRenderOptions)
 

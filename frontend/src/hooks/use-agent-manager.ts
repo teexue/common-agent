@@ -22,10 +22,10 @@ export function useAgentManager({ onAgentsChanged }: UseAgentManagerOptions = {}
   useEffect(() => { refreshAgents() }, [refreshAgents])
   useAgentEvents({ onAgentChange: useCallback(() => refreshAgents(), [refreshAgents]) })
 
-  const handleViewAgent = useCallback((name: string) => setAgentDetailName(name), [])
-  const handleEditAgent = useCallback((name: string) => { setAgentEditorName(name); setAgentEditorOpen(true) }, [])
+  const handleViewAgent = useCallback((id: string) => setAgentDetailName(id), [])
+  const handleEditAgent = useCallback((id: string) => { setAgentEditorName(id); setAgentEditorOpen(true) }, [])
   const handleCreateAgent = useCallback(() => { setAgentEditorName(null); setAgentEditorOpen(true) }, [])
-  const handleDeleteAgent = useCallback((name: string) => setAgentToDelete(name), [])
+  const handleDeleteAgent = useCallback((id: string) => setAgentToDelete(id), [])
   const handleAgentSaved = useCallback(() => refreshAgents(), [refreshAgents])
   const handleAgentDeleted = useCallback(() => refreshAgents(), [refreshAgents])
 

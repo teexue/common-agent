@@ -14,6 +14,7 @@ import (
 	"github.com/chzyer/readline"
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/config"
+	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
@@ -36,25 +37,25 @@ type chatState struct {
 
 func runChat(args []string, logger *slog.Logger) {
 	fs := flag.NewFlagSet("chat", flag.ExitOnError)
-	agentName := fs.String("agent", "", "agent name (default from config)")
-	homeFlag := fs.String("home", "", "config home")
-	mock := fs.Bool("mock", false, "use mock provider")
+	agentName := fs.String("agent", "", i18n.T("cli.flag.agent"))
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home_short"))
+	mock := fs.Bool("mock", false, i18n.T("cli.flag.mock"))
 	_ = fs.Parse(args)
 
 	paths, err := resolvePaths(*homeFlag)
 	if err != nil {
-		logger.Error("resolve paths", "error", err)
+		logger.Error("log.cmd.resolve_paths", "error", err)
 		os.Exit(1)
 	}
 	catalog, _, err := bootstrapRuntime(paths, *mock, logger)
 	if err != nil {
-		logger.Error("bootstrap", "error", err)
+		logger.Error("log.cmd.bootstrap", "error", err)
 		os.Exit(1)
 	}
 
 	settings, err := config.LoadSettings(paths.home)
 	if err != nil {
-		logger.Error("load settings", "error", err)
+		logger.Error("log.config.load_settings", "error", err)
 		os.Exit(1)
 	}
 	name := *agentName
@@ -64,7 +65,7 @@ func runChat(args []string, logger *slog.Logger) {
 
 	state, err := newChatState(catalog, *mock, paths, name)
 	if err != nil {
-		logger.Error("init chat", "error", err)
+		logger.Error("log.chat.init", "error", err)
 		os.Exit(1)
 	}
 
@@ -72,7 +73,7 @@ func runChat(args []string, logger *slog.Logger) {
 
 	rl, err := newChatReadline(paths.home)
 	if err != nil {
-		logger.Error("readline", "error", err)
+		logger.Error("log.chat.readline", "error", err)
 		os.Exit(1)
 	}
 	defer rl.Close()
@@ -177,7 +178,7 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 	parts := strings.Fields(line)
 	switch parts[0] {
 	case "/exit", "/quit":
-		fmt.Println(tui.Muted("再见"))
+		fmt.Println(tui.Muted(i18n.T("tui.chat.goodbye")))
 		return true
 	case "/help":
 		tui.PrintHelp()
@@ -185,20 +186,20 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 	case "/clear":
 		if state.store != nil {
 			if err := state.store.Save(state.sess); err != nil {
-				fmt.Println(tui.Error(fmt.Sprintf("保存会话失败: %v", err)))
+				fmt.Println(tui.Error(i18n.T("tui.chat.save_session_failed", "error", err.Error())))
 			} else {
-				fmt.Println(tui.Muted(fmt.Sprintf("会话 %s 已保存", state.sess.ID)))
+				fmt.Println(tui.Muted(i18n.T("tui.chat.session_saved", "id", state.sess.ID)))
 			}
 		}
 		state.sess = session.New(state.agent.Name)
-		fmt.Println(tui.Success("会话已清空"))
+		fmt.Println(tui.Success(i18n.T("tui.chat.session_cleared")))
 		return false
 	case "/agent":
 		return handleAgentCommand(parts, state)
 	case "/tools":
 		return handleToolsCommand(parts, state)
 	default:
-		fmt.Println(tui.Muted("未知命令，输入 /help"))
+		fmt.Println(tui.Muted(i18n.T("tui.chat.unknown_command")))
 		return false
 	}
 }
@@ -212,10 +213,10 @@ func handleAgentCommand(parts []string, state *chatState) bool {
 			return false
 		}
 		if len(names) == 0 {
-			fmt.Println(tui.Muted("没有可用的 agent"))
+			fmt.Println(tui.Muted(i18n.T("tui.chat.no_agents")))
 			return false
 		}
-		fmt.Println(tui.Muted("可用 agent:"))
+		fmt.Println(tui.Muted(i18n.T("tui.chat.agents_header")))
 		for _, n := range names {
 			marker := " "
 			if n == state.agent.Name {
@@ -238,7 +239,7 @@ func handleAgentCommand(parts []string, state *chatState) bool {
 	state.agent = loaded
 	state.provider = p
 	state.sess = session.New(loaded.Name)
-	fmt.Println(tui.Success(fmt.Sprintf("已切换 %s · %s · %s", loaded.Name, loaded.Provider, loaded.Model)))
+	fmt.Println(tui.Success(i18n.T("tui.chat.agent_switched", "agent", loaded.Name, "provider", loaded.Provider, "model", loaded.Model)))
 	return false
 }
 
@@ -250,15 +251,15 @@ func handleToolsCommand(parts []string, state *chatState) bool {
 			fmt.Println(tui.Error(err.Error()))
 			return false
 		}
-		fmt.Println(tui.Success(fmt.Sprintf("%s 工具验证通过: %v", a.Name, a.Tools)))
+		fmt.Println(tui.Success(i18n.T("tui.chat.tools_validated", "agent", a.Name, "tools", fmt.Sprint(a.Tools))))
 		return false
 	}
 	names := state.reg.Names()
 	if len(names) == 0 {
-		fmt.Println(tui.Muted("没有已注册的工具"))
+		fmt.Println(tui.Muted(i18n.T("tui.chat.no_tools")))
 		return false
 	}
-	fmt.Println(tui.Muted(fmt.Sprintf("已注册工具 (%d):", len(names))))
+	fmt.Println(tui.Muted(i18n.T("tui.chat.tools_header", "count", len(names))))
 	for _, t := range state.reg.List() {
 		fmt.Printf("  %-16s %s\n", tui.Muted(t.Name()), t.Description())
 	}

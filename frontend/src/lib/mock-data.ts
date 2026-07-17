@@ -10,6 +10,7 @@ import type {
 
 export const MOCK_AGENTS: AgentInfo[] = [
   {
+    id: "agt_general",
     name: "general-chat",
     provider: "anthropic",
     model: "claude-sonnet-4-20250514",
@@ -18,6 +19,7 @@ export const MOCK_AGENTS: AgentInfo[] = [
     systemPrompt: "You are a helpful assistant.",
   },
   {
+    id: "agt_review",
     name: "code-review",
     provider: "openai",
     model: "gpt-4o",
@@ -26,6 +28,7 @@ export const MOCK_AGENTS: AgentInfo[] = [
     systemPrompt: "You are a code review assistant. Analyze code for bugs, style issues, and improvements.",
   },
   {
+    id: "agt_data",
     name: "data-analysis",
     provider: "anthropic",
     model: "claude-sonnet-4-20250514",

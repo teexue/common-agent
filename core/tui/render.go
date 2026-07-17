@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/teexue/common-agent/core/event"
+	"github.com/teexue/common-agent/core/i18n"
 )
 
 // RenderOptions controls terminal output behavior.
@@ -81,9 +82,9 @@ func (r *Renderer) render(ev event.Event) {
 		if !r.opts.QuietDone {
 			status := ev.Status
 			if status == "" {
-				status = "unknown"
+				status = i18n.T("tui.done.status_unknown")
 			}
-			_, _ = fmt.Fprintln(r.out, Muted(fmt.Sprintf("done · %s · %d turns", status, ev.Turns)))
+			_, _ = fmt.Fprintln(r.out, Muted(i18n.T("tui.done.footer", "status", status, "turns", ev.Turns)))
 		}
 		r.opened = false
 	}
@@ -95,7 +96,7 @@ func (r *Renderer) ensureAssistantBlock() {
 	}
 	r.opened = true
 	_, _ = fmt.Fprintln(r.out)
-	_, _ = fmt.Fprintln(r.out, accentStyle.Render("Assistant"))
+	_, _ = fmt.Fprintln(r.out, accentStyle.Render(i18n.T("tui.assistant.label")))
 }
 
 func (r *Renderer) closeLine() {
@@ -145,29 +146,30 @@ func wrapToolResult(s string) []string {
 // PrintWelcome shows a compact session header.
 func PrintWelcome(agentName, providerName, model string) {
 	border := borderStyle
-	title := titleStyle.Render(" common-agent ")
+	title := titleStyle.Render(i18n.T("tui.welcome.title"))
 	line := strings.Repeat("─", 42)
+	titlePlain := i18n.T("tui.welcome.title")
 
 	top := border.Render("╭" + line + "╮")
 	fmt.Println(top)
-	fmt.Println(border.Render("│") + title + strings.Repeat(" ", 42-len(" common-agent ")) + border.Render("│"))
-	fmt.Println(border.Render("│") + mutedStyle.Render(fmt.Sprintf(" agent    %-28s", agentName)) + border.Render("│"))
-	fmt.Println(border.Render("│") + mutedStyle.Render(fmt.Sprintf(" provider %-28s", providerName)) + border.Render("│"))
-	fmt.Println(border.Render("│") + mutedStyle.Render(fmt.Sprintf(" model    %-28s", model)) + border.Render("│"))
+	fmt.Println(border.Render("│") + title + strings.Repeat(" ", 42-len(titlePlain)) + border.Render("│"))
+	fmt.Println(border.Render("│") + mutedStyle.Render(fmt.Sprintf("%-37s", i18n.T("tui.welcome.agent", "value", agentName))) + border.Render("│"))
+	fmt.Println(border.Render("│") + mutedStyle.Render(fmt.Sprintf("%-37s", i18n.T("tui.welcome.provider", "value", providerName))) + border.Render("│"))
+	fmt.Println(border.Render("│") + mutedStyle.Render(fmt.Sprintf("%-37s", i18n.T("tui.welcome.model", "value", model))) + border.Render("│"))
 	fmt.Println(border.Render("╰" + line + "╯"))
-	fmt.Println(hintStyle.Render("  /help 命令  ·  Ctrl+C 退出  ·  Enter 发送"))
+	fmt.Println(hintStyle.Render(i18n.T("tui.welcome.hint")))
 }
 
 // PrintHelp shows slash commands.
 func PrintHelp() {
 	fmt.Println()
-	fmt.Println(accentStyle.Render("命令"))
+	fmt.Println(accentStyle.Render(i18n.T("tui.help.title")))
 	rows := []struct{ cmd, desc string }{
-		{"/help", "显示帮助"},
-		{"/exit", "退出"},
-		{"/clear", "清空会话"},
-		{"/agent [name]", "切换或列出 agent"},
-		{"/tools [agent]", "列出或验证工具"},
+		{"/help", i18n.T("tui.help.help")},
+		{"/exit", i18n.T("tui.help.exit")},
+		{"/clear", i18n.T("tui.help.clear")},
+		{"/agent [name]", i18n.T("tui.help.agent")},
+		{"/tools [agent]", i18n.T("tui.help.tools")},
 	}
 	for _, row := range rows {
 		fmt.Printf("  %-22s %s\n", toolStyle.Render(row.cmd), mutedStyle.Render(row.desc))

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Loader2, Play } from "lucide-react"
 import {
   Dialog,
@@ -25,6 +26,7 @@ interface SessionReplayProps {
 }
 
 export function SessionReplay({ sessionId, open, onOpenChange }: SessionReplayProps) {
+  const { t } = useTranslation()
   const [events, setEvents] = useState<ReplayEvent[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,7 +81,7 @@ export function SessionReplay({ sessionId, open, onOpenChange }: SessionReplayPr
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 font-heading text-sm tracking-tight">
               <Play className="h-4 w-4 text-primary" />
-              会话回放
+              {t("replay.title")}
             </DialogTitle>
           </DialogHeader>
 
@@ -107,7 +109,7 @@ export function SessionReplay({ sessionId, open, onOpenChange }: SessionReplayPr
 
           {!loading && !error && events.length === 0 && (
             <div className="flex items-center justify-center py-12 text-xs text-muted-foreground">
-              暂无回放事件
+              {t("replay.noEvents")}
             </div>
           )}
 
@@ -149,8 +151,6 @@ export function SessionReplay({ sessionId, open, onOpenChange }: SessionReplayPr
   )
 }
 
-// ─── Turn Filter ──────────────────────────────────────────────────
-
 function TurnFilter({ fromTurn, toTurn, onFromChange, onToChange, count }: {
   fromTurn: string
   toTurn: string
@@ -158,11 +158,12 @@ function TurnFilter({ fromTurn, toTurn, onFromChange, onToChange, count }: {
   onToChange: (v: string) => void
   count: number
 }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-end gap-3">
       <div className="flex flex-col gap-1">
         <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          起始轮次
+          {t("replay.fromTurn")}
         </Label>
         <Input
           value={fromTurn}
@@ -174,17 +175,17 @@ function TurnFilter({ fromTurn, toTurn, onFromChange, onToChange, count }: {
       </div>
       <div className="flex flex-col gap-1">
         <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          结束轮次
+          {t("replay.toTurn")}
         </Label>
         <Input
           value={toTurn}
           onChange={(e) => onToChange(e.target.value)}
-          placeholder="全部"
+          placeholder={t("replay.all")}
           type="number"
           className="h-8 w-24 rounded-lg font-mono text-xs"
         />
       </div>
-      <span className="pb-1.5 text-[10px] text-muted-foreground">共 {count} 条事件</span>
+      <span className="pb-1.5 text-[10px] text-muted-foreground">{t("replay.eventCount", { count })}</span>
     </div>
   )
 }

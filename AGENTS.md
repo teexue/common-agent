@@ -2,7 +2,7 @@
 
 通用 Agent 基座（Go 核心 + React 前端）。
 
-> **权威来源**: 完整编码规范见 [`docs/html/code-standards.html`](docs/html/code-standards.html)。本文档为各 AI 代理（Cursor 等）提供精简指引，如有冲突以 HTML 文档为准。
+> **权威来源**: 完整编码规范见 [`docs/html/code-standards.html`](docs/html/code-standards.html)。本文档为各 AI 代理提供精简指引，如有冲突以 HTML 文档为准。
 
 ## 架构约束（最高优先级）
 

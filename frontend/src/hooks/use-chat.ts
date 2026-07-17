@@ -122,10 +122,14 @@ async function sendRunRequest(
   signal: AbortSignal,
   entryId: string,
   dispatch: (action: ChatAction) => void,
+  images?: { dataUrl: string; name: string }[],
 ) {
   const body: Record<string, unknown> = { agent, prompt, messages }
   if (sessionId) body.session_id = sessionId
   if (workDir) body.workdir = workDir
+  if (images && images.length > 0) {
+    body.images = images.map((img) => ({ data_url: img.dataUrl, name: img.name }))
+  }
 
   const res = await fetch("/v1/agents/run", {
     method: "POST",
@@ -159,7 +163,7 @@ export function useChat() {
   const sessionIdRef = useRef(state.sessionId); sessionIdRef.current = state.sessionId
 
   const sendMessage = useCallback(
-    async (text: string, agent: string, workDir?: string) => {
+    async (text: string, agent: string, workDir?: string, images?: { dataUrl: string; name: string }[]) => {
       abortRef.current?.abort()
       const controller = new AbortController()
       abortRef.current = controller
@@ -171,7 +175,7 @@ export function useChat() {
       dispatch({ type: "START_ASSISTANT", entryId })
 
       try {
-        await sendRunRequest(agent, text, history, sessionIdRef.current, workDir, controller.signal, entryId, dispatch)
+        await sendRunRequest(agent, text, history, sessionIdRef.current, workDir, controller.signal, entryId, dispatch, images)
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === "AbortError") return
         dispatch({ type: "STREAM_ERROR", message: err instanceof Error ? err.message : "Unknown error" })

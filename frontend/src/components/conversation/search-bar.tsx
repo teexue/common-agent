@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,10 +14,11 @@ interface SearchBarProps {
 }
 
 function MatchNav({ matchCount, currentMatch, onPrev, onNext }: Pick<SearchBarProps, "matchCount" | "currentMatch" | "onPrev" | "onNext">) {
+  const { t } = useTranslation()
   return (
     <>
       <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-        {matchCount > 0 ? `${currentMatch + 1}/${matchCount}` : "无匹配"}
+        {matchCount > 0 ? `${currentMatch + 1}/${matchCount}` : t("conversation.noMatch")}
       </span>
       <div className="flex items-center gap-0.5">
         <Button variant="ghost" size="icon-xs" className="h-5 w-5 rounded-md" onClick={onPrev} disabled={matchCount === 0}>
@@ -31,6 +33,7 @@ function MatchNav({ matchCount, currentMatch, onPrev, onNext }: Pick<SearchBarPr
 }
 
 export function SearchBar({ onSearch, onClear, matchCount, currentMatch, onPrev, onNext }: SearchBarProps) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -50,7 +53,7 @@ export function SearchBar({ onSearch, onClear, matchCount, currentMatch, onPrev,
     <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-sm">
       <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       <Input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleKeyDown}
-        placeholder="搜索消息..." className="h-6 flex-1 border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0" />
+        placeholder={t("conversation.searchPlaceholder")} className="h-6 flex-1 border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0" />
       {query && (
         <>
           <MatchNav {...{ matchCount, currentMatch, onPrev, onNext }} />

@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Check, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -8,6 +9,7 @@ import {
 } from "@/components/ui/tooltip"
 
 export function CopyButton({ text }: { text: string }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
   const handleCopy = async () => {
@@ -34,7 +36,7 @@ export function CopyButton({ text }: { text: string }) {
           <Copy className="h-3.5 w-3.5" />
         )}
       </TooltipTrigger>
-      <TooltipContent>{copied ? "已复制" : "复制"}</TooltipContent>
+      <TooltipContent>{copied ? t("common.copied") : t("common.copy")}</TooltipContent>
     </Tooltip>
   )
 }

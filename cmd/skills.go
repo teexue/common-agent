@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/teexue/common-agent/core/config"
+	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/skill"
 )
 
@@ -24,20 +25,14 @@ func runSkills(args []string) {
 	case "info":
 		runSkillsInfo(args[1:])
 	default:
-		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", args[0])
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.unknown_subcommand", "name", args[0]))
 		printSkillsUsage()
 		os.Exit(1)
 	}
 }
 
 func printSkillsUsage() {
-	fmt.Println("Usage: agent-server skills <subcommand>")
-	fmt.Println()
-	fmt.Println("Subcommands:")
-	fmt.Println("  list               List installed skills")
-	fmt.Println("  validate           Validate all skill manifests")
-	fmt.Println("  info <name>        Show skill details")
-	fmt.Println()
+	fmt.Print(i18n.T("cli.usage.skills"))
 }
 
 func skillsDir(home string) string {
@@ -46,7 +41,7 @@ func skillsDir(home string) string {
 
 func runSkillsList(args []string) {
 	fs := flag.NewFlagSet("skills list", flag.ExitOnError)
-	homeFlag := fs.String("home", "", "config home (default ~/.common-agent)")
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home"))
 	_ = fs.Parse(args)
 
 	home := resolveHome(*homeFlag)
@@ -55,21 +50,22 @@ func runSkillsList(args []string) {
 	loader := skill.NewLoader(dir)
 	skills, err := loader.LoadAll()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+		fmt.Fprintln(os.Stderr, i18n.T("cli.warning.generic", "error", err.Error()))
 	}
 
 	if len(skills) == 0 {
-		fmt.Println("No skills installed.")
-		fmt.Printf("Skills directory: %s\n", dir)
+		fmt.Println(i18n.T("cli.skills.none"))
+		fmt.Println(i18n.T("cli.skills.directory", "path", dir))
 		return
 	}
 
-	fmt.Printf("Installed skills (%d):\n\n", len(skills))
+	fmt.Println(i18n.T("cli.skills.installed_header", "count", len(skills)))
+	fmt.Println()
 	for _, s := range skills {
 		toolNames := s.ToolNames()
 		fmt.Printf("  %-20s v%-8s [%s] %s\n", s.Name, s.Version, s.Format, s.Description)
 		if len(toolNames) > 0 {
-			fmt.Printf("  %-20s tools: %v\n", "", toolNames)
+			fmt.Println(i18n.T("cli.skills.tools_line", "name", fmt.Sprintf("%-20s", ""), "tools", fmt.Sprint(toolNames)))
 		}
 		fmt.Println()
 	}
@@ -77,7 +73,7 @@ func runSkillsList(args []string) {
 
 func runSkillsValidate(args []string) {
 	fs := flag.NewFlagSet("skills validate", flag.ExitOnError)
-	homeFlag := fs.String("home", "", "config home (default ~/.common-agent)")
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home"))
 	_ = fs.Parse(args)
 
 	home := resolveHome(*homeFlag)
@@ -86,29 +82,29 @@ func runSkillsValidate(args []string) {
 	loader := skill.NewLoader(dir)
 	skills, err := loader.LoadAll()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: some skills failed to load: %v\n", err)
+		fmt.Fprintln(os.Stderr, i18n.T("cli.skills.load_warning", "error", err.Error()))
 	}
 
 	if len(skills) == 0 {
-		fmt.Println("No skills found to validate.")
+		fmt.Println(i18n.T("cli.skills.none_to_validate"))
 		return
 	}
 
 	exitCode := 0
 	for _, s := range skills {
 		toolNames := s.ToolNames()
-		fmt.Printf("OK   %s (v%s, [%s], tools=%d)\n", s.Name, s.Version, s.Format, len(toolNames))
+		fmt.Println(i18n.T("cli.skills.validate_ok", "name", s.Name, "version", s.Version, "format", s.Format, "tools", len(toolNames)))
 	}
 	os.Exit(exitCode)
 }
 
 func runSkillsInfo(args []string) {
 	fs := flag.NewFlagSet("skills info", flag.ExitOnError)
-	homeFlag := fs.String("home", "", "config home (default ~/.common-agent)")
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home"))
 	_ = fs.Parse(args)
 
 	if fs.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "usage: agent-server skills info <name>")
+		fmt.Fprintln(os.Stderr, i18n.T("cli.usage.skills_info"))
 		os.Exit(1)
 	}
 	name := fs.Arg(0)
@@ -119,45 +115,45 @@ func runSkillsInfo(args []string) {
 	loader := skill.NewLoader(dir)
 	s, err := loader.LoadByName(name)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.generic", "error", err.Error()))
 		os.Exit(1)
 	}
 
-	fmt.Printf("Name:        %s\n", s.Name)
-	fmt.Printf("Version:     %s\n", s.Version)
-	fmt.Printf("Format:      %s\n", s.Format)
-	fmt.Printf("Description: %s\n", s.Description)
-	fmt.Printf("Directory:   %s\n", s.Dir)
+	fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.name"), s.Name)
+	fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.version"), s.Version)
+	fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.format"), s.Format)
+	fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.description"), s.Description)
+	fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.directory"), s.Dir)
 
 	if s.MDManifest != nil {
 		fm := s.MDManifest.Frontmatter
 		if fm.License != "" {
-			fmt.Printf("License:     %s\n", fm.License)
+			fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.license"), fm.License)
 		}
 		if fm.Compatibility != "" {
-			fmt.Printf("Compat:      %s\n", fm.Compatibility)
+			fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.compat"), fm.Compatibility)
 		}
 		if len(fm.Metadata) > 0 {
-			fmt.Printf("Metadata:    %v\n", fm.Metadata)
+			fmt.Printf("%-12s %v\n", i18n.T("cli.skills.info.metadata"), fm.Metadata)
 		}
 		if fm.AllowedTools != "" {
-			fmt.Printf("Allowed:     %s\n", fm.AllowedTools)
+			fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.allowed"), fm.AllowedTools)
 		}
 		if s.Body() != "" {
-			fmt.Printf("\n--- Instructions ---\n%s\n", s.Body())
+			fmt.Printf("\n%s\n%s\n", i18n.T("cli.skills.info.instructions"), s.Body())
 		}
 	}
 
 	if s.LegacyManifest != nil {
 		m := s.LegacyManifest
 		if m.Author != "" {
-			fmt.Printf("Author:      %s\n", m.Author)
+			fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.author"), m.Author)
 		}
-		fmt.Printf("\nTools (%d):\n", len(m.Tools))
+		fmt.Println(i18n.T("cli.skills.info.tools_header", "count", len(m.Tools)))
 		for _, t := range m.Tools {
 			typ := t.Type
 			if typ == "" {
-				typ = "prompt"
+				typ = i18n.T("cli.skills.tool_type_prompt")
 			}
 			fmt.Printf("  %-20s [%s] %s\n", t.Name, typ, t.Description)
 		}
@@ -170,7 +166,7 @@ func resolveHome(homeFlag string) string {
 	}
 	home, err := config.Home(false)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.generic", "error", err.Error()))
 		os.Exit(1)
 	}
 	return home

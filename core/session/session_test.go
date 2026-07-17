@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"strings"
 	"sync"
 	"testing"
 
@@ -59,6 +60,36 @@ func TestClear(t *testing.T) {
 	s.Clear()
 	if len(s.GetMessages()) != 0 {
 		t.Fatal("expected empty messages after clear")
+	}
+}
+
+func TestTitleFromPrompt(t *testing.T) {
+	if got := session.TitleFromPrompt("  "); got != "" {
+		t.Fatalf("empty prompt: got %q", got)
+	}
+	if got := session.TitleFromPrompt("  hello   world  "); got != "hello world" {
+		t.Fatalf("normalize: got %q", got)
+	}
+	long := strings.Repeat("标题", 30)
+	title := session.TitleFromPrompt(long)
+	runes := []rune(title)
+	if len(runes) != 41 {
+		t.Fatalf("title rune count = %d, want 41", len(runes))
+	}
+	if runes[len(runes)-1] != '…' {
+		t.Fatalf("expected ellipsis suffix, got %q", title)
+	}
+}
+
+func TestEnsureTitle(t *testing.T) {
+	s := session.New("demo")
+	s.EnsureTitle("first prompt")
+	if s.GetTitle() != "first prompt" {
+		t.Fatalf("title = %q, want first prompt", s.GetTitle())
+	}
+	s.EnsureTitle("second prompt should be ignored")
+	if s.GetTitle() != "first prompt" {
+		t.Fatalf("title should not change, got %q", s.GetTitle())
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 // Settings holds user-level defaults.
 type Settings struct {
 	DefaultAgent string `yaml:"default_agent"`
+	Locale       string `yaml:"locale,omitempty"`
 }
 
 // LoadSettings reads config.yaml from home. Missing file returns defaults.
@@ -18,7 +19,7 @@ func LoadSettings(home string) (Settings, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return Settings{DefaultAgent: "chat-assistant"}, nil
+			return Settings{DefaultAgent: "chat-assistant", Locale: "zh-CN"}, nil
 		}
 		return Settings{}, fmt.Errorf("read settings: %w", err)
 	}
@@ -28,6 +29,9 @@ func LoadSettings(home string) (Settings, error) {
 	}
 	if s.DefaultAgent == "" {
 		s.DefaultAgent = "chat-assistant"
+	}
+	if s.Locale == "" {
+		s.Locale = "zh-CN"
 	}
 	return s, nil
 }

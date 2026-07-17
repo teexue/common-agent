@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/tui"
 )
@@ -14,9 +15,9 @@ type CLIApprover struct{}
 
 // Approve prompts the user and returns true if they approve.
 func (CLIApprover) Approve(ctx context.Context, req loop.ApprovalRequest) bool {
-	fmt.Printf("\n%s 工具 %q 请求执行权限\n", tui.Muted("⚠"), req.Tool)
+	fmt.Printf("\n%s%s\n", tui.Muted("⚠"), i18n.T("tui.approval.tool_request", "name", req.Tool))
 	fmt.Printf("%s\n", tui.Muted(string(req.Arguments)))
-	fmt.Printf("%s [Y/n] ", tui.Prompt())
+	fmt.Printf("%s%s", tui.Prompt(), i18n.T("tui.approval.prompt"))
 
 	// Read user input in a goroutine so we can respect context cancellation.
 	ch := make(chan string, 1)

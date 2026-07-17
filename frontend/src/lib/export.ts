@@ -1,41 +1,58 @@
+import i18n from "@/i18n"
 import type { ConversationEntry } from "@/types/agent"
+
+function dateLocale(): string {
+  return i18n.language?.startsWith("zh") ? "zh-CN" : "en"
+}
 
 // ─── Markdown Export ──────────────────────────────────────────────
 
 function formatToolCall(tc: ConversationEntry["toolCalls"] extends (infer T)[] | undefined ? T : never): string[] {
   const lines: string[] = []
   const status = tc.status === "completed" ? "✅" : tc.status === "error" ? "❌" : "⏳"
-  lines.push(`### ${status} 工具: \`${tc.name}\``, "")
+  lines.push(`### ${status} ${i18n.t("export.tool")}: \`${tc.name}\``, "")
   if (tc.input) {
-    lines.push("**输入:**", "```json", JSON.stringify(tc.input, null, 2), "```", "")
+    lines.push(`**${i18n.t("export.input")}:**`, "```json", JSON.stringify(tc.input, null, 2), "```", "")
   }
   if (tc.output !== undefined) {
-    lines.push("**输出:**", "```json", typeof tc.output === "string" ? tc.output : JSON.stringify(tc.output, null, 2), "```", "")
+    lines.push(`**${i18n.t("export.output")}:**`, "```json", typeof tc.output === "string" ? tc.output : JSON.stringify(tc.output, null, 2), "```", "")
   }
   return lines
 }
 
 function formatEntry(entry: ConversationEntry): string[] {
-  if (entry.compactionSummary) return ["---", `> ⚡ 上下文已压缩: ${entry.compactionSummary}`, ""]
+  if (entry.compactionSummary) {
+    return ["---", `> ⚡ ${i18n.t("export.compaction")}: ${entry.compactionSummary}`, ""]
+  }
 
-  const time = new Date(entry.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+  const time = new Date(entry.timestamp).toLocaleTimeString(dateLocale(), {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })
   const lines: string[] = []
 
   if (entry.role === "user") {
-    lines.push(`## 👤 你 _(${time})_`, "", entry.content, "")
+    lines.push(`## 👤 ${i18n.t("export.you")} _(${time})_`, "", entry.content, "")
   }
 
   if (entry.role === "assistant") {
     lines.push(`## 🤖 Agent _(${time})_`, "")
     if (entry.reasoningContent) {
-      lines.push("<details>", "<summary>💭 推理过程</summary>", "", entry.reasoningContent, "", "</details>", "")
+      lines.push("<details>", `<summary>💭 ${i18n.t("export.reasoning")}</summary>`, "", entry.reasoningContent, "", "</details>", "")
     }
     if (entry.toolCalls?.length) {
       for (const tc of entry.toolCalls) lines.push(...formatToolCall(tc))
     }
     if (entry.content) lines.push(entry.content, "")
     if (entry.usage) {
-      lines.push(`_Token 用量: ${entry.usage.inputTokens.toLocaleString()} 输入 / ${entry.usage.outputTokens.toLocaleString()} 输出_`, "")
+      lines.push(
+        `_${i18n.t("export.tokenUsage", {
+          input: entry.usage.inputTokens.toLocaleString(dateLocale()),
+          output: entry.usage.outputTokens.toLocaleString(dateLocale()),
+        })}_`,
+        "",
+      )
     }
   }
 
@@ -44,7 +61,10 @@ function formatEntry(entry: ConversationEntry): string[] {
 
 export function exportToMarkdown(entries: ConversationEntry[], agentName: string): string {
   const lines: string[] = [
-    `# 会话记录 — ${agentName}`, "", `> 导出时间: ${new Date().toLocaleString("zh-CN")}`, "",
+    `# ${i18n.t("export.title", { agent: agentName })}`,
+    "",
+    `> ${i18n.t("export.exportedAt", { time: new Date().toLocaleString(dateLocale()) })}`,
+    "",
   ]
   for (const entry of entries) lines.push(...formatEntry(entry))
   return lines.join("\n")

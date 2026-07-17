@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents when working with code in this repository.
 
 ## Build and test commands
 
@@ -62,7 +62,7 @@ This is a Go agent runtime (`common-agent`). The project is in **Phase 1** (prod
 
 ## Coding standards
 
-编码规范的权威来源是 `docs/html/code-standards.html`，本文件仅记录 Claude Code 工作时需要特别注意的要点：
+编码规范的权威来源是 `docs/html/code-standards.html`，本文件仅记录 AI 代理工作时需要特别注意的要点：
 
 ### 可维护性约束
 

@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { useTranslation } from "react-i18next"
 import { ActivityEntry } from "@/components/conversation/activity-entry"
 import { useAutoScroll } from "@/hooks/use-auto-scroll"
 import { buildVisibleEntries } from "@/lib/replay-parser"
@@ -10,6 +11,7 @@ interface ConversationPanelProps {
 }
 
 export function ConversationPanel({ entries, currentEventIndex }: ConversationPanelProps) {
+  const { t } = useTranslation()
   const { containerRef, handleScroll } = useAutoScroll(currentEventIndex)
 
   const visibleEntries = useMemo(
@@ -20,7 +22,7 @@ export function ConversationPanel({ entries, currentEventIndex }: ConversationPa
   if (visibleEntries.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-        暂无对话内容
+        {t("replay.noConversation")}
       </div>
     )
   }

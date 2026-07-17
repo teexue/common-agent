@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { TurnNode } from "@/types/replay"
 import { AuditTreeNode } from "./audit-tree-node"
@@ -9,10 +10,11 @@ interface AuditTreePanelProps {
 }
 
 export function AuditTreePanel({ turnNodes, currentIndex, onSeek }: AuditTreePanelProps) {
+  const { t } = useTranslation()
   if (turnNodes.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-        暂无审计事件
+        {t("replay.noAudit")}
       </div>
     )
   }

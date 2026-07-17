@@ -9,6 +9,7 @@ import (
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/config"
+	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/tui"
@@ -34,45 +35,39 @@ func runSessions(args []string, logger *slog.Logger) {
 }
 
 func sessionsUsage() {
-	fmt.Fprintf(os.Stderr, `Usage:
-  agent-server sessions list               列出所有会话
-  agent-server sessions resume --id <id>   恢复指定会话
-  agent-server sessions delete --id <id>   删除指定会话
-
-  可用 --home 覆盖默认配置目录
-`)
+	fmt.Fprint(os.Stderr, i18n.T("cli.usage.sessions"))
 }
 
 func sessionsList(args []string, logger *slog.Logger) {
 	fs := flag.NewFlagSet("sessions list", flag.ExitOnError)
-	homeFlag := fs.String("home", "", "config home")
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home_short"))
 	_ = fs.Parse(args)
 
 	paths, err := resolvePaths(*homeFlag)
 	if err != nil {
-		logger.Error("resolve paths", "error", err)
+		logger.Error("log.cmd.resolve_paths", "error", err)
 		os.Exit(1)
 	}
 
 	store, err := session.NewFileStore(config.SessionsDir(paths.home))
 	if err != nil {
-		logger.Error("open session store", "error", err)
+		logger.Error("log.session.open_store", "error", err)
 		os.Exit(1)
 	}
 
 	metas, err := store.List()
 	if err != nil {
-		logger.Error("list sessions", "error", err)
+		logger.Error("log.session.list", "error", err)
 		os.Exit(1)
 	}
 
 	if len(metas) == 0 {
-		fmt.Println(tui.Muted("没有已保存的会话"))
+		fmt.Println(tui.Muted(i18n.T("cli.sessions.none")))
 		return
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "ID\tAGENT\tUPDATED\tMESSAGES\n")
+	fmt.Fprintln(w, i18n.T("cli.sessions.table_header"))
 	for _, m := range metas {
 		fmt.Fprintf(w, "%s\t%s\t%s\t\n",
 			m.ID,
@@ -85,49 +80,49 @@ func sessionsList(args []string, logger *slog.Logger) {
 
 func sessionsResume(args []string, logger *slog.Logger) {
 	fs := flag.NewFlagSet("sessions resume", flag.ExitOnError)
-	sessionID := fs.String("id", "", "session ID to resume")
-	homeFlag := fs.String("home", "", "config home")
-	mock := fs.Bool("mock", false, "use mock provider")
+	sessionID := fs.String("id", "", i18n.T("cli.flag.session_resume"))
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home_short"))
+	mock := fs.Bool("mock", false, i18n.T("cli.flag.mock"))
 	_ = fs.Parse(args)
 
 	if *sessionID == "" {
-		fmt.Fprintln(os.Stderr, "error: --id is required")
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.id_required"))
 		os.Exit(1)
 	}
 
 	paths, err := resolvePaths(*homeFlag)
 	if err != nil {
-		logger.Error("resolve paths", "error", err)
+		logger.Error("log.cmd.resolve_paths", "error", err)
 		os.Exit(1)
 	}
 
 	store, err := session.NewFileStore(config.SessionsDir(paths.home))
 	if err != nil {
-		logger.Error("open session store", "error", err)
+		logger.Error("log.session.open_store", "error", err)
 		os.Exit(1)
 	}
 
 	loaded, err := store.Load(*sessionID)
 	if err != nil {
-		logger.Error("load session", "error", err)
+		logger.Error("log.session.load", "error", err)
 		os.Exit(1)
 	}
 
 	catalog, _, err := bootstrapRuntime(paths, *mock, logger)
 	if err != nil {
-		logger.Error("bootstrap", "error", err)
+		logger.Error("log.cmd.bootstrap", "error", err)
 		os.Exit(1)
 	}
 
 	a, err := agent.LoadByName(paths.agentsDir, service.NormalizeAgentName(loaded.Agent))
 	if err != nil {
-		logger.Error("load agent", "error", err)
+		logger.Error("log.agent.load", "error", err)
 		os.Exit(1)
 	}
 
 	p, err := resolveProvider(catalog, *mock)(a)
 	if err != nil {
-		logger.Error("create provider", "error", err)
+		logger.Error("log.provider.create", "error", err)
 		os.Exit(1)
 	}
 
@@ -141,13 +136,13 @@ func sessionsResume(args []string, logger *slog.Logger) {
 		reg:      newRegistry(""), // uses current working directory
 	}
 
-	fmt.Println(tui.Success(fmt.Sprintf("已恢复会话 %s (%s)", loaded.ID, loaded.Agent)))
+	fmt.Println(tui.Success(i18n.T("cli.sessions.resumed", "id", loaded.ID, "agent", loaded.Agent)))
 	msgs := loaded.GetMessages()
-	fmt.Println(tui.Muted(fmt.Sprintf("历史消息: %d 条", len(msgs))))
+	fmt.Println(tui.Muted(i18n.T("cli.sessions.message_count", "count", len(msgs))))
 
 	rl, err := newChatReadline(paths.home)
 	if err != nil {
-		logger.Error("readline", "error", err)
+		logger.Error("log.chat.readline", "error", err)
 		os.Exit(1)
 	}
 	defer rl.Close()
@@ -157,31 +152,31 @@ func sessionsResume(args []string, logger *slog.Logger) {
 
 func sessionsDelete(args []string, logger *slog.Logger) {
 	fs := flag.NewFlagSet("sessions delete", flag.ExitOnError)
-	sessionID := fs.String("id", "", "session ID to delete")
-	homeFlag := fs.String("home", "", "config home")
+	sessionID := fs.String("id", "", i18n.T("cli.flag.session_delete"))
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home_short"))
 	_ = fs.Parse(args)
 
 	if *sessionID == "" {
-		fmt.Fprintln(os.Stderr, "error: --id is required")
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.id_required"))
 		os.Exit(1)
 	}
 
 	paths, err := resolvePaths(*homeFlag)
 	if err != nil {
-		logger.Error("resolve paths", "error", err)
+		logger.Error("log.cmd.resolve_paths", "error", err)
 		os.Exit(1)
 	}
 
 	store, err := session.NewFileStore(config.SessionsDir(paths.home))
 	if err != nil {
-		logger.Error("open session store", "error", err)
+		logger.Error("log.session.open_store", "error", err)
 		os.Exit(1)
 	}
 
 	if err := store.Delete(*sessionID); err != nil {
-		logger.Error("delete session", "error", err)
+		logger.Error("log.session.delete", "error", err)
 		os.Exit(1)
 	}
 
-	fmt.Println(tui.Success(fmt.Sprintf("会话 %s 已删除", *sessionID)))
+	fmt.Println(tui.Success(i18n.T("cli.sessions.deleted", "id", *sessionID)))
 }

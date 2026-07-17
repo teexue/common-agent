@@ -15,10 +15,12 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/teexue/common-agent/core/audit"
 	"github.com/teexue/common-agent/core/agent"
+	"github.com/teexue/common-agent/core/audit"
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/event"
+	"github.com/teexue/common-agent/core/i18n"
+	"github.com/teexue/common-agent/core/job"
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/service"
@@ -31,7 +33,15 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	locale := i18n.ResolveLocale("", "")
+	bundle, err := i18n.NewBundle(locale)
+	if err != nil {
+		bundle = i18n.Global()
+	} else {
+		i18n.SetGlobal(bundle)
+	}
+	logger := slog.New(i18n.NewSlogHandler(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}), bundle))
+	slog.SetDefault(logger)
 
 	if len(os.Args) < 2 {
 		usage()
@@ -63,45 +73,48 @@ func main() {
 	}
 }
 
+// newLocaleLogger builds a slog logger that translates log catalog keys.
+func newLocaleLogger(flagLocale, settingsLocale string) *slog.Logger {
+	locale := i18n.ResolveLocale(flagLocale, settingsLocale)
+	bundle, err := i18n.NewBundle(locale)
+	if err != nil {
+		bundle = i18n.Global()
+	} else {
+		i18n.SetGlobal(bundle)
+	}
+	logger := slog.New(i18n.NewSlogHandler(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}), bundle))
+	slog.SetDefault(logger)
+	return logger
+}
+
 func usage() {
-	fmt.Fprintf(os.Stderr, `Usage:
-  agent-server config init              交互式初始化 ~/.common-agent
-  agent-server config set provider ...  命令行配置 provider
-  agent-server config set-key ENV KEY   保存 API Key
-  agent-server config show              查看当前配置
-
-  agent-server chat                     交互式终端对话
-  agent-server run --prompt "hello"     单次对话（默认终端可读输出）
-  agent-server run --prompt "hello" --format json  NDJSON 事件流（便于脚本解析）
-  agent-server serve                    启动 HTTP SSE 服务
-  agent-server sessions list            列出所有会话
-  agent-server sessions resume --id ID  恢复指定会话
-  agent-server sessions delete --id ID  删除指定会话
-  agent-server tools                    列出已注册工具
-
-  默认配置目录: ~/.common-agent
-  可用 --home 覆盖；可用 --mock 离线调试
-
-  agent-server config --help  查看更多 config 子命令
-`)
+	fmt.Fprint(os.Stderr, i18n.T("cli.usage.main"))
 }
 
 func runServe(args []string, logger *slog.Logger) {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	addr := fs.String("addr", ":8080", "HTTP listen address")
-	grpcAddr := fs.String("grpc-addr", "", "gRPC listen address (empty = disabled)")
-	homeFlag := fs.String("home", "", "config home (default ~/.common-agent)")
-	mock := fs.Bool("mock", false, "use mock provider")
+	addr := fs.String("addr", ":8080", i18n.T("cli.flag.addr"))
+	grpcAddr := fs.String("grpc-addr", "", i18n.T("cli.flag.grpc_addr"))
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home"))
+	localeFlag := fs.String("locale", "", i18n.T("cli.flag.locale"))
+	mock := fs.Bool("mock", false, i18n.T("cli.flag.mock"))
 	_ = fs.Parse(args)
 
 	paths, err := resolvePaths(*homeFlag)
 	if err != nil {
-		logger.Error("resolve paths", "error", err)
+		logger.Error("log.cmd.resolve_paths", "error", err)
 		os.Exit(1)
 	}
-	catalog, _, err := bootstrapRuntime(paths, *mock, logger)
+	settings, err := config.LoadSettings(paths.home)
 	if err != nil {
-		logger.Error("bootstrap", "error", err)
+		logger.Error("log.config.load_settings", "error", err)
+		os.Exit(1)
+	}
+	logger = newLocaleLogger(*localeFlag, settings.Locale)
+
+	catalog, creds, err := bootstrapRuntime(paths, *mock, logger)
+	if err != nil {
+		logger.Error("log.cmd.bootstrap", "error", err)
 		os.Exit(1)
 	}
 
@@ -111,7 +124,16 @@ func runServe(args []string, logger *slog.Logger) {
 	if !*mock {
 		sessStore, err = session.NewFileStore(config.SessionsDir(paths.home))
 		if err != nil {
-			logger.Error("open session store", "error", err)
+			logger.Error("log.session.open_store", "error", err)
+			os.Exit(1)
+		}
+	}
+
+	var jobStore job.Store
+	if !*mock {
+		jobStore, err = job.NewFileStore(config.JobsDir(paths.home))
+		if err != nil {
+			logger.Error("log.job.open_store", "error", err)
 			os.Exit(1)
 		}
 	}
@@ -120,16 +142,41 @@ func runServe(args []string, logger *slog.Logger) {
 	eventLogger := audit.NewEventLogger(filepath.Join(paths.home, "events"))
 
 	// HTTP server.
-	srv := httpapi.NewServer(httpapi.ServerConfig{AgentsDir: paths.agentsDir, Registry: reg, NewProvider: resolveProvider(catalog, *mock), StaticFS: distFS(), Logger: logger, Store: sessStore})
+	srv := httpapi.NewServer(httpapi.ServerConfig{
+		AgentsDir:   paths.agentsDir,
+		Registry:    reg,
+		NewProvider: resolveProvider(catalog, *mock),
+		StaticFS:    distFS(),
+		Logger:      logger,
+		Store:       sessStore,
+		Jobs:        jobStore,
+	})
 	srv.SetEventLogger(eventLogger)
 	if catalog != nil {
 		srv.SetCatalog(catalog)
+	}
+	if creds != nil {
+		srv.SetCredentialStore(creds)
 	}
 	srv.StartWatcher()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	srv.SetShutdownCtx(ctx)
+
+	var sched *job.Scheduler
+	if jobStore != nil {
+		sched = job.NewScheduler(job.SchedulerConfig{
+			Store:       jobStore,
+			Runner:      srv.Service().JobRunner(),
+			Logger:      logger,
+			TickEvery:   time.Second,
+			MaxParallel: 2,
+		})
+		srv.SetScheduler(sched)
+		sched.Start(ctx)
+		defer sched.Stop()
+	}
 
 	httpServer := &http.Server{
 		Addr:              *addr,
@@ -144,9 +191,9 @@ func runServe(args []string, logger *slog.Logger) {
 	}
 
 	go func() {
-		logger.Info("http server listening", "addr", *addr, "home", paths.home)
+		logger.Info("log.http.listening", "addr", *addr, "home", paths.home)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("server failed", "error", err)
+			logger.Error("log.http.server_failed", "error", err)
 			os.Exit(1)
 		}
 	}()
@@ -183,14 +230,14 @@ func startGRPCServer(cfg GRPCConfig) *grpc.Server {
 
 	lis, err := net.Listen("tcp", cfg.Addr)
 	if err != nil {
-		cfg.Logger.Error("grpc listen", "error", err)
+		cfg.Logger.Error("log.grpc.listen_failed", "error", err)
 		os.Exit(1)
 	}
 
 	go func() {
-		cfg.Logger.Info("grpc server listening", "addr", cfg.Addr, "home", cfg.Paths.home)
+		cfg.Logger.Info("log.grpc.listening", "addr", cfg.Addr, "home", cfg.Paths.home)
 		if err := srv.Serve(lis); err != nil {
-			cfg.Logger.Error("grpc server failed", "error", err)
+			cfg.Logger.Error("log.grpc.server_failed", "error", err)
 			os.Exit(1)
 		}
 	}()
@@ -199,38 +246,40 @@ func startGRPCServer(cfg GRPCConfig) *grpc.Server {
 
 func runCLI(args []string, logger *slog.Logger) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	agentName := fs.String("agent", "", "agent name (default from config)")
-	prompt := fs.String("prompt", "", "user prompt")
-	format := fs.String("format", "text", "output format: text (TUI) or json (NDJSON events)")
-	homeFlag := fs.String("home", "", "config home")
-	mock := fs.Bool("mock", false, "use mock provider")
+	agentName := fs.String("agent", "", i18n.T("cli.flag.agent"))
+	prompt := fs.String("prompt", "", i18n.T("cli.flag.prompt"))
+	format := fs.String("format", "text", i18n.T("cli.flag.format"))
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home_short"))
+	localeFlag := fs.String("locale", "", i18n.T("cli.flag.locale"))
+	mock := fs.Bool("mock", false, i18n.T("cli.flag.mock"))
 	_ = fs.Parse(args)
 
 	if *format != "text" && *format != "json" {
-		fmt.Fprintf(os.Stderr, "error: --format must be text or json\n")
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.format_invalid"))
 		os.Exit(1)
 	}
 	if *prompt == "" {
-		fmt.Fprintln(os.Stderr, "error: --prompt is required")
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.prompt_required"))
 		os.Exit(1)
 	}
 
 	paths, err := resolvePaths(*homeFlag)
 	if err != nil {
-		logger.Error("resolve paths", "error", err)
+		logger.Error("log.cmd.resolve_paths", "error", err)
 		os.Exit(1)
 	}
 	catalog, _, err := bootstrapRuntime(paths, *mock, logger)
 	if err != nil {
-		logger.Error("bootstrap", "error", err)
+		logger.Error("log.cmd.bootstrap", "error", err)
 		os.Exit(1)
 	}
 
 	settings, err := config.LoadSettings(paths.home)
 	if err != nil {
-		logger.Error("load settings", "error", err)
+		logger.Error("log.config.load_settings", "error", err)
 		os.Exit(1)
 	}
+	logger = newLocaleLogger(*localeFlag, settings.Locale)
 	name := *agentName
 	if name == "" {
 		name = settings.DefaultAgent
@@ -238,13 +287,13 @@ func runCLI(args []string, logger *slog.Logger) {
 
 	a, err := agent.LoadByName(paths.agentsDir, service.NormalizeAgentName(name))
 	if err != nil {
-		logger.Error("load agent", "error", err)
+		logger.Error("log.agent.load", "error", err)
 		os.Exit(1)
 	}
 
 	p, err := resolveProvider(catalog, *mock)(a)
 	if err != nil {
-		logger.Error("create provider", "error", err)
+		logger.Error("log.provider.create", "error", err)
 		os.Exit(1)
 	}
 
@@ -254,7 +303,7 @@ func runCLI(args []string, logger *slog.Logger) {
 		Provider: p, Registry: reg, Agent: a, Session: sess, Prompt: *prompt,
 	})
 	if err != nil {
-		logger.Error("run agent", "error", err)
+		logger.Error("log.agent.run", "error", err)
 		os.Exit(1)
 	}
 
@@ -275,23 +324,23 @@ type CLIOutputConfig struct {
 func outputCLIResult(cfg CLIOutputConfig) {
 	if cfg.Format == "json" {
 		if err := event.StreamEvents(context.Background(), os.Stdout, cfg.Events); err != nil {
-			cfg.Logger.Error("stream events", "error", err)
+			cfg.Logger.Error("log.event.stream", "error", err)
 			os.Exit(1)
 		}
 		return
 	}
-	cfg.Logger.Info("agent run started", "session_id", cfg.Session.ID, "agent", cfg.Agent.Name, "provider", cfg.Agent.Provider, "model", cfg.Agent.Model, "home", cfg.Paths.home)
+	cfg.Logger.Info("log.agent.run_started", "session_id", cfg.Session.ID, "agent", cfg.Agent.Name, "provider", cfg.Agent.Provider, "model", cfg.Agent.Model, "home", cfg.Paths.home)
 	tui.PrintEvents(cfg.Events)
 }
 
 func runTools(args []string, _ *slog.Logger) {
 	fs := flag.NewFlagSet("tools", flag.ExitOnError)
-	agentName := fs.String("agent", "", "validate tools for an agent")
+	agentName := fs.String("agent", "", i18n.T("cli.flag.agent_validate"))
 	_ = fs.Parse(args)
 
 	home, err := config.Home(false)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.generic", "error", err.Error()))
 		os.Exit(1)
 	}
 	reg := newRegistry("") // uses current working directory
@@ -300,20 +349,20 @@ func runTools(args []string, _ *slog.Logger) {
 		// Validate agent tools against registry.
 		a, err := agent.LoadByNameAndValidate(config.AgentsDir(home), *agentName, reg.Names())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			fmt.Fprintln(os.Stderr, i18n.T("cli.error.generic", "error", err.Error()))
 			os.Exit(1)
 		}
-		fmt.Printf("agent %q tools validated OK: %v\n", a.Name, a.Tools)
+		fmt.Println(i18n.T("cli.tools.validated_ok", "name", a.Name, "tools", fmt.Sprint(a.Tools)))
 		return
 	}
 
 	// List all registered tools.
 	names := reg.Names()
 	if len(names) == 0 {
-		fmt.Println("no tools registered")
+		fmt.Println(i18n.T("cli.tools.none"))
 		return
 	}
-	fmt.Printf("Registered tools (%d):\n", len(names))
+	fmt.Println(i18n.T("cli.tools.registered_header", "count", len(names)))
 	for _, t := range reg.List() {
 		fmt.Printf("  %-20s %s\n", t.Name(), t.Description())
 	}

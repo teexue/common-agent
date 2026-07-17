@@ -73,11 +73,15 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 		}
 		cfg.Session.SetMessages(msgs)
 	}
-	if cfg.Prompt != "" {
-		cfg.Session.AddMessages(provider.Message{
+	if cfg.Prompt != "" || len(cfg.Images) > 0 {
+		msg := provider.Message{
 			Role:    provider.RoleUser,
 			Content: cfg.Prompt,
-		})
+		}
+		if len(cfg.Images) > 0 {
+			msg.ContentParts = append([]provider.ContentPart{{Type: "text", Text: cfg.Prompt}}, cfg.Images...)
+		}
+		cfg.Session.AddMessages(msg)
 	}
 
 	if cfg.WorkDir != "" {
@@ -91,7 +95,7 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 
 		if cfg.Store != nil {
 			if err := cfg.Store.Save(cfg.Session); err != nil {
-				slog.Warn("failed to persist session", "session_id", cfg.Session.ID, "error", err)
+				slog.Warn("log.session.persist_failed", "session_id", cfg.Session.ID, "error", err)
 			}
 		}
 	}()
@@ -337,18 +341,18 @@ func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, tu
 	})
 	result, err := cmp.Compact(cfg.Session.GetMessages())
 	if err != nil {
-		log.Warn("compaction error", "turn", turn, "error", err)
+		log.Warn("log.compaction.error", "turn", turn, "error", err)
 	} else if result != nil {
 		cfg.Session.SetMessages(result.Compacted)
 		emit(ctx, out, event.Event{Type: event.TypeCompaction, Content: result.Summary})
-		log.Info("context compacted", "turn", turn, "old_messages", result.OldCount, "new_messages", result.NewCount)
+		log.Info("log.compaction.compacted", "turn", turn, "old_messages", result.OldCount, "new_messages", result.NewCount)
 	}
 }
 
 func fireOnTurnStart(hooks *hook.Chain, turn int, log *slog.Logger) {
 	if hooks != nil {
 		if err := hooks.OnTurnStart(context.Background(), hook.TurnInfo{TurnNumber: turn}); err != nil {
-			log.Warn("hook OnTurnStart error", "turn", turn, "error", err)
+			log.Warn("log.hook.turn_start_error", "turn", turn, "error", err)
 		}
 	}
 }
@@ -356,7 +360,7 @@ func fireOnTurnStart(hooks *hook.Chain, turn int, log *slog.Logger) {
 func fireOnTurnEnd(hooks *hook.Chain, ctx context.Context, turn int, log *slog.Logger) {
 	if hooks != nil {
 		if err := hooks.OnTurnEnd(ctx, hook.TurnInfo{TurnNumber: turn}); err != nil {
-			log.Warn("hook OnTurnEnd error", "turn", turn, "error", err)
+			log.Warn("log.hook.turn_end_error", "turn", turn, "error", err)
 		}
 	}
 }
