@@ -241,13 +241,45 @@ export async function deleteProvider(name: string): Promise<void> {
   }
 }
 
-/** Fetches the list of configured MCP servers. */
+/** Fetches the list of configured MCP servers (global + per-agent). */
 export async function fetchMCPServers(): Promise<MCPServerInfo[]> {
   const res = await fetch("/v1/mcp", { headers: langHeaders() })
   if (!res.ok) {
     throw new Error(i18n.t("api.fetchMcpFailed", { status: res.status }))
   }
   return (await res.json()) ?? []
+}
+
+/** Upserts a global shared MCP server by name. */
+export async function upsertGlobalMCP(data: {
+  name: string
+  type: "stdio" | "sse"
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  url?: string
+}): Promise<void> {
+  const res = await fetch("/v1/mcp/global", {
+    method: "POST",
+    headers: langHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.message ?? i18n.t("api.saveMcpFailed", { status: res.status }))
+  }
+}
+
+/** Deletes a global shared MCP server by name. */
+export async function deleteGlobalMCP(name: string): Promise<void> {
+  const res = await fetch(`/v1/mcp/global/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+    headers: langHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.message ?? i18n.t("api.deleteMcpFailed", { status: res.status }))
+  }
 }
 
 /** Fetches the list of available skills. */

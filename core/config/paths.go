@@ -61,3 +61,21 @@ func SessionsDir(home string) string {
 func JobsDir(home string) string {
 	return filepath.Join(home, "jobs")
 }
+
+// MCPFile returns the mcp.yaml path under home, holding global shared MCP servers.
+func MCPFile(home string) string {
+	return filepath.Join(home, "mcp.yaml")
+}
+
+// EnsureDirs creates the ~/.common-agent directory structure (home, agents,
+// sessions, jobs) without writing any default content. Use this on startup so
+// the runtime has a place to read/write without pre-installing vendors or
+// agents — initial content is provided by `config init` or the Settings UI.
+func EnsureDirs(home string) error {
+	for _, d := range []string{home, AgentsDir(home), SessionsDir(home), JobsDir(home)} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			return fmt.Errorf("create dir %s: %w", d, err)
+		}
+	}
+	return nil
+}

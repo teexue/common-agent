@@ -35,6 +35,7 @@ type AgentDetail struct {
 	MaxTokens     int                     `json:"max_tokens"`
 	ToolExecution *agent.ToolExecution    `json:"tool_execution,omitempty"`
 	Permissions   *permission.Permissions `json:"permissions,omitempty"`
+	MCPServers    []agent.MCPServerConfig  `json:"mcp_servers,omitempty"`
 }
 
 func (s *Server) handleAgents(c *gin.Context) {
@@ -76,6 +77,7 @@ func (s *Server) handleAgentGet(c *gin.Context) {
 		MaxTokens:     a.MaxTokens,
 		ToolExecution: a.ToolExecution,
 		Permissions:   a.Permissions,
+		MCPServers:    a.MCPServers,
 	})
 }
 

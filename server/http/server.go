@@ -217,6 +217,8 @@ func (s *Server) Handler() *gin.Engine {
 	v1.DELETE("/agents/:id", s.handleAgentDelete)
 	v1.POST("/agents/validate", s.handleAgentValidate)
 	v1.GET("/mcp", s.handleMCPList)
+	v1.POST("/mcp/global", s.handleMCPGlobalUpsert)
+	v1.DELETE("/mcp/global/:name", s.handleMCPGlobalDelete)
 	v1.GET("/skills", s.handleSkillsList)
 	v1.GET("/fs/list", s.handleFSList)
 	v1.GET("/events", s.handleEvents)

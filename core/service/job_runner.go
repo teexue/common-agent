@@ -22,9 +22,7 @@ func (s *Service) JobRunner() job.Runner {
 			return "", err
 		}
 		defer func() {
-			if len(result.TempToolNames) > 0 && s.Registry != nil {
-				s.Registry.UnregisterBatch(result.TempToolNames)
-			}
+			result.Cleanup(s.Registry)
 		}()
 
 		events, err := loop.Run(ctx, result.Config)

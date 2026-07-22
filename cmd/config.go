@@ -49,7 +49,7 @@ func runConfigInit(args []string) {
 	}
 	if *homeFlag != "" {
 		home = *homeFlag
-		if err := config.InstallDefaults(home); err != nil {
+		if err := config.EnsureDirs(home); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
