@@ -42,7 +42,7 @@ func bootstrapRuntime(paths runtimePaths, useMock bool, logger *slog.Logger) (*p
 	if useMock {
 		return nil, nil, nil
 	}
-	if err := config.InstallDefaults(paths.home); err != nil {
+	if err := config.EnsureDirs(paths.home); err != nil {
 		return nil, nil, err
 	}
 

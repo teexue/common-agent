@@ -73,9 +73,7 @@ func (s *Server) handleRun(c *gin.Context) {
 	}
 
 	defer func() {
-		if len(result.TempToolNames) > 0 {
-			s.registry.UnregisterBatch(result.TempToolNames)
-		}
+		result.Cleanup(s.registry)
 	}()
 
 	runCtx := c.Request.Context()

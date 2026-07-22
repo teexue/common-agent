@@ -58,6 +58,16 @@ export interface AgentDetail {
   max_tokens: number
   tool_execution?: ToolExecutionConfig
   permissions?: PermissionsConfig
+  mcp_servers?: McpServerConfig[]
+}
+
+export interface McpServerConfig {
+  name: string
+  type: "stdio" | "sse"
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  url?: string
 }
 
 export interface ToolExecutionConfig {
@@ -147,7 +157,8 @@ export interface MCPServerInfo {
   type: string // "stdio" | "sse"
   command?: string
   url?: string
-  agent: string
+  agent: string // agent name for agent-scoped servers; "" for global
+  scope: "global" | "agent"
 }
 
 // Health & metrics types (mirrors Go telemetry)

@@ -374,36 +374,3 @@ func (s ProviderSpec) validate() error {
 	}
 	return nil
 }
-
-// InstallDefaults copies built-in templates when home is empty.
-func InstallDefaults(home string) error {
-	if err := ensureHome(home); err != nil {
-		return err
-	}
-	providersPath := ProvidersFile(home)
-	if _, err := os.Stat(providersPath); os.IsNotExist(err) {
-		content := `providers:
-  moonshot:
-    type: openai
-    base_url: https://api.moonshot.cn/v1
-    api_key_env: MOONSHOT_API_KEY
-    default_model: kimi-k2.6
-    thinking:
-      type: disabled
-`
-		if err := os.WriteFile(providersPath, []byte(content), 0o644); err != nil {
-			return err
-		}
-	}
-	// Install built-in agent templates (skips existing ones).
-	InstallAllTemplates(home)
-	_, err := LoadSettings(home)
-	if err != nil {
-		return err
-	}
-	settingsPath := SettingsFile(home)
-	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
-		return SaveSettings(home, Settings{DefaultAgent: "chat-assistant"})
-	}
-	return nil
-}

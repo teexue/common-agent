@@ -9,6 +9,7 @@ import (
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/loop"
+	"github.com/teexue/common-agent/core/mcp"
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/session"
@@ -31,6 +32,25 @@ type RunResult struct {
 	Config        loop.Config
 	Session       *session.Session
 	TempToolNames []string // skill tools registered during preparation; caller should unregister
+	MCPManager    *mcp.Manager // MCP manager connected during preparation; caller must close
+	MCPToolNames  []string     // MCP tools registered during preparation; caller should unregister
+}
+
+// Cleanup unregisters temporary tools and closes the MCP manager.
+// Callers should defer this once the run's events are fully consumed.
+func (r *RunResult) Cleanup(reg *registry.Registry) {
+	if r == nil {
+		return
+	}
+	if len(r.TempToolNames) > 0 && reg != nil {
+		reg.UnregisterBatch(r.TempToolNames)
+	}
+	if len(r.MCPToolNames) > 0 && reg != nil {
+		reg.UnregisterBatch(r.MCPToolNames)
+	}
+	if r.MCPManager != nil {
+		r.MCPManager.Close()
+	}
 }
 
 // PrepareRun validates the request, loads the agent, resolves the provider,
@@ -78,6 +98,10 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		sess.SetMessages(req.Messages)
 	}
 
+	// Connect MCP servers (global + agent) last, so subprocesses only spawn
+	// once the run is otherwise guaranteed to proceed.
+	mcpMgr, mcpToolNames := injectMCP(ctx, a, s.AgentsDir, s.Registry, s.Logger)
+
 	var pol permission.Policy
 	if a.Permissions != nil {
 		pol = permission.NewAgentPolicy(*a.Permissions)
@@ -100,7 +124,13 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		Images:    req.Images,
 	}
 
-	return &RunResult{Config: cfg, Session: sess, TempToolNames: tempToolNames}, nil
+	return &RunResult{
+		Config:        cfg,
+		Session:       sess,
+		TempToolNames: tempToolNames,
+		MCPManager:    mcpMgr,
+		MCPToolNames:  mcpToolNames,
+	}, nil
 }
 
 // ToolSummary is the lightweight representation of a tool for list endpoints.

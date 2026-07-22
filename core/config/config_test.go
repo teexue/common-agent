@@ -51,12 +51,21 @@ func TestUpsertProvider(t *testing.T) {
 	}
 }
 
-func TestInstallDefaults(t *testing.T) {
+func TestEnsureDirs(t *testing.T) {
 	dir := t.TempDir()
-	if err := config.InstallDefaults(dir); err != nil {
+	if err := config.EnsureDirs(dir); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(config.AgentsDir(dir), "chat-assistant.yaml")); err != nil {
-		t.Fatal(err)
+	for _, sub := range []string{"agents", "sessions", "jobs"} {
+		if _, err := os.Stat(filepath.Join(dir, sub)); err != nil {
+			t.Fatalf("expected %s dir: %v", sub, err)
+		}
+	}
+	// EnsureDirs must NOT pre-install any vendor provider or agent.
+	if _, err := os.Stat(config.ProvidersFile(dir)); !os.IsNotExist(err) {
+		t.Fatalf("providers.yaml should not be pre-installed, got err=%v", err)
+	}
+	if entries, err := os.ReadDir(config.AgentsDir(dir)); err == nil && len(entries) != 0 {
+		t.Fatalf("agents dir should be empty, got %d entries", len(entries))
 	}
 }

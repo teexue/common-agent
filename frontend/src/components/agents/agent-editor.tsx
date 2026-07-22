@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, Bot, Loader2, Save, Settings2, Shield, Wrench } from "lucide-react"
+import { ArrowLeft, Bot, Loader2, Plug, Save, Settings2, Shield, Wrench } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { fetchAgentDetail, fetchProviders, fetchTools, createAgent, updateAgent, validateAgent } from "@/lib/api"
-import { formDataToYaml, EMPTY_FORM } from "@/lib/agent-yaml"
+import { EMPTY_FORM, formDataToYaml, mcpConfigToForm } from "@/lib/agent-yaml"
 import type { AgentFormData } from "@/lib/agent-yaml"
 import type { ProviderInfo, ToolInfo } from "@/types/agent"
-import { BasicTab, RuntimeTab, ToolsTab } from "./agent-editor-tabs"
+import { BasicTab, McpTab, RuntimeTab, ToolsTab } from "./agent-editor-tabs"
 
 interface AgentEditorPageProps {
   agentId?: string | null
@@ -53,6 +53,7 @@ export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditor
         maxParallel: d.tool_execution?.MaxParallel || 4,
         autoApprove: d.permissions?.auto_approve || [],
         alwaysDeny: d.permissions?.always_deny || [],
+        mcpServers: (d.mcp_servers ?? []).map(mcpConfigToForm),
       }))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
@@ -85,6 +86,7 @@ export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditor
   const tabs = [
     { value: "basic", icon: Bot, label: t("agent.tabBasic") },
     { value: "tools", icon: Wrench, label: t("agent.tabTools") },
+    { value: "mcp", icon: Plug, label: t("agent.tabMcp") },
     { value: "runtime", icon: Settings2, label: t("agent.tabRuntime") },
   ] as const
 
@@ -124,6 +126,9 @@ export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditor
                     {item.value === "tools" && form.tools.length > 0 && (
                       <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px]">{form.tools.length}</Badge>
                     )}
+                    {item.value === "mcp" && form.mcpServers.length > 0 && (
+                      <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px]">{form.mcpServers.length}</Badge>
+                    )}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -140,6 +145,9 @@ export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditor
               </TabsContent>
               <TabsContent value="tools" className="mt-0">
                 <ToolsTab form={form} setForm={setForm} tools={tools} />
+              </TabsContent>
+              <TabsContent value="mcp" className="mt-0">
+                <McpTab form={form} setForm={setForm} />
               </TabsContent>
               <TabsContent value="runtime" className="mt-0">
                 <RuntimeTab form={form} setForm={setForm} />

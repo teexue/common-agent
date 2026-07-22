@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import i18n from "@/i18n"
 import { useTheme } from "@/components/theme-provider"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -17,9 +16,8 @@ import { ArrowLeft, FolderOpen, Keyboard, Monitor, Plug, Server, Settings } from
 import { Input } from "@/components/ui/input"
 import { MetricsPanel } from "@/components/monitoring/metrics-panel"
 import { DirPickerDialog } from "@/components/settings/dir-picker-dialog"
+import { McpPanel } from "@/components/settings/mcp-panel"
 import { ProviderPanel } from "@/components/settings/provider-panel"
-import { fetchMCPServers as fetchMCP } from "@/lib/api"
-import type { MCPServerInfo } from "@/types/agent"
 
 export function SettingsPage() {
   const { t } = useTranslation()
@@ -76,7 +74,7 @@ export function SettingsPage() {
             </TabsContent>
             <TabsContent value="mcp" className="mt-0 space-y-4">
               <Section title={t("settings.mcpServers")} icon={<Plug className="h-3.5 w-3.5" />}>
-                <MCPPanel />
+                <McpPanel />
               </Section>
             </TabsContent>
           </Tabs>
@@ -209,61 +207,6 @@ function Section({ title, icon, children }: { title: string; icon?: React.ReactN
         </span>
       </div>
       {children}
-    </div>
-  )
-}
-
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="flex items-center justify-center rounded-xl border border-dashed border-border py-6">
-      <p className="text-xs text-muted-foreground">{text}</p>
-    </div>
-  )
-}
-
-function MCPServerCard({ server }: { server: MCPServerInfo }) {
-  return (
-    <div className="flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-3">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
-        <Plug className="h-4 w-4 text-blue-500" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-foreground">{server.name}</p>
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <Badge variant="secondary" className="rounded-md px-1.5 py-0.5 text-[10px] font-mono">{server.type}</Badge>
-          {server.command && <span className="text-[11px] text-muted-foreground font-mono truncate">{server.command}</span>}
-          {server.url && <span className="text-[11px] text-muted-foreground font-mono truncate">{server.url}</span>}
-        </div>
-      </div>
-      <Badge variant="outline" className="rounded-md px-1.5 py-0.5 text-[10px] shrink-0">{server.agent}</Badge>
-    </div>
-  )
-}
-
-function MCPPanel() {
-  const { t } = useTranslation()
-  const [servers, setServers] = useState<MCPServerInfo[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchMCP().then(setServers).catch(() => setServers([])).finally(() => setLoading(false))
-  }, [])
-
-  if (loading) return <EmptyState text={t("settings.mcpLoading")} />
-  if (servers.length === 0) {
-    return (
-      <div className="space-y-3">
-        <EmptyState text={t("settings.mcpEmpty")} />
-        <div className="rounded-xl border border-dashed border-border px-3 py-2.5 text-[11px] text-muted-foreground leading-relaxed">
-          {t("settings.mcpHint")}
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-2">
-      {servers.map((s) => <MCPServerCard key={`${s.agent}-${s.name}`} server={s} />)}
     </div>
   )
 }

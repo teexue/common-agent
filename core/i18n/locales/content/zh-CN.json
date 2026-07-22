@@ -160,6 +160,8 @@
   "api.error.agent_not_found": "Agent 不存在",
   "api.error.cannot_read_body": "无法读取请求体",
   "api.error.no_catalog": "未配置 provider 目录",
+  "api.error.mcp_error": "MCP 服务器保存失败",
+  "api.error.mcp_not_found": "MCP 服务器不存在",
   "api.error.no_audit": "未配置审计存储",
   "api.error.approval_id_required": "必须提供 approval_id",
   "api.error.approval_not_found": "没有与 approval_id 对应的待审批项",

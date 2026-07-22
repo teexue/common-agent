@@ -160,6 +160,8 @@
   "api.error.agent_not_found": "agent not found",
   "api.error.cannot_read_body": "cannot read body",
   "api.error.no_catalog": "provider catalog not configured",
+  "api.error.mcp_error": "failed to save MCP server",
+  "api.error.mcp_not_found": "MCP server not found",
   "api.error.no_audit": "audit store not configured",
   "api.error.approval_id_required": "approval_id is required",
   "api.error.approval_not_found": "no pending approval for approval_id",
