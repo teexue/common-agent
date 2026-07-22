@@ -36,10 +36,20 @@ func (s *Server) authMiddleware() gin.HandlerFunc {
 	}
 }
 
+// backgroundUploadMaxBytes is the body size limit for POST /v1/background.
+// Wallpapers are often larger than the default API payload limit.
+const backgroundUploadMaxBytes = 50 << 20 // 50 MB
+
 // bodySizeLimit returns middleware that limits request body size.
+// Background image uploads use a higher limit (see backgroundUploadMaxBytes).
 func (s *Server) bodySizeLimit(maxBytes int64) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes)
+		limit := maxBytes
+		// Middleware runs before route match, so inspect the raw path.
+		if c.Request.Method == http.MethodPost && c.Request.URL.Path == "/v1/background" {
+			limit = backgroundUploadMaxBytes
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 		c.Next()
 	}
 }
