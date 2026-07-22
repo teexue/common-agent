@@ -75,21 +75,145 @@ func (s *Server) handleTools(c *gin.Context) {
 
 func (s *Server) handleProvidersList(c *gin.Context) {
 	if s.catalog == nil {
-		respondError(c, http.StatusServiceUnavailable, "no_catalog", "api.error.no_catalog")
+		c.JSON(http.StatusOK, []provider.ProviderInfo{})
 		return
 	}
 	c.JSON(http.StatusOK, s.catalog.Entries())
 }
 
+// handleVendors returns the built-in vendor presets (no secrets).
+func (s *Server) handleVendors(c *gin.Context) {
+	c.JSON(http.StatusOK, provider.VendorInfos())
+}
+
+// handleProviderModels fetches the model list for a configured provider.
+// Requires a valid API key to be stored for the provider.
+func (s *Server) handleProviderModels(c *gin.Context) {
+	if s.catalog == nil {
+		respondError(c, http.StatusServiceUnavailable, "no_catalog", "api.error.no_catalog")
+		return
+	}
+	name := c.Param("name")
+	if name == "" {
+		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request")
+		return
+	}
+	models, err := s.catalog.ListModels(c.Request.Context(), name)
+	if err != nil {
+		respondErrorDetails(c, http.StatusBadGateway, "provider_error", "api.error.provider_error", err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, models)
+}
+
+// ProviderModelsRequest is the DTO for POST /v1/providers/models.
+// It fetches models using inline config (no saved provider required), so the
+// UI can pull a model list while creating a provider before saving it.
+type ProviderModelsRequest struct {
+	Name       string `json:"name,omitempty"`
+	APIStyle   string `json:"api_style"`
+	BaseURL    string `json:"base_url,omitempty"`
+	ModelsPath string `json:"models_path,omitempty"`
+	APIVersion string `json:"api_version,omitempty"`
+	AuthStyle  string `json:"auth_style,omitempty"`
+	APIKey     string `json:"api_key,omitempty"`
+}
+
+// handleProviderModelsTest fetches models from an inline provider config.
+// If api_key is empty and name matches a saved provider, the stored key is used.
+func (s *Server) handleProviderModelsTest(c *gin.Context) {
+	var req ProviderModelsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		return
+	}
+	style := provider.APIStyle(req.APIStyle)
+	if style != provider.StyleOpenAI && style != provider.StyleAnthropic {
+		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request")
+		return
+	}
+
+	apiKey := req.APIKey
+	if apiKey == "" && req.Name != "" && s.catalog != nil {
+		if prof, err := s.catalog.Get(req.Name); err == nil {
+			apiKey = prof.APIKey
+		}
+	}
+	if apiKey == "" {
+		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request")
+		return
+	}
+
+	baseURL := req.BaseURL
+	modelsPath := req.ModelsPath
+	apiVersion := req.APIVersion
+	authStyle := provider.AuthStyle(req.AuthStyle)
+	if v, ok := provider.LookupVendor(req.Name); ok {
+		if baseURL == "" {
+			baseURL = v.BaseURLFor(style)
+		}
+		if modelsPath == "" {
+			modelsPath = provider.DefaultModelsPathFor(style)
+		}
+		if apiVersion == "" {
+			apiVersion = v.APIVersion
+		}
+		if authStyle == "" {
+			authStyle = v.AuthForStyle(style)
+		}
+	}
+	if baseURL == "" {
+		baseURL = provider.DefaultBaseURLFor(style)
+	}
+	if modelsPath == "" {
+		modelsPath = provider.DefaultModelsPathFor(style)
+	}
+	if authStyle == "" {
+		if style == provider.StyleAnthropic {
+			authStyle = provider.AuthXAPIKey
+		} else {
+			authStyle = provider.AuthBearer
+		}
+	}
+
+	p, err := provider.NewProvider(provider.ListingProfile(provider.Profile{
+		Name:       req.Name,
+		APIStyle:   style,
+		BaseURL:    baseURL,
+		APIKey:     apiKey,
+		APIVersion: apiVersion,
+		AuthStyle:  authStyle,
+		ModelsPath: modelsPath,
+	}))
+	if err != nil {
+		respondErrorDetails(c, http.StatusBadRequest, "provider_error", "api.error.provider_error", err.Error())
+		return
+	}
+	lister, ok := p.(provider.ModelLister)
+	if !ok {
+		respondErrorDetails(c, http.StatusBadGateway, "provider_error", "api.error.provider_error", "provider does not support model listing")
+		return
+	}
+	models, err := lister.ListModels(c.Request.Context())
+	if err != nil {
+		respondErrorDetails(c, http.StatusBadGateway, "provider_error", "api.error.provider_error", err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, models)
+}
+
 // ProviderUpsertRequest is the DTO for POST/PUT /v1/providers.
 type ProviderUpsertRequest struct {
 	Name         string `json:"name"`
-	Type         string `json:"type"`
+	APIStyle     string `json:"api_style"`
 	BaseURL      string `json:"base_url,omitempty"`
 	APIKey       string `json:"api_key,omitempty"`
 	APIKeyEnv    string `json:"api_key_env,omitempty"`
 	APIVersion   string `json:"api_version,omitempty"`
+	AuthStyle    string `json:"auth_style,omitempty"`
 	DefaultModel string `json:"default_model,omitempty"`
+	DisplayName string `json:"display_name,omitempty"`
+	ModelsPath   string `json:"models_path,omitempty"`
 	Vision       bool   `json:"vision,omitempty"`
 }
 
@@ -115,11 +239,14 @@ func (s *Server) handleProviderUpsert(c *gin.Context) {
 
 	spec := config.ProviderSpec{
 		Name:         req.Name,
-		Type:         provider.Kind(req.Type),
+		APIStyle:     provider.APIStyle(req.APIStyle),
 		BaseURL:      req.BaseURL,
 		APIKeyEnv:    req.APIKeyEnv,
 		APIVersion:   req.APIVersion,
+		AuthStyle:    provider.AuthStyle(req.AuthStyle),
 		DefaultModel: req.DefaultModel,
+		DisplayName: req.DisplayName,
+		ModelsPath:   req.ModelsPath,
 		Vision:       req.Vision,
 	}
 	if err := config.UpsertProvider(home, spec); err != nil {

@@ -20,7 +20,10 @@ type AnthropicConfig struct {
 	APIKey     string
 	BaseURL    string
 	APIVersion string
+	AuthStyle  AuthStyle
 	Client     *http.Client
+	ModelsPath string
+	Vision     bool
 }
 
 // Anthropic implements Provider using Anthropic Messages API.
@@ -28,7 +31,10 @@ type Anthropic struct {
 	apiKey     string
 	baseURL    string
 	apiVersion string
+	authStyle  AuthStyle
 	client     *http.Client
+	modelsPath string
+	vision     bool
 }
 
 // NewAnthropic creates an Anthropic provider.
@@ -44,6 +50,14 @@ func NewAnthropic(cfg AnthropicConfig) (*Anthropic, error) {
 	if apiVersion == "" {
 		apiVersion = defaultAnthropicVersion
 	}
+	authStyle := cfg.AuthStyle
+	if authStyle == "" {
+		authStyle = AuthXAPIKey
+	}
+	modelsPath := cfg.ModelsPath
+	if modelsPath == "" {
+		modelsPath = APIStyleAnthropicModelsPath
+	}
 	client := cfg.Client
 	if client == nil {
 		client = DefaultHTTPClient()
@@ -52,8 +66,63 @@ func NewAnthropic(cfg AnthropicConfig) (*Anthropic, error) {
 		apiKey:     cfg.APIKey,
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		apiVersion: apiVersion,
+		authStyle:  authStyle,
 		client:     client,
+		modelsPath: modelsPath,
+		vision:     cfg.Vision,
 	}, nil
+}
+
+// setAuthHeaders applies the configured auth header to a request.
+func (a *Anthropic) setAuthHeaders(req *http.Request) {
+	if a.authStyle == AuthBearer {
+		req.Header.Set("Authorization", "Bearer "+a.apiKey)
+	} else {
+		req.Header.Set("x-api-key", a.apiKey)
+	}
+}
+
+// Capabilities advertises this provider's optional features.
+func (a *Anthropic) Capabilities() Capabilities {
+	return Capabilities{Vision: a.vision}
+}
+
+// anthropicModelsResponse is the shape of GET /v1/models from the Anthropic API.
+type anthropicModelsResponse struct {
+	Data []struct {
+		ID string `json:"id"`
+	} `json:"data"`
+}
+
+// ListModels fetches available models from the vendor's model-list endpoint.
+func (a *Anthropic) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.baseURL+a.modelsPath, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create anthropic models request: %w", err)
+	}
+	a.setAuthHeaders(req)
+	req.Header.Set("anthropic-version", a.apiVersion)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("anthropic models request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("anthropic models request failed: status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var out anthropicModelsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decode anthropic models: %w", err)
+	}
+	models := make([]ModelInfo, 0, len(out.Data))
+	for _, m := range out.Data {
+		models = append(models, ModelInfo{ID: m.ID})
+	}
+	return models, nil
 }
 
 type anthropicRequest struct {
@@ -126,7 +195,7 @@ func (a *Anthropic) Stream(ctx context.Context, req Request) (<-chan Chunk, erro
 	if err != nil {
 		return nil, fmt.Errorf("create anthropic request: %w", err)
 	}
-	httpReq.Header.Set("x-api-key", a.apiKey)
+	a.setAuthHeaders(httpReq)
 	httpReq.Header.Set("anthropic-version", a.apiVersion)
 	httpReq.Header.Set("Content-Type", "application/json")
 

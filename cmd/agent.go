@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/teexue/common-agent/core/agent"
@@ -25,6 +26,9 @@ func resolveProvider(catalog *provider.Catalog, useMock bool) func(a *agent.Agen
 	return func(a *agent.Agent) (provider.Provider, error) {
 		if useMock {
 			return mockProvider(), nil
+		}
+		if catalog == nil {
+			return nil, fmt.Errorf("no provider configured; add one in the Settings UI or run: agent-server config set provider")
 		}
 		return catalog.ResolveForAgent(a.Provider)
 	}

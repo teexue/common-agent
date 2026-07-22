@@ -14,58 +14,17 @@ import (
 // ProviderSpec is CLI input for configuring a provider.
 type ProviderSpec struct {
 	Name         string
-	Type         provider.Kind
+	APIStyle     provider.APIStyle
 	BaseURL      string
 	APIKeyEnv    string
 	APIVersion   string
+	AuthStyle    provider.AuthStyle
 	DefaultModel string
+	DisplayName string
+	ModelsPath   string
 	Vision       bool
 	ThinkingType string
 	ThinkingKeep string
-}
-
-type providerPreset struct {
-	LabelKey     string
-	Name         string
-	Type         provider.Kind
-	BaseURL      string
-	APIKeyEnv    string
-	Models       []string
-	APIVersion   string
-	NeedThinking bool
-}
-
-func (p providerPreset) label() string {
-	return i18n.T(p.LabelKey)
-}
-
-var providerPresets = []providerPreset{
-	{
-		LabelKey:     "wizard.provider.moonshot",
-		Name:         "moonshot",
-		Type:         provider.KindOpenAI,
-		BaseURL:      "https://api.moonshot.cn/v1",
-		APIKeyEnv:    "MOONSHOT_API_KEY",
-		Models:       []string{"kimi-k2.6", "kimi-k2.5"},
-		NeedThinking: true,
-	},
-	{
-		LabelKey:  "wizard.provider.openai",
-		Name:      "openai",
-		Type:      provider.KindOpenAI,
-		BaseURL:   "https://api.openai.com/v1",
-		APIKeyEnv: "OPENAI_API_KEY",
-		Models:    []string{"gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"},
-	},
-	{
-		LabelKey:   "wizard.provider.anthropic",
-		Name:       "anthropic",
-		Type:       provider.KindAnthropic,
-		BaseURL:    "https://api.anthropic.com",
-		APIKeyEnv:  "ANTHROPIC_API_KEY",
-		Models:     []string{"claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"},
-		APIVersion: "2023-06-01",
-	},
 }
 
 // InitInteractive runs a wizard to bootstrap ~/.common-agent.
@@ -134,9 +93,10 @@ tool_execution:
 // RunProviderWizard runs the interactive provider configuration wizard.
 // Returns the provider spec, agent name, API key env name, and any error.
 func RunProviderWizard() (ProviderSpec, string, string, error) {
-	labels := make([]string, 0, len(providerPresets)+1)
-	for _, p := range providerPresets {
-		labels = append(labels, p.label())
+	vendors := provider.BuiltInVendors()
+	labels := make([]string, 0, len(vendors)+1)
+	for _, v := range vendors {
+		labels = append(labels, v.DisplayName)
 	}
 	customLabel := i18n.T("wizard.option.custom")
 	labels = append(labels, customLabel)
@@ -152,14 +112,14 @@ func RunProviderWizard() (ProviderSpec, string, string, error) {
 	if choice == customLabel {
 		spec, apiKeyEnv, err = customProviderWizard()
 	} else {
-		var preset providerPreset
-		for _, p := range providerPresets {
-			if p.label() == choice {
-				preset = p
+		var vendor provider.Vendor
+		for _, v := range vendors {
+			if v.DisplayName == choice {
+				vendor = v
 				break
 			}
 		}
-		spec, apiKeyEnv, err = presetProviderWizard(preset)
+		spec, apiKeyEnv, err = presetProviderWizard(vendor)
 	}
 	if err != nil {
 		return ProviderSpec{}, "", "", err
@@ -173,30 +133,37 @@ func RunProviderWizard() (ProviderSpec, string, string, error) {
 	return spec, agentName, apiKeyEnv, nil
 }
 
-func presetProviderWizard(p providerPreset) (ProviderSpec, string, error) {
-	model, err := selectOrInput(i18n.T("wizard.select.model"), p.Models, 0, i18n.T("wizard.input.model_name"))
+func presetProviderWizard(v provider.Vendor) (ProviderSpec, string, error) {
+	model, err := selectOrInput(i18n.T("wizard.select.model"), []string{v.DefaultModel}, 0, i18n.T("wizard.input.model_name"))
 	if err != nil {
 		return ProviderSpec{}, "", err
 	}
-
-	spec := ProviderSpec{
-		Name:         p.Name,
-		Type:         p.Type,
-		BaseURL:      p.BaseURL,
-		APIKeyEnv:    p.APIKeyEnv,
-		DefaultModel: model,
-		APIVersion:   p.APIVersion,
+	if strings.TrimSpace(model) == "" {
+		model = v.DefaultModel
 	}
 
-	if p.NeedThinking {
+	spec := ProviderSpec{
+		Name:         v.Name,
+		APIStyle:     v.APIStyle,
+		BaseURL:      v.BaseURLFor(v.APIStyle),
+		APIKeyEnv:    v.APIKeyEnv,
+		DefaultModel: model,
+		APIVersion:   v.APIVersion,
+		AuthStyle:    v.AuthForStyle(v.APIStyle),
+		DisplayName: v.DisplayName,
+		ModelsPath:   provider.DefaultModelsPathFor(v.APIStyle),
+		Vision:       v.Vision,
+	}
+
+	if v.SupportsThinking {
 		if err := configureThinking(&spec); err != nil {
 			return ProviderSpec{}, "", err
 		}
 	}
 
-	fmt.Print(i18n.T("wizard.summary.selected", "provider", spec.Name, "type", spec.Type, "model", spec.DefaultModel))
+	fmt.Print(i18n.T("wizard.summary.selected", "provider", spec.Name, "type", spec.APIStyle, "model", spec.DefaultModel))
 	fmt.Println()
-	return spec, p.APIKeyEnv, nil
+	return spec, v.APIKeyEnv, nil
 }
 
 func configureThinking(spec *ProviderSpec) error {
@@ -225,12 +192,13 @@ func customProviderWizard() (ProviderSpec, string, error) {
 		return ProviderSpec{}, "", err
 	}
 
-	pType, err := selectOption(i18n.T("wizard.select.api_type"), []string{"openai", "anthropic"}, 0)
+	pStyle, err := selectOption(i18n.T("wizard.select.api_type"), []string{"openai", "anthropic"}, 0)
 	if err != nil {
 		return ProviderSpec{}, "", err
 	}
+	style := provider.APIStyle(pStyle)
 
-	baseURL, err := inputString(i18n.T("wizard.input.base_url"), "https://api.example.com/v1")
+	baseURL, err := inputString(i18n.T("wizard.input.base_url"), defaultBaseURLHint(style))
 	if err != nil {
 		return ProviderSpec{}, "", err
 	}
@@ -247,13 +215,14 @@ func customProviderWizard() (ProviderSpec, string, error) {
 
 	spec := ProviderSpec{
 		Name:         name,
-		Type:         provider.Kind(pType),
+		APIStyle:     style,
 		BaseURL:      baseURL,
 		APIKeyEnv:    apiKeyEnv,
 		DefaultModel: model,
+		ModelsPath:   provider.DefaultModelsPathFor(style),
 	}
 
-	if spec.Type == provider.KindAnthropic {
+	if style == provider.StyleAnthropic {
 		version, err := selectOption(i18n.T("wizard.select.api_version"), []string{"2023-06-01"}, 0)
 		if err != nil {
 			return ProviderSpec{}, "", err
@@ -261,7 +230,7 @@ func customProviderWizard() (ProviderSpec, string, error) {
 		spec.APIVersion = version
 	}
 
-	if spec.Type == provider.KindOpenAI {
+	if style == provider.StyleOpenAI {
 		notSet := i18n.T("wizard.option.not_set")
 		thinking, err := selectOption(i18n.T("wizard.select.thinking_mode_custom"), []string{"disabled", "enabled", notSet}, 2)
 		if err != nil {
@@ -273,6 +242,15 @@ func customProviderWizard() (ProviderSpec, string, error) {
 	}
 
 	return spec, apiKeyEnv, nil
+}
+
+func defaultBaseURLHint(style provider.APIStyle) string {
+	switch style {
+	case provider.StyleAnthropic:
+		return "https://api.anthropic.com"
+	default:
+		return "https://api.example.com/v1"
+	}
 }
 
 // UpsertProvider adds or updates a provider in providers.yaml.
@@ -294,16 +272,25 @@ func UpsertProvider(home string, spec ProviderSpec) error {
 		return fmt.Errorf("read providers: %w", err)
 	}
 
-	// For updates, preserve existing api_key_env if not provided.
+	// For updates, preserve existing fields if not provided.
 	if existing, ok := providers[spec.Name]; ok {
 		if spec.APIKeyEnv == "" {
 			spec.APIKeyEnv = existing.APIKeyEnv
 		}
-		if spec.Type == "" {
-			spec.Type = existing.Type
+		if spec.APIStyle == "" {
+			spec.APIStyle = existing.APIStyle
 		}
 		if spec.DefaultModel == "" {
 			spec.DefaultModel = existing.DefaultModel
+		}
+		if spec.BaseURL == "" {
+			spec.BaseURL = existing.BaseURL
+		}
+		if spec.ModelsPath == "" {
+			spec.ModelsPath = existing.ModelsPath
+		}
+		if spec.APIVersion == "" {
+			spec.APIVersion = existing.APIVersion
 		}
 	}
 
@@ -312,11 +299,14 @@ func UpsertProvider(home string, spec ProviderSpec) error {
 	}
 
 	entry := provider.ProfileEntry{
-		Type:         spec.Type,
+		APIStyle:     spec.APIStyle,
 		BaseURL:      spec.BaseURL,
 		APIKeyEnv:    spec.APIKeyEnv,
 		APIVersion:   spec.APIVersion,
+		AuthStyle:    spec.AuthStyle,
 		DefaultModel: spec.DefaultModel,
+		DisplayName: spec.DisplayName,
+		ModelsPath:   spec.ModelsPath,
 		Vision:       spec.Vision,
 	}
 	if spec.ThinkingType != "" {
@@ -363,7 +353,7 @@ func (s ProviderSpec) validate() error {
 	if s.Name == "" {
 		return fmt.Errorf("%s", i18n.T("wizard.error.provider_name_required"))
 	}
-	if s.Type != provider.KindAnthropic && s.Type != provider.KindOpenAI {
+	if s.APIStyle != provider.StyleAnthropic && s.APIStyle != provider.StyleOpenAI {
 		return fmt.Errorf("%s", i18n.T("wizard.error.type_invalid"))
 	}
 	if s.APIKeyEnv == "" {

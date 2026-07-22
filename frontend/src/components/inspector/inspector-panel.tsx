@@ -48,7 +48,7 @@ function EntryDetail({ entry }: { entry: ConversationEntry }) {
       <div className="flex flex-col gap-4 p-4">
         <div>
           <p className="text-xs font-medium text-muted-foreground">{entry.role === "user" ? t("inspector.userMessage") : t("inspector.assistantReply")}</p>
-          <h3 className="mt-0.5 font-heading text-sm capitalize text-foreground">{entry.role}</h3>
+          <h3 className="mt-0.5 text-sm font-medium capitalize text-foreground">{entry.role}</h3>
         </div>
         <Separator />
         {entry.reasoningContent && (

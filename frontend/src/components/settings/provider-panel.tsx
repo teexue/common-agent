@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Eye, Plus, Server, Settings, Trash2 } from "lucide-react"
+import { Eye, Plus, RefreshCw, Server, Settings, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,8 +12,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { deleteProvider, fetchProviders, upsertProvider } from "@/lib/api"
-import type { ProviderInfo } from "@/types/agent"
+import {
+  deleteProvider,
+  fetchProviderModels,
+  fetchProviders,
+  fetchVendors,
+  upsertProvider,
+} from "@/lib/api"
+import type { ModelInfo, ProviderInfo, VendorInfo } from "@/types/agent"
 
 function EmptyState({ text }: { text: string }) {
   return (
@@ -31,9 +37,12 @@ function ProviderCard({ provider: p, onEdit, onDelete }: { provider: ProviderInf
         <Server className="h-4 w-4 text-primary" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-foreground">{p.name}</p>
+        <p className="text-sm font-medium text-foreground">{p.display_name || p.name}</p>
+        {p.display_name && p.display_name !== p.name && (
+          <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{p.name}</p>
+        )}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <Badge variant="secondary" className="rounded-md px-1.5 py-0.5 text-[10px] font-mono">{p.type}</Badge>
+          <Badge variant="secondary" className="rounded-md px-1.5 py-0.5 text-[10px] font-mono">{p.api_style}</Badge>
           {p.default_model && <Badge variant="outline" className="rounded-md px-1.5 py-0.5 text-[10px] font-mono">{p.default_model}</Badge>}
           {p.vision && (
             <Badge variant="outline" className="rounded-md px-1.5 py-0.5 text-[10px] gap-0.5">
@@ -54,19 +63,103 @@ function ProviderCard({ provider: p, onEdit, onDelete }: { provider: ProviderInf
   )
 }
 
+type StyleOption = "openai" | "anthropic"
+
+function defaultModelsPath(style: StyleOption): string {
+  return style === "anthropic" ? "/v1/models" : "/models"
+}
+
 function ProviderForm({ provider, onSaved, onCancel }: { provider?: ProviderInfo; onSaved: () => void; onCancel: () => void }) {
   const { t } = useTranslation()
   const isEdit = !!provider
+  const [vendors, setVendors] = useState<VendorInfo[]>([])
+  const [vendorName, setVendorName] = useState<string>("")
   const [name, setName] = useState(provider?.name ?? "")
-  const [type, setType] = useState(provider?.type ?? "openai")
+  const [apiStyle, setApiStyle] = useState<StyleOption>((provider?.api_style as StyleOption) ?? "openai")
+  const [authStyle, setAuthStyle] = useState<"x-api-key" | "bearer" | "">((provider?.auth_style as "x-api-key" | "bearer") ?? "")
   const [baseURL, setBaseURL] = useState(provider?.base_url ?? "")
+  const [baseURLTouched, setBaseURLTouched] = useState(false)
   const [apiKey, setApiKey] = useState("")
   const [defaultModel, setDefaultModel] = useState(provider?.default_model ?? "")
+  const [modelsPath, setModelsPath] = useState(provider?.models_path ?? "")
   const [vision, setVision] = useState(provider?.vision ?? false)
+  const [displayName, setDisplayName] = useState(provider?.display_name ?? "")
+  const [modelsPathTouched, setModelsPathTouched] = useState(false)
+  const [models, setModels] = useState<ModelInfo[] | null>(null)
+  const [fetching, setFetching] = useState(false)
+  const [fetchErr, setFetchErr] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    fetchVendors()
+      .then((list) => setVendors(list ?? []))
+      .catch(() => setVendors([]))
+  }, [])
+
+  const selectedVendor = useMemo(
+    () => vendors.find((v) => v.name === vendorName) ?? null,
+    [vendors, vendorName],
+  )
+
+  const styleOptions: StyleOption[] = selectedVendor?.supported_styles ?? ["openai", "anthropic"]
+
+  const vendorBaseURL = (v: VendorInfo, style: StyleOption): string =>
+    style === "anthropic" ? (v.anthropic_base_url ?? "") : (v.openai_base_url ?? "")
+  const vendorAuth = (v: VendorInfo, style: StyleOption): "x-api-key" | "bearer" => {
+    if (style === "anthropic") return v.anthropic_auth ?? "x-api-key"
+    return "bearer"
+  }
+
+  const applyVendor = (v: VendorInfo) => {
+    setVendorName(v.name)
+    setName((prev) => prev || v.name)
+    const style = v.api_style as StyleOption
+    setApiStyle(style)
+    setBaseURL(vendorBaseURL(v, style))
+    setBaseURLTouched(false)
+    setAuthStyle(vendorAuth(v, style))
+    setDefaultModel(v.default_model)
+    setModelsPath(defaultModelsPath(style))
+    setModelsPathTouched(false)
+    setVision(v.vision)
+    setDisplayName(v.display_name)
+  }
+
+  const onStyleChange = (style: StyleOption) => {
+    setApiStyle(style)
+    if (!modelsPathTouched) setModelsPath(defaultModelsPath(style))
+    if (selectedVendor) {
+      if (!baseURLTouched) setBaseURL(vendorBaseURL(selectedVendor, style))
+      setAuthStyle(vendorAuth(selectedVendor, style))
+    }
+  }
+
+  const canFetch = isEdit || !!apiKey.trim()
   const canSave = !!name.trim() && !!defaultModel.trim() && (isEdit || !!apiKey.trim())
+
+  const handleFetchModels = async () => {
+    if (!canFetch) return
+    setFetching(true)
+    setFetchErr(null)
+    try {
+      const list = await fetchProviderModels({
+        name: name.trim(),
+        api_style: apiStyle,
+        base_url: baseURL.trim() || undefined,
+        models_path: modelsPath.trim() || undefined,
+        api_version: undefined,
+        auth_style: authStyle || undefined,
+        api_key: apiKey.trim() || undefined,
+      })
+      setModels(list ?? [])
+    } catch (e: unknown) {
+      setFetchErr(e instanceof Error ? e.message : String(e))
+      setModels(null)
+    } finally {
+      setFetching(false)
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -74,10 +167,13 @@ function ProviderForm({ provider, onSaved, onCancel }: { provider?: ProviderInfo
     try {
       await upsertProvider({
         name: name.trim(),
-        type,
+        api_style: apiStyle,
         base_url: baseURL.trim() || undefined,
         api_key: apiKey.trim() || undefined,
         default_model: defaultModel.trim() || undefined,
+        display_name: displayName.trim() || undefined,
+        models_path: modelsPath.trim() || undefined,
+        auth_style: authStyle || undefined,
         vision,
       })
       onSaved()
@@ -90,23 +186,55 @@ function ProviderForm({ provider, onSaved, onCancel }: { provider?: ProviderInfo
 
   return (
     <div className="space-y-4 rounded-xl border border-primary/30 bg-card p-5">
+      {!isEdit && vendors.length > 0 && (
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">{t("settings.providerVendor")}</Label>
+          <Select
+            value={vendorName ? { value: vendorName, label: selectedVendor?.display_name ?? vendorName } : null}
+            onValueChange={(v) => {
+              if (v && typeof v === "object" && "value" in v) {
+                const found = vendors.find((x) => x.name === (v as { value: string }).value)
+                if (found) applyVendor(found)
+              }
+            }}
+          >
+            <SelectTrigger className="h-9 w-full rounded-lg text-sm"><SelectValue placeholder={t("settings.providerVendorPlaceholder")} /></SelectTrigger>
+            <SelectContent className="rounded-xl">
+              {vendors.map((v) => (
+                <SelectItem key={v.name} value={{ value: v.name, label: v.display_name }}>{v.display_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">{t("settings.providerName")}</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} disabled={isEdit} className="h-9 rounded-lg font-mono text-sm" placeholder="moonshot" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">{t("settings.providerType")}</Label>
+          <Label className="text-xs text-muted-foreground">{t("settings.providerDisplayName")}</Label>
+          <Input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            className="h-9 rounded-lg text-sm"
+            placeholder={selectedVendor?.display_name ?? name ?? "My Provider"}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">{t("settings.providerAPIStyle")}</Label>
           <Select
-            value={{ value: type, label: type }}
+            value={{ value: apiStyle, label: apiStyle }}
             onValueChange={(v) => {
-              if (v && typeof v === "object" && "value" in v) setType((v as { value: string }).value)
+              if (v && typeof v === "object" && "value" in v) onStyleChange((v as { value: string }).value as StyleOption)
             }}
           >
-            <SelectTrigger className="h-9 rounded-lg text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-9 w-full rounded-lg text-sm"><SelectValue /></SelectTrigger>
             <SelectContent className="rounded-xl">
-              <SelectItem value={{ value: "openai", label: "openai" }}>openai</SelectItem>
-              <SelectItem value={{ value: "anthropic", label: "anthropic" }}>anthropic</SelectItem>
+              {styleOptions.map((s) => (
+                <SelectItem key={s} value={{ value: s, label: s }}>{s}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -114,8 +242,31 @@ function ProviderForm({ provider, onSaved, onCancel }: { provider?: ProviderInfo
 
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">{t("settings.providerBaseURL")}</Label>
-        <Input value={baseURL} onChange={(e) => setBaseURL(e.target.value)} className="h-9 rounded-lg font-mono text-sm" placeholder={t("settings.baseURLPlaceholder")} />
+        <Input
+          value={baseURL}
+          onChange={(e) => { setBaseURL(e.target.value); setBaseURLTouched(true) }}
+          className="h-9 rounded-lg font-mono text-sm"
+          placeholder={t("settings.baseURLPlaceholder")}
+        />
       </div>
+
+      {apiStyle === "anthropic" && (
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">{t("settings.providerAuthStyle")}</Label>
+          <Select
+            value={{ value: authStyle || "x-api-key", label: authStyle || "x-api-key" }}
+            onValueChange={(v) => {
+              if (v && typeof v === "object" && "value" in v) setAuthStyle((v as { value: string }).value as "x-api-key" | "bearer")
+            }}
+          >
+            <SelectTrigger className="h-9 w-full rounded-lg text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value={{ value: "x-api-key", label: "x-api-key" }}>x-api-key</SelectItem>
+              <SelectItem value={{ value: "bearer", label: "Authorization: Bearer" }}>Authorization: Bearer</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">{t("settings.providerApiKey")}</Label>
@@ -133,17 +284,59 @@ function ProviderForm({ provider, onSaved, onCancel }: { provider?: ProviderInfo
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">{t("settings.providerDefaultModel")}</Label>
-          <Input value={defaultModel} onChange={(e) => setDefaultModel(e.target.value)} className="h-9 rounded-lg font-mono text-sm" placeholder={t("settings.defaultModelPlaceholder")} />
+          <div className="flex gap-2">
+            <Input value={defaultModel} onChange={(e) => setDefaultModel(e.target.value)} className="h-9 rounded-lg font-mono text-sm" placeholder={t("settings.defaultModelPlaceholder")} />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 shrink-0 gap-1.5 rounded-lg px-3 text-xs"
+              onClick={handleFetchModels}
+              disabled={fetching || !canFetch}
+              title={canFetch ? t("settings.fetchModelsHint") : t("settings.fetchModelsNoKey")}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
+              {t("settings.fetchModels")}
+            </Button>
+          </div>
+          {fetchErr && <p className="text-[11px] text-destructive">{t("settings.fetchModelsFailed")}: {fetchErr}</p>}
+          {apiStyle === "anthropic" && selectedVendor?.supported_styles?.includes("openai") && !fetchErr && (
+            <p className="text-[11px] text-muted-foreground">{t("settings.fetchModelsViaOpenAI")}</p>
+          )}
+          {models && models.length > 0 && (
+            <Select
+              value={defaultModel ? { value: defaultModel, label: defaultModel } : null}
+              onValueChange={(v) => {
+                if (v && typeof v === "object" && "value" in v) setDefaultModel((v as { value: string }).value)
+              }}
+            >
+              <SelectTrigger className="h-9 w-full rounded-lg text-sm"><SelectValue placeholder={t("settings.fetchModelsPick")} /></SelectTrigger>
+              <SelectContent className="rounded-xl">
+                {models.map((m) => (
+                  <SelectItem key={m.id} value={{ value: m.id, label: m.id }}>{m.id}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
-        <div className="flex items-end pb-1">
-          <button
-            type="button"
-            onClick={() => setVision(!vision)}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition-colors ${vision ? "border-primary/30 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
-          >
-            <Eye className="h-3.5 w-3.5" /> {t("settings.providerVision")}
-          </button>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">{t("settings.providerModelsPath")}</Label>
+          <Input
+            value={modelsPath}
+            onChange={(e) => { setModelsPath(e.target.value); setModelsPathTouched(true) }}
+            className="h-9 rounded-lg font-mono text-sm"
+            placeholder={defaultModelsPath(apiStyle)}
+          />
         </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setVision(!vision)}
+          className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition-colors ${vision ? "border-primary/30 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
+        >
+          <Eye className="h-3.5 w-3.5" /> {t("settings.providerVision")}
+        </button>
       </div>
 
       {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}

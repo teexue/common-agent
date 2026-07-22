@@ -12,9 +12,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, FolderOpen, Keyboard, Monitor, Plug, Server, Settings } from "lucide-react"
+import { ArrowLeft, FolderOpen, ImageIcon, Keyboard, Monitor, Plug, Server, Settings } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { MetricsPanel } from "@/components/monitoring/metrics-panel"
+import { BackgroundPanel } from "@/components/settings/background-panel"
 import { DirPickerDialog } from "@/components/settings/dir-picker-dialog"
 import { McpPanel } from "@/components/settings/mcp-panel"
 import { ProviderPanel } from "@/components/settings/provider-panel"
@@ -86,7 +87,7 @@ export function SettingsPage() {
 
 function GeneralTab() {
   const { t, i18n: i18nInstance } = useTranslation()
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, palette, setPalette } = useTheme()
   const [workDir, setWorkDir] = useState(() => localStorage.getItem("workDir") || "")
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -94,6 +95,11 @@ function GeneralTab() {
     { value: "light", label: t("settings.themeLight") },
     { value: "dark", label: t("settings.themeDark") },
     { value: "system", label: t("settings.themeSystem") },
+  ]
+
+  const paletteOptions = [
+    { value: "warm", label: t("settings.paletteWarm") },
+    { value: "slate", label: t("settings.paletteSlate") },
   ]
 
   const langOptions = [
@@ -117,6 +123,18 @@ function GeneralTab() {
 
   return (
     <>
+      <Section title={t("settings.palette")}>
+        <Select
+          value={{ value: palette, label: paletteOptions.find((o) => o.value === palette)?.label ?? palette }}
+          onValueChange={(v) => { if (v && typeof v === "object" && "value" in v) setPalette((v as { value: string }).value as "warm" | "slate") }}
+        >
+          <SelectTrigger className="w-full rounded-xl"><SelectValue /></SelectTrigger>
+          <SelectContent className="rounded-xl">
+            {paletteOptions.map((o) => <SelectItem key={o.value} value={{ value: o.value, label: o.label }}>{o.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </Section>
+
       <Section title={t("settings.appearance")}>
         <Select
           value={{ value: theme, label: themeOptions.find((o) => o.value === theme)?.label ?? theme }}
@@ -169,6 +187,10 @@ function GeneralTab() {
           initialPath={workDir}
           onSelect={handleWorkDirChange}
         />
+      </Section>
+
+      <Section title={t("settings.background")} icon={<ImageIcon className="h-3.5 w-3.5" />}>
+        <BackgroundPanel />
       </Section>
 
       <Section title={t("settings.shortcuts")} icon={<Keyboard className="h-3.5 w-3.5" />}>

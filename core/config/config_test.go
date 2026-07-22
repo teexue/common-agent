@@ -33,7 +33,7 @@ func TestUpsertProvider(t *testing.T) {
 	dir := t.TempDir()
 	spec := config.ProviderSpec{
 		Name:         "moonshot",
-		Type:         provider.KindOpenAI,
+		APIStyle:     provider.StyleOpenAI,
 		BaseURL:      "https://api.moonshot.cn/v1",
 		APIKeyEnv:    "MOONSHOT_API_KEY",
 		DefaultModel: "kimi-k2.6",

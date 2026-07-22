@@ -219,6 +219,10 @@ func (s *Server) Handler() *gin.Engine {
 	v1.GET("/mcp", s.handleMCPList)
 	v1.POST("/mcp/global", s.handleMCPGlobalUpsert)
 	v1.DELETE("/mcp/global/:name", s.handleMCPGlobalDelete)
+	v1.GET("/background", s.handleBackgroundGet)
+	v1.HEAD("/background", s.handleBackgroundGet)
+	v1.POST("/background", s.handleBackgroundUpload)
+	v1.DELETE("/background", s.handleBackgroundDelete)
 	v1.GET("/skills", s.handleSkillsList)
 	v1.GET("/fs/list", s.handleFSList)
 	v1.GET("/events", s.handleEvents)
@@ -247,11 +251,12 @@ func (s *Server) Handler() *gin.Engine {
 		v1.GET("/sessions/:id/replay", s.handleSessionReplay)
 	}
 
-	if s.catalog != nil {
-		v1.GET("/providers", s.handleProvidersList)
-		v1.POST("/providers", s.handleProviderUpsert)
-		v1.DELETE("/providers/:name", s.handleProviderDelete)
-	}
+	v1.GET("/vendors", s.handleVendors)
+	v1.GET("/providers", s.handleProvidersList)
+	v1.POST("/providers", s.handleProviderUpsert)
+	v1.DELETE("/providers/:name", s.handleProviderDelete)
+	v1.GET("/providers/:name/models", s.handleProviderModels)
+	v1.POST("/providers/models", s.handleProviderModelsTest)
 
 	if s.auditStore != nil {
 		v1.GET("/audit/export", s.handleAuditExport)

@@ -40,7 +40,7 @@ function SessionListItem({
         <span className={`h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${active ? "bg-primary" : "bg-muted-foreground/25 group-hover:bg-primary/40"}`} />
         <div className="min-w-0 flex-1">
           <span className="block truncate text-xs font-medium">{title}</span>
-          <span className="block truncate text-[10px] text-muted-foreground">
+          <span className="block truncate text-[11px] text-muted-foreground">
             {agentLabel || sess.agent} · {formatRelativeTime(sess.updated_at)}
           </span>
         </div>
@@ -69,7 +69,7 @@ export function SessionList({
 
   return (
     <div className="p-2.5">
-      <div className="mb-2 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+      <div className="mb-2 flex items-center gap-1.5 px-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">
         <Clock className="h-3 w-3" /> {t("layout.historySessions")}
       </div>
       <div className="flex flex-col gap-0.5">

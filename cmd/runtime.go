@@ -53,6 +53,12 @@ func bootstrapRuntime(paths runtimePaths, useMock bool, logger *slog.Logger) (*p
 
 	catalog, err := provider.LoadCatalog(paths.providers, creds.Lookup)
 	if err != nil {
+		// A missing or empty providers.yaml is non-fatal: the server can still
+		// start and let the user configure providers from the Settings UI.
+		if provider.IsMissingCatalogError(err) {
+			logger.Warn("log.runtime.no_providers", "path", paths.providers)
+			return nil, creds, nil
+		}
 		return nil, nil, fmt.Errorf("load providers from %s: %w (run: agent-server config init)", paths.providers, err)
 	}
 	logger.Debug("log.runtime.ready", "home", paths.home, "providers", paths.providers)

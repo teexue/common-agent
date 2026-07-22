@@ -241,11 +241,14 @@ func runConfigSetProvider(args []string) {
 func runConfigSetProviderFlags(args []string) {
 	fs := flag.NewFlagSet("config set provider", flag.ExitOnError)
 	homeFlag := fs.String("home", "", i18n.T("cli.flag.home_short"))
-	pType := fs.String("type", "openai", i18n.T("cli.flag.provider_type"))
+	apiStyle := fs.String("api-style", "openai", i18n.T("cli.flag.api_style"))
 	baseURL := fs.String("base-url", "", i18n.T("cli.flag.base_url"))
 	apiKeyEnv := fs.String("api-key-env", "", i18n.T("cli.flag.api_key_env"))
 	apiVersion := fs.String("api-version", "", i18n.T("cli.flag.api_version"))
 	model := fs.String("model", "", i18n.T("cli.flag.model"))
+	displayName := fs.String("display-name", "", i18n.T("cli.flag.display_name"))
+	modelsPath := fs.String("models-path", "", i18n.T("cli.flag.models_path"))
+	authStyle := fs.String("auth-style", "", i18n.T("cli.flag.auth_style"))
 	thinking := fs.String("thinking", "", i18n.T("cli.flag.thinking"))
 	thinkingKeep := fs.String("thinking-keep", "", i18n.T("cli.flag.thinking_keep"))
 	_ = fs.Parse(args)
@@ -262,16 +265,22 @@ func runConfigSetProviderFlags(args []string) {
 
 	spec := config.ProviderSpec{
 		Name:         fs.Args()[0],
-		Type:         provider.Kind(*pType),
+		APIStyle:     provider.APIStyle(*apiStyle),
 		BaseURL:      *baseURL,
 		APIKeyEnv:    *apiKeyEnv,
 		APIVersion:   *apiVersion,
+		AuthStyle:    provider.AuthStyle(*authStyle),
 		DefaultModel: *model,
+		DisplayName: *displayName,
+		ModelsPath:   *modelsPath,
 		ThinkingType: *thinking,
 		ThinkingKeep: *thinkingKeep,
 	}
 	if spec.APIKeyEnv == "" {
 		spec.APIKeyEnv = strings.ToUpper(spec.Name) + "_API_KEY"
+	}
+	if spec.ModelsPath == "" {
+		spec.ModelsPath = provider.DefaultModelsPathFor(spec.APIStyle)
 	}
 	if err := config.UpsertProvider(paths.home, spec); err != nil {
 		fmt.Fprintln(os.Stderr, err)

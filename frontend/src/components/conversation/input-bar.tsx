@@ -23,11 +23,11 @@ interface InputBarProps {
 function HintText({ isStreaming }: { isStreaming: boolean }) {
   const { t } = useTranslation()
   return (
-    <span className="text-[10px] text-muted-foreground/60">
+    <span className="text-[11px] text-muted-foreground/70">
       {isStreaming ? (
-        <><kbd className="rounded border border-border bg-muted px-1 py-px font-mono text-[9px]">Enter</kbd> {t("conversation.hintStop")}</>
+        <><kbd className="rounded border border-border bg-muted px-1 py-px font-mono text-[10px]">Enter</kbd> {t("conversation.hintStop")}</>
       ) : (
-        <><kbd className="rounded border border-border bg-muted px-1 py-px font-mono text-[9px]">Enter</kbd> {t("conversation.hintSend")} <kbd className="rounded border border-border bg-muted px-1 py-px font-mono text-[9px]">Shift+Enter</kbd> {t("conversation.hintNewline")}</>
+        <><kbd className="rounded border border-border bg-muted px-1 py-px font-mono text-[10px]">Enter</kbd> {t("conversation.hintSend")} <kbd className="rounded border border-border bg-muted px-1 py-px font-mono text-[10px]">Shift+Enter</kbd> {t("conversation.hintNewline")}</>
       )}
     </span>
   )

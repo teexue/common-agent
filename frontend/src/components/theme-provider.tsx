@@ -1,31 +1,44 @@
 /* eslint-disable react-refresh/only-export-components */
 import * as React from "react"
 
-type Theme = "dark" | "light" | "system"
-type ResolvedTheme = "dark" | "light"
+export type ThemeMode = "dark" | "light" | "system"
+export type ThemePalette = "warm" | "slate"
+type ResolvedMode = "dark" | "light"
 
 type ThemeProviderProps = {
   children: React.ReactNode
-  defaultTheme?: Theme
-  storageKey?: string
+  defaultMode?: ThemeMode
+  defaultPalette?: ThemePalette
+  modeKey?: string
+  paletteKey?: string
   disableTransitionOnChange?: boolean
 }
 
 type ThemeProviderState = {
-  theme: Theme
-  setTheme: (theme: Theme) => void
+  /** Legacy alias for mode. */
+  theme: ThemeMode
+  setTheme: (mode: ThemeMode) => void
+  mode: ThemeMode
+  setMode: (mode: ThemeMode) => void
+  palette: ThemePalette
+  setPalette: (palette: ThemePalette) => void
 }
 
 const COLOR_SCHEME_QUERY = "(prefers-color-scheme: dark)"
-const THEME_VALUES: Theme[] = ["dark", "light", "system"]
+const MODE_VALUES: ThemeMode[] = ["dark", "light", "system"]
+const PALETTE_VALUES: ThemePalette[] = ["warm", "slate"]
 
 const ThemeProviderContext = React.createContext<ThemeProviderState | undefined>(undefined)
 
-function isTheme(value: string | null): value is Theme {
-  return value !== null && THEME_VALUES.includes(value as Theme)
+function isMode(value: string | null): value is ThemeMode {
+  return value !== null && MODE_VALUES.includes(value as ThemeMode)
 }
 
-function getSystemTheme(): ResolvedTheme {
+function isPalette(value: string | null): value is ThemePalette {
+  return value !== null && PALETTE_VALUES.includes(value as ThemePalette)
+}
+
+function getSystemMode(): ResolvedMode {
   return window.matchMedia(COLOR_SCHEME_QUERY).matches ? "dark" : "light"
 }
 
@@ -42,60 +55,71 @@ function isEditableTarget(target: EventTarget | null) {
   return !!target.closest("input, textarea, select, [contenteditable='true']")
 }
 
-function resolveTheme(theme: Theme): ResolvedTheme {
-  return theme === "system" ? getSystemTheme() : theme
+function resolveMode(mode: ThemeMode): ResolvedMode {
+  return mode === "system" ? getSystemMode() : mode
 }
 
-function toggleTheme(current: Theme): Theme {
+function toggleMode(current: ThemeMode): ThemeMode {
   if (current === "dark") return "light"
   if (current === "light") return "dark"
-  return getSystemTheme() === "dark" ? "light" : "dark"
+  return getSystemMode() === "dark" ? "light" : "dark"
 }
 
-export function ThemeProvider({ children, defaultTheme = "system", storageKey = "theme", disableTransitionOnChange = true, ...props }: ThemeProviderProps) {
-  const [theme, setThemeState] = React.useState<Theme>(() => {
-    const stored = localStorage.getItem(storageKey)
-    return isTheme(stored) ? stored : defaultTheme
+export function ThemeProvider({ children, defaultMode = "system", defaultPalette = "warm", modeKey = "theme", paletteKey = "theme-palette", disableTransitionOnChange = true, ...props }: ThemeProviderProps) {
+  const [mode, setModeState] = React.useState<ThemeMode>(() => {
+    const stored = localStorage.getItem(modeKey)
+    return isMode(stored) ? stored : defaultMode
+  })
+  const [palette, setPaletteState] = React.useState<ThemePalette>(() => {
+    const stored = localStorage.getItem(paletteKey)
+    return isPalette(stored) ? stored : defaultPalette
   })
 
-  const setTheme = React.useCallback((next: Theme) => { localStorage.setItem(storageKey, next); setThemeState(next) }, [storageKey])
+  const setMode = React.useCallback((next: ThemeMode) => { localStorage.setItem(modeKey, next); setModeState(next) }, [modeKey])
+  const setPalette = React.useCallback((next: ThemePalette) => { localStorage.setItem(paletteKey, next); setPaletteState(next) }, [paletteKey])
 
-  const applyTheme = React.useCallback((next: Theme) => {
+  const applyTheme = React.useCallback((nextMode: ThemeMode, nextPalette: ThemePalette) => {
     const root = document.documentElement
-    const resolved = resolveTheme(next)
+    const resolved = resolveMode(nextMode)
     const restore = disableTransitionOnChange ? disableTransitionsTemporarily() : null
-    root.classList.remove("light", "dark"); root.classList.add(resolved)
+    root.classList.remove("light", "dark", "theme-slate")
+    if (nextPalette === "slate") root.classList.add("theme-slate")
+    root.classList.add(resolved)
     restore?.()
   }, [disableTransitionOnChange])
 
   React.useEffect(() => {
-    applyTheme(theme)
-    if (theme !== "system") return undefined
+    applyTheme(mode, palette)
+    if (mode !== "system") return undefined
     const mq = window.matchMedia(COLOR_SCHEME_QUERY)
-    const handler = () => applyTheme("system")
+    const handler = () => applyTheme("system", palette)
     mq.addEventListener("change", handler)
     return () => mq.removeEventListener("change", handler)
-  }, [theme, applyTheme])
+  }, [mode, palette, applyTheme])
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || isEditableTarget(e.target) || e.key.toLowerCase() !== "d") return
-      setThemeState((current) => { const next = toggleTheme(current); localStorage.setItem(storageKey, next); return next })
+      setModeState((current) => { const next = toggleMode(current); localStorage.setItem(modeKey, next); return next })
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [storageKey])
+  }, [modeKey])
 
   React.useEffect(() => {
     const handler = (e: StorageEvent) => {
-      if (e.storageArea !== localStorage || e.key !== storageKey) return
-      setThemeState(isTheme(e.newValue) ? e.newValue : defaultTheme)
+      if (e.storageArea !== localStorage) return
+      if (e.key === modeKey) setModeState(isMode(e.newValue) ? e.newValue : defaultMode)
+      if (e.key === paletteKey) setPaletteState(isPalette(e.newValue) ? e.newValue : defaultPalette)
     }
     window.addEventListener("storage", handler)
     return () => window.removeEventListener("storage", handler)
-  }, [defaultTheme, storageKey])
+  }, [defaultMode, defaultPalette, modeKey, paletteKey])
 
-  const value = React.useMemo(() => ({ theme, setTheme }), [theme, setTheme])
+  const value = React.useMemo<ThemeProviderState>(() => ({
+    theme: mode, setTheme: setMode, mode, setMode, palette, setPalette,
+  }), [mode, setMode, palette, setPalette])
+
   return <ThemeProviderContext.Provider {...props} value={value}>{children}</ThemeProviderContext.Provider>
 }
 

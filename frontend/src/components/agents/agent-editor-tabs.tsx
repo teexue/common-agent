@@ -124,8 +124,8 @@ export function BasicTab({
               <SelectTrigger className="h-9 w-full rounded-xl"><SelectValue placeholder={t("agent.selectProvider")} /></SelectTrigger>
               <SelectContent className="rounded-xl">
                 {providers.map((p) => (
-                  <SelectItem key={p.name} value={{ value: p.name, label: `${p.name} (${p.type})` }}>
-                    {p.name} <span className="text-muted-foreground">({p.type})</span>
+                  <SelectItem key={p.name} value={{ value: p.name, label: `${p.display_name || p.name} (${p.api_style})` }}>
+                    {p.display_name || p.name} <span className="text-muted-foreground">({p.api_style})</span>
                   </SelectItem>
                 ))}
               </SelectContent>

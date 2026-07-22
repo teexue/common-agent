@@ -53,7 +53,7 @@ function AgentSwitcher({
   if (!onSelectAgent || agents.length === 0) {
     return (
       <div className="flex items-center gap-2">
-        <span className="font-heading text-sm tracking-tight text-foreground">{agent.name}</span>
+        <span className="text-sm font-medium tracking-tight text-foreground">{agent.name}</span>
         {agent.model && (
           <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px] font-mono">{agent.model}</Badge>
         )}
@@ -72,7 +72,7 @@ function AgentSwitcher({
             />
           }
         >
-          <span className="font-heading text-sm tracking-tight text-foreground">{agent.name}</span>
+          <span className="text-sm font-medium tracking-tight text-foreground">{agent.name}</span>
           {agent.model && (
             <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px] font-mono">{agent.model}</Badge>
           )}
@@ -94,7 +94,7 @@ function AgentSwitcher({
           />
         }
       >
-        <span className="font-heading text-sm tracking-tight">{agent.name}</span>
+        <span className="text-sm font-medium tracking-tight">{agent.name}</span>
         {agent.model && (
           <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px] font-mono">{agent.model}</Badge>
         )}
@@ -126,7 +126,7 @@ export function TopBar({
 }: TopBarProps) {
   const { t } = useTranslation()
   return (
-    <header className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md">
+    <header className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-background px-4">
       <div className="flex items-center gap-2.5">
         <AgentSwitcher agent={agent} agents={agents} locked={agentLocked} onSelectAgent={onSelectAgent} />
         <StatusIndicator status={status} />

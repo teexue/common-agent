@@ -26,10 +26,10 @@ function UserMessage({ entry }: { entry: ConversationEntry }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-heading text-xs text-foreground">{t("common.you")}</span>
-          <span className="text-[10px] text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
+          <span className="text-xs font-medium text-foreground">{t("common.you")}</span>
+          <span className="text-[11px] text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
         </div>
-        <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{entry.content}</p>
+        <p className="mt-1 whitespace-pre-wrap rounded-xl bg-muted/50 px-3.5 py-2.5 text-sm leading-relaxed text-foreground">{entry.content}</p>
       </div>
     </div>
   )
@@ -39,15 +39,15 @@ function AssistantHeader({ entry, isActive }: { entry: ConversationEntry; isActi
   const { t } = useTranslation()
   return (
     <div className="flex items-center gap-2">
-      <span className="font-heading text-xs text-foreground">Agent</span>
-      <span className="text-[10px] text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
+      <span className="text-xs font-medium text-foreground">Agent</span>
+      <span className="text-[11px] text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
       {isActive && (
-        <span className="flex items-center gap-1 text-[10px] text-primary">
+        <span className="flex items-center gap-1 text-[11px] text-primary">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /> {t("status.generating")}
         </span>
       )}
       {entry.usage && !isActive && (
-        <span className="text-[10px] text-muted-foreground/60">
+        <span className="text-[11px] text-muted-foreground/70">
           {entry.usage.inputTokens.toLocaleString()} in / {entry.usage.outputTokens.toLocaleString()} out
         </span>
       )}
@@ -105,15 +105,15 @@ function CompactionBanner({ summary }: { summary: string }) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   return (
-    <div className="mx-1 rounded-xl border border-amber-200/50 bg-amber-50/50 dark:border-amber-800/30 dark:bg-amber-950/20">
+    <div className="mx-1 rounded-xl border border-warning/30 bg-warning/10">
       <button onClick={() => setExpanded((v) => !v)} className="flex w-full items-center gap-2 px-3 py-2 text-left">
-        <Minimize2 className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-        <span className="flex-1 text-xs font-medium text-amber-700 dark:text-amber-300">{t("conversation.compaction")}</span>
-        {expanded ? <ChevronDown className="h-3 w-3 text-amber-500" /> : <ChevronRight className="h-3 w-3 text-amber-500" />}
+        <Minimize2 className="h-3.5 w-3.5 shrink-0 text-warning" />
+        <span className="flex-1 text-xs font-medium text-warning">{t("conversation.compaction")}</span>
+        {expanded ? <ChevronDown className="h-3 w-3 text-warning/70" /> : <ChevronRight className="h-3 w-3 text-warning/70" />}
       </button>
       {expanded && (
-        <div className="border-t border-amber-200/50 px-3 py-2 dark:border-amber-800/30">
-          <p className="whitespace-pre-wrap text-xs leading-relaxed text-amber-800/80 dark:text-amber-200/70">{summary}</p>
+        <div className="border-t border-warning/20 px-3 py-2">
+          <p className="whitespace-pre-wrap text-xs leading-relaxed text-warning/80">{summary}</p>
         </div>
       )}
     </div>

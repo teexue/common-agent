@@ -135,10 +135,36 @@ export interface SessionMeta {
 
 export interface ProviderInfo {
   name: string
-  type: string // "openai" | "anthropic"
+  api_style: "openai" | "anthropic"
+  auth_style?: "x-api-key" | "bearer"
+  display_name: string
   base_url: string
   default_model: string
+  models_path: string
   vision: boolean
+}
+
+// Built-in vendor preset (mirrors Go provider.VendorInfo)
+export interface VendorInfo {
+  name: string
+  display_name: string
+  openai_base_url: string
+  anthropic_base_url?: string
+  anthropic_auth?: "x-api-key" | "bearer"
+  default_model: string
+  api_key_env: string
+  api_version?: string
+  api_style: "openai" | "anthropic"
+  supported_styles: ("openai" | "anthropic")[]
+  vision: boolean
+  supports_thinking: boolean
+}
+
+// Model list entry (mirrors Go provider.ModelInfo)
+export interface ModelInfo {
+  id: string
+  vision?: boolean
+  context_window?: number
 }
 
 // Skill info (mirrors Go SkillInfo)

@@ -14,18 +14,22 @@ const defaultOpenAIBaseURL = "https://api.openai.com/v1"
 
 // OpenAIConfig configures an OpenAI-compatible provider.
 type OpenAIConfig struct {
-	APIKey   string
-	BaseURL  string
-	Client   *http.Client
-	Thinking *ThinkingConfig
+	APIKey     string
+	BaseURL    string
+	Client     *http.Client
+	Thinking   *ThinkingConfig
+	ModelsPath string
+	Vision     bool
 }
 
 // OpenAI implements Provider against OpenAI-compatible chat completions APIs.
 type OpenAI struct {
-	apiKey   string
-	baseURL  string
-	client   *http.Client
-	thinking *ThinkingConfig
+	apiKey     string
+	baseURL    string
+	client     *http.Client
+	thinking   *ThinkingConfig
+	modelsPath string
+	vision     bool
 }
 
 // NewOpenAI creates an OpenAI-compatible provider.
@@ -37,11 +41,62 @@ func NewOpenAI(cfg OpenAIConfig) (*OpenAI, error) {
 	if baseURL == "" {
 		baseURL = defaultOpenAIBaseURL
 	}
+	modelsPath := cfg.ModelsPath
+	if modelsPath == "" {
+		modelsPath = APIStyleOpenAIModelsPath
+	}
 	client := cfg.Client
 	if client == nil {
 		client = DefaultHTTPClient()
 	}
-	return &OpenAI{apiKey: cfg.APIKey, baseURL: strings.TrimRight(baseURL, "/"), client: client, thinking: cfg.Thinking}, nil
+	return &OpenAI{
+		apiKey: cfg.APIKey, baseURL: strings.TrimRight(baseURL, "/"),
+		client: client, thinking: cfg.Thinking,
+		modelsPath: modelsPath, vision: cfg.Vision,
+	}, nil
+}
+
+// Capabilities advertises this provider's optional features.
+func (o *OpenAI) Capabilities() Capabilities {
+	return Capabilities{Vision: o.vision, Reasoning: o.thinking != nil && o.thinking.Type == "enabled"}
+}
+
+// openAIModelsResponse is the shape of GET /models from OpenAI-compatible APIs.
+type openAIModelsResponse struct {
+	Data []struct {
+		ID      string `json:"id"`
+		Context int    `json:"context_length,omitempty"`
+	} `json:"data"`
+}
+
+// ListModels fetches available models from the vendor's model-list endpoint.
+func (o *OpenAI) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, o.baseURL+o.modelsPath, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create openai models request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+o.apiKey)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := o.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("openai models request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("openai models request failed: status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var out openAIModelsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decode openai models: %w", err)
+	}
+	models := make([]ModelInfo, 0, len(out.Data))
+	for _, m := range out.Data {
+		models = append(models, ModelInfo{ID: m.ID, ContextWindow: m.Context})
+	}
+	return models, nil
 }
 
 type openAIThinking struct {

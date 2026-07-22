@@ -1,6 +1,5 @@
 import { useTranslation } from "react-i18next"
 import {
-  Bot,
   ChevronLeft,
   ChevronRight,
   Layers,
@@ -88,10 +87,8 @@ export function Sidebar({
     <div className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-sidebar overflow-hidden">
       <div className="flex items-center justify-between px-3.5 py-3">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Bot className="h-3.5 w-3.5" />
-          </div>
-          <span className="font-heading text-sm tracking-tight text-foreground">common-agent</span>
+          <img src="/logo.png" alt="common-agent logo" className="h-7 w-7 rounded-lg" />
+          <span className="font-sans text-sm font-semibold tracking-tight text-foreground">common-agent</span>
         </div>
         <Button variant="ghost" size="icon-xs" onClick={onToggle} className="h-6 w-6 rounded-lg text-muted-foreground">
           <ChevronLeft className="h-3.5 w-3.5" />
@@ -106,8 +103,6 @@ export function Sidebar({
         </Button>
       </div>
 
-      <Separator />
-
       <ScrollArea className="min-h-0 flex-1">
         <SidebarJobsList />
         <SessionList
@@ -120,9 +115,7 @@ export function Sidebar({
         />
       </ScrollArea>
 
-      <Separator />
-
-      <div className="flex flex-col gap-0.5 p-2.5">
+      <div className="flex flex-col gap-0.5 border-t border-border/60 p-2.5">
         {onOpenManage && (
           <Button variant="ghost" size="sm" className="w-full justify-start gap-2 rounded-xl text-xs text-muted-foreground" onClick={onOpenManage}>
             <Layers className="h-3.5 w-3.5" /> {t("layout.manage")}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Trans, useTranslation } from "react-i18next"
-import { AlertCircle, Download, FileJson, FileText, Plus, Search, Sparkles } from "lucide-react"
+import { AlertCircle, Download, FileJson, FileText, Plus, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -31,11 +31,10 @@ interface WorkspacePanelProps {
 function EmptyState({ noAgent, onCreateAgent }: { noAgent?: boolean; onCreateAgent?: () => void }) {
   const { t } = useTranslation()
   return (
-    <div className="flex h-full min-h-[calc(100vh-10rem)] items-center justify-center px-6">
+    <div className="flex h-full items-center justify-center px-6">
       <div className="max-w-sm text-center">
         <div className="relative mx-auto mb-5 h-14 w-14">
-          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5" />
-          <div className="absolute inset-[3px] flex items-center justify-center rounded-[13px] bg-card"><Sparkles className="h-5 w-5 text-primary" /></div>
+          <img src="/logo.png" alt="common-agent logo" className="h-full w-full object-contain" />
         </div>
         {noAgent ? (
           <>
@@ -139,7 +138,7 @@ export function WorkspacePanel({ messages, isStreaming, error, onSendMessage, on
           <div ref={containerRef} onScroll={handleScroll} className="h-full overflow-auto">
             {isEmpty ? <EmptyState noAgent={noAgent} onCreateAgent={onCreateAgent} /> : (
               <div className="flex flex-col gap-5 p-5">
-                <div className="sticky top-0 z-10 flex flex-col gap-2">
+                <div className="sticky top-0 z-10 -mx-5 flex flex-col gap-2 bg-background px-5 py-2">
                   <Toolbar searchOpen={searchOpen} onToggleSearch={() => setSearchOpen((v) => !v)} messages={messages} agentName={agentName} />
                   {searchOpen && <SearchBar onSearch={setSearchQuery} onClear={handleClear} matchCount={searchResults.length} currentMatch={currentMatch} onPrev={handlePrev} onNext={handleNext} />}
                 </div>

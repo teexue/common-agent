@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Route, Routes, useLocation, useNavigate, useParams, Navigate } from "react-router-dom"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ThemeProvider, useTheme } from "@/components/theme-provider"
+import { BackgroundProvider } from "@/components/background/background-provider"
 import { AppLayout } from "@/components/layout/app-layout"
 import { WorkspacePanel } from "@/components/conversation/workspace-panel"
 import { InspectorPanel } from "@/components/inspector/inspector-panel"
@@ -354,8 +355,9 @@ function SettingsRoute() {
 
 export function App() {
   return (
-    <ThemeProvider defaultTheme="dark">
-      <Routes>
+    <ThemeProvider defaultMode="dark">
+      <BackgroundProvider>
+        <Routes>
         <Route path="/settings" element={<SettingsRoute />} />
         <Route path="/manage" element={<ManageRoute />} />
         <Route path="/manage/agents/new" element={<AgentEditorRoute mode="create" />} />
@@ -363,7 +365,8 @@ export function App() {
         <Route path="/agents/:agentName" element={<WorkspaceRoute />} />
         <Route path="/" element={<WorkspaceRoute />} />
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+        </Routes>
+      </BackgroundProvider>
     </ThemeProvider>
   )
 }

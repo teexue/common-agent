@@ -3,6 +3,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
+import { BackgroundLayer } from "@/components/background/background-layer"
 import { TopBar } from "./top-bar"
 import { Sidebar } from "./sidebar"
 import type {
@@ -44,6 +45,7 @@ export function AppLayout({
 }: AppLayoutProps) {
   return (
     <div className="flex h-svh overflow-hidden bg-background">
+      <BackgroundLayer />
       <Sidebar
         {...sidebarProps}
         agents={agents}
@@ -68,13 +70,13 @@ export function AppLayout({
 
         {showInspector ? (
           <ResizablePanelGroup orientation="horizontal" className="flex-1">
-            <ResizablePanel defaultSize={inspectorOpen ? 60 : 100} minSize={35} className="bg-background">
+            <ResizablePanel defaultSize={inspectorOpen ? 74 : 100} minSize={35} className="bg-background">
               {leftPanel}
             </ResizablePanel>
             {inspectorOpen && rightPanel && (
               <>
-                <ResizableHandle className="w-[3px] bg-border/40 transition-colors hover:bg-primary/25" />
-                <ResizablePanel defaultSize={40} minSize={25} className="border-l border-border bg-card/30">
+                <ResizableHandle className="w-1 bg-border transition-colors hover:bg-primary/25" />
+                <ResizablePanel defaultSize={26} minSize={20} className="border-l border-border bg-background">
                   {rightPanel}
                 </ResizablePanel>
               </>
