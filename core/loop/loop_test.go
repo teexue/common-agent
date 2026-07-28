@@ -6,6 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/loop"
@@ -193,9 +196,7 @@ func TestRunMaxTurnsExceeded(t *testing.T) {
 		Session:  session.New(sc.Name),
 		Prompt:   "x",
 	})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
+	require.NoError(t, err)
 
 	sawMaxTurns := false
 	for ev := range events {
@@ -203,9 +204,56 @@ func TestRunMaxTurnsExceeded(t *testing.T) {
 			sawMaxTurns = true
 		}
 	}
-	if !sawMaxTurns {
-		t.Fatal("expected max_turns error")
+	assert.True(t, sawMaxTurns, "expected max_turns error")
+}
+
+func TestRunMaxTurnsUnlimitedContinues(t *testing.T) {
+	reg := registry.New()
+	builtin.RegisterAll(reg, t.TempDir())
+
+	sc := &agent.Agent{
+		Name:         "test",
+		Provider:     "mock",
+		SystemPrompt: "test",
+		Tools:        []string{"echo"},
+		Model:        "mock",
+		MaxTurns:     0, // unlimited
 	}
+
+	args, _ := json.Marshal(map[string]string{"message": "x"})
+	mock := &provider.MockProvider{
+		Calls: [][]provider.MockStep{
+			{{ToolCalls: []provider.ToolCall{{ID: "1", Name: "echo", Arguments: args}}}},
+			{{ToolCalls: []provider.ToolCall{{ID: "2", Name: "echo", Arguments: args}}}},
+			{{Text: "done after tools"}},
+		},
+	}
+
+	events, err := loop.Run(context.Background(), loop.Config{
+		Provider: mock,
+		Registry: reg,
+		Agent:    sc,
+		Session:  session.New(sc.Name),
+		Prompt:   "x",
+	})
+	require.NoError(t, err)
+
+	var sawDone, sawMaxTurns bool
+	var toolResults int
+	for ev := range events {
+		if ev.Type == event.TypeToolResult {
+			toolResults++
+		}
+		if ev.Type == event.TypeError && ev.Code == "max_turns" {
+			sawMaxTurns = true
+		}
+		if ev.Type == event.TypeDone && ev.Status == "completed" {
+			sawDone = true
+		}
+	}
+	assert.False(t, sawMaxTurns)
+	assert.True(t, sawDone)
+	assert.Equal(t, 2, toolResults)
 }
 
 func TestRunContextCancellation(t *testing.T) {

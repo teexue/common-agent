@@ -17,6 +17,7 @@ import (
 type Session struct {
 	mu        sync.RWMutex
 	ID        string
+	UserID    string
 	Agent     string
 	Title     string
 	Messages  []provider.Message
@@ -25,11 +26,20 @@ type Session struct {
 	UpdatedAt time.Time
 }
 
-// New creates a session with a random UUID-based ID.
+// New creates a session owned by the default local user.
 func New(agentName string) *Session {
+	return NewForUser(agentName, "usr_local")
+}
+
+// NewForUser creates a session with a random ID owned by userID.
+func NewForUser(agentName, userID string) *Session {
 	now := time.Now().UTC()
+	if userID == "" {
+		userID = "usr_local"
+	}
 	return &Session{
 		ID:        newID("sess"),
+		UserID:    userID,
 		Agent:     agentName,
 		Messages:  nil,
 		Metadata:  make(map[string]string),

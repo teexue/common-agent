@@ -1,8 +1,11 @@
+import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import {
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   Layers,
+  LogOut,
   Plus,
   Settings,
 } from "lucide-react"
@@ -10,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useAuth } from "@/lib/auth"
 import type { AgentInfo, SessionMeta } from "@/types/agent"
 import { SidebarJobsList } from "./sidebar-jobs-list"
 import { SessionList } from "./sidebar-session-list"
@@ -19,6 +23,7 @@ interface SidebarProps {
   onToggle: () => void
   onOpenSettings: () => void
   onOpenManage?: () => void
+  onOpenApiDocs?: () => void
   onNewSession?: () => void
   sessions?: SessionMeta[]
   agents?: AgentInfo[]
@@ -29,8 +34,8 @@ interface SidebarProps {
 }
 
 function CollapsedSidebar({
-  onToggle, onOpenSettings, onOpenManage, onNewSession,
-}: Pick<SidebarProps, "onToggle" | "onOpenSettings" | "onOpenManage" | "onNewSession">) {
+  onToggle, onOpenSettings, onOpenManage, onOpenApiDocs, onNewSession,
+}: Pick<SidebarProps, "onToggle" | "onOpenSettings" | "onOpenManage" | "onOpenApiDocs" | "onNewSession">) {
   const { t } = useTranslation()
   return (
     <div className="flex h-full w-12 flex-col items-center gap-1 border-r border-border bg-sidebar py-3">
@@ -58,6 +63,14 @@ function CollapsedSidebar({
           <TooltipContent side="right">{t("layout.manage")}</TooltipContent>
         </Tooltip>
       )}
+      {onOpenApiDocs && (
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={onOpenApiDocs} className="rounded-lg" />}>
+            <BookOpen className="h-3.5 w-3.5" />
+          </TooltipTrigger>
+          <TooltipContent side="right">{t("layout.apiDocs")}</TooltipContent>
+        </Tooltip>
+      )}
       <Tooltip>
         <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={onOpenSettings} className="rounded-lg" />}>
           <Settings className="h-3.5 w-3.5" />
@@ -69,12 +82,14 @@ function CollapsedSidebar({
 }
 
 export function Sidebar({
-  collapsed, onToggle, onOpenSettings, onOpenManage, onNewSession,
+  collapsed, onToggle, onOpenSettings, onOpenManage, onOpenApiDocs, onNewSession,
   sessions = [], agents = [], activeSessionId, onResumeSession, onDeleteSession, onReplaySession,
 }: SidebarProps) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
   if (collapsed) {
-    return <CollapsedSidebar {...{ onToggle, onOpenSettings, onOpenManage, onNewSession }} />
+    return <CollapsedSidebar {...{ onToggle, onOpenSettings, onOpenManage, onOpenApiDocs, onNewSession }} />
   }
 
   const agentLabels: Record<string, string> = {}
@@ -116,13 +131,34 @@ export function Sidebar({
       </ScrollArea>
 
       <div className="flex flex-col gap-0.5 border-t border-border/60 p-2.5">
+        {user && (
+          <div className="mb-1 truncate px-2 text-[10px] text-muted-foreground" title={`@${user.username}`}>
+            {user.name || user.username}
+          </div>
+        )}
         {onOpenManage && (
           <Button variant="ghost" size="sm" className="w-full justify-start gap-2 rounded-xl text-xs text-muted-foreground" onClick={onOpenManage}>
             <Layers className="h-3.5 w-3.5" /> {t("layout.manage")}
           </Button>
         )}
+        {onOpenApiDocs && (
+          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 rounded-xl text-xs text-muted-foreground" onClick={onOpenApiDocs}>
+            <BookOpen className="h-3.5 w-3.5" /> {t("layout.apiDocs")}
+          </Button>
+        )}
         <Button variant="ghost" size="sm" className="w-full justify-start gap-2 rounded-xl text-xs text-muted-foreground" onClick={onOpenSettings}>
           <Settings className="h-3.5 w-3.5" /> {t("common.settings")}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start gap-2 rounded-xl text-xs text-muted-foreground"
+          onClick={() => {
+            logout()
+            navigate("/login", { replace: true })
+          }}
+        >
+          <LogOut className="h-3.5 w-3.5" /> {t("auth.logout")}
         </Button>
       </div>
     </div>

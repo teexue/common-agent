@@ -6,8 +6,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/teexue/common-agent/core/agent"
+	"github.com/teexue/common-agent/core/auth"
+	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/mcp"
 	"github.com/teexue/common-agent/core/permission"
@@ -80,18 +83,25 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		return nil, &ServerError{Message: fmt.Sprintf("create provider: %v", err)}
 	}
 
+	// In-pipeline prompt optimization (agent-driven, non-fatal).
+	// The system prompt is optimized once per content (memoized); the user
+	// prompt is optimized per run. The session title keeps the raw prompt.
+	OptimizeSystemPrompt(ctx, &s.optimizeCache, a, p, s.Logger)
+	prompt := OptimizeUserPrompt(ctx, a, p, req.Prompt, s.Logger)
+
+	userID := auth.IdentityFromContext(ctx).UserID
 	var sess *session.Session
 	if req.SessionID != "" {
 		if s.Store == nil {
 			return nil, &ArgError{Field: "session_id", Message: "session persistence not configured"}
 		}
-		loaded, err := s.Store.Load(req.SessionID)
+		loaded, err := s.LoadSession(req.SessionID, userID)
 		if err != nil {
 			return nil, fmt.Errorf("load session %s: %w", req.SessionID, err)
 		}
 		sess = loaded
 	} else {
-		sess = session.New(a.ID)
+		sess = session.NewForUser(a.ID, userID)
 		sess.EnsureTitle(req.Prompt)
 	}
 	if len(req.Messages) > 0 {
@@ -114,7 +124,7 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		Registry:  s.Registry,
 		Agent:     a,
 		Session:   sess,
-		Prompt:    req.Prompt,
+		Prompt:    prompt,
 		Logger:    s.Logger,
 		Store:     s.Store,
 		SessionID: req.SessionID,
@@ -169,13 +179,13 @@ type ServerError struct {
 
 func (e *ServerError) Error() string { return e.Message }
 
-// injectSkills loads skills referenced by the agent, registers their tools,
-// and appends skill instructions to the agent's system prompt.
+// injectSkills loads skills available to the agent (global + agent-scoped),
+// registers the progressive-disclosure load_skill tool plus any legacy skill
+// tools, and appends the metadata listing to the agent's system prompt.
 // Returns the names of temporarily registered tools for caller cleanup.
 func injectSkills(a *agent.Agent, agentsDir string, reg *registry.Registry, log *slog.Logger) []string {
-	skillsDir := filepath.Join(filepath.Dir(agentsDir), "skills")
-	loader := skill.NewLoader(skillsDir)
-	allSkills, err := loader.LoadAll()
+	home := filepath.Dir(agentsDir)
+	allSkills, err := skill.LoadScoped(config.SkillsDir(home), config.AgentSkillsDir(home, a.Name), a.Name)
 	if err != nil {
 		log.Warn("log.skill.load_partial", "error", err)
 	}
@@ -188,11 +198,13 @@ func injectSkills(a *agent.Agent, agentsDir string, reg *registry.Registry, log 
 		return nil
 	}
 
-	var sections []string
+	var lines []string
 	var tempToolNames []string
+	hasMD := false
 	for _, sk := range selected {
-		if body := sk.Body(); body != "" {
-			sections = append(sections, fmt.Sprintf("[[skill:%s]]\n%s", sk.Name, body))
+		if sk.MDManifest != nil {
+			hasMD = true
+			lines = append(lines, skillListingLine(sk))
 		}
 		if sk.LegacyManifest != nil {
 			for _, t := range skill.Tools(sk) {
@@ -205,11 +217,33 @@ func injectSkills(a *agent.Agent, agentsDir string, reg *registry.Registry, log 
 		}
 	}
 
-	if len(sections) > 0 {
-		a.SkillsContext = "# Available Skills\n\n" + joinSections(sections)
+	if hasMD {
+		loader := skill.LoadSkillTool(selected)
+		if err := reg.Register(loader); err != nil {
+			log.Warn("log.skill.register_tool", "tool", loader.Name(), "error", err)
+		} else {
+			tempToolNames = append(tempToolNames, loader.Name())
+		}
+	}
+
+	if len(lines) > 0 {
+		a.SkillsContext = "# Available Skills\n\n" +
+			"When a task matches a skill's description, call the `load_skill` tool with its name to load the full instructions. " +
+			"File references inside instructions are relative to the skill's base directory.\n\n" +
+			strings.Join(lines, "\n")
 	}
 
 	return tempToolNames
+}
+
+// skillListingLine renders one metadata line for the skills system prompt
+// (discovery stage of progressive disclosure: name + description only).
+func skillListingLine(sk *skill.Skill) string {
+	line := fmt.Sprintf("- %s: %s (base_dir: %s)", sk.Name, sk.Description, sk.Dir)
+	if sk.MDManifest != nil && sk.MDManifest.Frontmatter.AllowedTools != "" {
+		line += fmt.Sprintf(" [allowed-tools: %s]", sk.MDManifest.Frontmatter.AllowedTools)
+	}
+	return line
 }
 
 func filterSkills(a *agent.Agent, all []*skill.Skill, log *slog.Logger) []*skill.Skill {
@@ -229,17 +263,6 @@ func filterSkills(a *agent.Agent, all []*skill.Skill, log *slog.Logger) []*skill
 		}
 	}
 	return selected
-}
-
-func joinSections(sections []string) string {
-	result := ""
-	for i, s := range sections {
-		if i > 0 {
-			result += "\n\n"
-		}
-		result += s
-	}
-	return result
 }
 
 // loadContextFile loads AGENTS.md or CLAUDE.md from the working directory.

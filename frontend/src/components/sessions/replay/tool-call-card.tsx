@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { CheckCircle, ChevronDown, ChevronRight, Clock, Loader2, XCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { toolDisplayName } from "@/lib/tool-i18n"
 import type { ToolCallNode } from "@/types/replay"
 
 interface ToolCallCardProps {
@@ -45,7 +46,7 @@ export function ToolCallCard({ node, compact, highlight, eventIndex, onJump }: T
           ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />}
         {statusIcon}
-        <span className="flex-1 truncate font-mono text-xs">{node.name}</span>
+        <span className="flex-1 truncate text-xs" title={node.name}>{toolDisplayName(node.name, t)}</span>
         {node.durationMs != null && (
           <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
             <Clock className="h-2.5 w-2.5" />

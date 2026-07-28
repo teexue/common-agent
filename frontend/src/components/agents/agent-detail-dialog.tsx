@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { fetchAgentDetail } from "@/lib/api"
+import { toolDisplayName } from "@/lib/tool-i18n"
 import type { AgentDetail } from "@/types/agent"
 
 interface AgentDetailDialogProps {
@@ -96,7 +97,7 @@ export function AgentDetailDialog({ agentId, open, onOpenChange, onEdit, onDelet
               <AgentHeader detail={detail} onEdit={onEdit} onDelete={onDelete} />
               <Separator />
               <div className="grid grid-cols-2 gap-3">
-                <InfoCard label={t("agent.maxTurns")} value={String(detail.max_turns)} />
+                <InfoCard label={t("agent.maxTurns")} value={detail.max_turns > 0 ? String(detail.max_turns) : t("common.unlimited")} />
                 <InfoCard label={t("agent.maxTokens")} value={detail.max_tokens ? String(detail.max_tokens) : t("common.unlimited")} />
                 {detail.tool_execution && (
                   <>
@@ -114,7 +115,13 @@ export function AgentDetailDialog({ agentId, open, onOpenChange, onEdit, onDelet
               {(detail.tools ?? []).length > 0 && (
                 <div>
                   <h4 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"><Wrench className="h-3 w-3" /> {t("agent.toolsLabel", { count: (detail.tools ?? []).length })}</h4>
-                  <div className="flex flex-wrap gap-1.5">{(detail.tools ?? []).map((tool) => <Badge key={tool} variant="secondary" className="rounded-md px-2 py-0.5 font-mono text-[10px]">{tool}</Badge>)}</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(detail.tools ?? []).map((tool) => (
+                      <Badge key={tool} variant="secondary" className="rounded-md px-2 py-0.5 text-[10px]" title={tool}>
+                        {toolDisplayName(tool, t)}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
               )}
               {detail.permissions && <PermissionsSection permissions={detail.permissions} />}

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import {
   ArrowLeft,
+  BookOpen,
   Bot,
   Info,
   Layers,
@@ -23,7 +24,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { KnowledgeDetailPanel, KnowledgeListPanel } from "@/components/manage/knowledge-panel"
+import { SkillsPanel } from "@/components/manage/skills-panel"
 import { fetchAgents, fetchSkills, fetchTools } from "@/lib/api"
+import { toolDisplayDescription, toolDisplayName } from "@/lib/tool-i18n"
 import type { AgentInfo, SkillInfo, ToolInfo } from "@/types/agent"
 
 interface ManagePageProps {
@@ -101,6 +105,7 @@ function AgentCard({
 }
 
 function ToolCard({ tool, onSelect }: { tool: ToolInfo; onSelect?: (tool: ToolInfo) => void }) {
+  const { t } = useTranslation()
   return (
     <button
       type="button"
@@ -111,36 +116,13 @@ function ToolCard({ tool, onSelect }: { tool: ToolInfo; onSelect?: (tool: ToolIn
         <Wrench className="h-4 w-4 text-muted-foreground" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="font-mono text-sm font-medium text-foreground">{tool.name}</p>
-        <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">{tool.description}</p>
-      </div>
-    </button>
-  )
-}
-
-function SkillCard({ skill }: { skill: SkillInfo }) {
-  const { t } = useTranslation()
-  return (
-    <div className="flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-3">
-      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-        <Puzzle className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-foreground">{skill.name}</p>
-          {skill.version && (
-            <Badge variant="outline" className="rounded-md px-1.5 py-0 text-[10px] font-mono">v{skill.version}</Badge>
-          )}
-        </div>
-        {skill.description && (
-          <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">{skill.description}</p>
-        )}
-        <p className="mt-1.5 text-[10px] text-muted-foreground">
-          {t("manage.toolsCount", { count: (skill.tools ?? []).length })}
-          {skill.format ? ` · ${skill.format}` : ""}
+        <p className="text-sm font-medium text-foreground">{toolDisplayName(tool.name, t)}</p>
+        <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{tool.name}</p>
+        <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+          {toolDisplayDescription(tool.name, tool.description, t)}
         </p>
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -156,6 +138,11 @@ export function ManagePage({
   const [tools, setTools] = useState<ToolInfo[]>([])
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [loading, setLoading] = useState(true)
+  const [kbId, setKbId] = useState<string | null>(null)
+
+  const reloadSkills = useCallback(() => {
+    fetchSkills().then((d) => setSkills(d ?? [])).catch(() => setSkills([]))
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -170,9 +157,11 @@ export function ManagePage({
     { value: "agents", icon: Bot, label: t("manage.tabAgents"), count: agents.length },
     { value: "tools", icon: Wrench, label: t("manage.tabTools"), count: tools.length },
     { value: "skills", icon: Puzzle, label: t("manage.tabSkills"), count: skills.length },
+    { value: "knowledge", icon: BookOpen, label: t("manage.tabKnowledge"), count: null },
   ] as const
 
   const handleTabChange = (value: string) => {
+    setKbId(null)
     setSearchParams(value === "agents" ? {} : { tab: value })
   }
 
@@ -189,14 +178,16 @@ export function ManagePage({
       </header>
 
       <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-3xl px-6 py-6">
+        <div className="w-full px-6 py-6">
           <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList className="mb-6 w-full rounded-xl bg-muted p-0.5">
               {tabTriggers.map((tab) => (
                 <TabsTrigger key={tab.value} value={tab.value} className="flex-1 gap-1.5 rounded-lg text-xs">
                   <tab.icon className="h-3 w-3" />
                   {tab.label}
-                  <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px]">{tab.count}</Badge>
+                  {tab.count != null && (
+                    <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px]">{tab.count}</Badge>
+                  )}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -228,12 +219,15 @@ export function ManagePage({
               )}
             </TabsContent>
 
-            <TabsContent value="skills" className="mt-0 space-y-3">
-              <p className="text-[11px] text-muted-foreground">{t("manage.skillsHint")}</p>
-              {loading ? <EmptyState text={t("manage.loading")} /> : skills.length === 0 ? (
-                <EmptyState text={t("manage.skillsEmpty")} />
+            <TabsContent value="skills" className="mt-0">
+              <SkillsPanel skills={skills} loading={loading} agents={agents} onRefresh={reloadSkills} />
+            </TabsContent>
+
+            <TabsContent value="knowledge" className="mt-0">
+              {kbId ? (
+                <KnowledgeDetailPanel kbId={kbId} onBack={() => setKbId(null)} />
               ) : (
-                skills.map((sk) => <SkillCard key={sk.name} skill={sk} />)
+                <KnowledgeListPanel onOpen={setKbId} />
               )}
             </TabsContent>
           </Tabs>

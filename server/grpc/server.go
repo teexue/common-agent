@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/teexue/common-agent/core/agent"
+	"github.com/teexue/common-agent/core/auth"
 	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/permission"
@@ -61,7 +62,8 @@ type GRPCServer struct {
 	store       session.Store
 	svc         *service.Service
 	approver    *GRPCApprover
-	apiKey      string                      // when non-empty, all methods require this key
+	apiKeysMu   sync.RWMutex
+	apiKeys     map[string]struct{}         // when non-empty, all methods require one of these keys
 	healthSrv   grpc_health_v1.HealthServer // the registered health service
 	health      *telemetry.HealthServer     // optional; nil disables component checks
 	healthMu    sync.RWMutex
@@ -101,18 +103,38 @@ func (s *GRPCServer) SetHealth(h *telemetry.HealthServer) {
 	s.health = h
 }
 
-// SetAPIKey enables API key authentication for all gRPC methods.
-// When set to a non-empty value, clients must send the key via
-// the "authorization" metadata key as "bearer <key>" or the
-// "x-api-key" metadata key.
+// SetAPIKey enables API key authentication with a single key.
+// Prefer SetAPIKeys when multiple keys are needed.
 func (s *GRPCServer) SetAPIKey(key string) {
-	s.apiKey = key
+	if key == "" {
+		s.SetAPIKeys(nil)
+		return
+	}
+	s.SetAPIKeys([]string{key})
+}
+
+// SetAPIKeys enables API key authentication for all gRPC methods.
+// When non-empty, clients must send a matching key via the
+// "authorization" metadata key as "bearer <key>" or "x-api-key".
+func (s *GRPCServer) SetAPIKeys(keys []string) {
+	next := make(map[string]struct{}, len(keys))
+	for _, k := range keys {
+		if k != "" {
+			next[k] = struct{}{}
+		}
+	}
+	s.apiKeysMu.Lock()
+	s.apiKeys = next
+	s.apiKeysMu.Unlock()
 }
 
 // checkAuth validates the API key from gRPC metadata.
 // Returns nil if auth is disabled or the key is valid.
 func (s *GRPCServer) checkAuth(ctx context.Context) error {
-	if s.apiKey == "" {
+	s.apiKeysMu.RLock()
+	enabled := len(s.apiKeys) > 0
+	s.apiKeysMu.RUnlock()
+	if !enabled {
 		return nil
 	}
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -122,8 +144,8 @@ func (s *GRPCServer) checkAuth(ctx context.Context) error {
 
 	// Check authorization: bearer <key>.
 	for _, val := range md.Get("authorization") {
-		if strings.HasPrefix(val, "bearer ") {
-			if strings.TrimPrefix(val, "bearer ") == s.apiKey {
+		if len(val) > 7 && strings.EqualFold(val[:7], "bearer ") {
+			if s.hasAPIKey(val[7:]) {
 				return nil
 			}
 		}
@@ -131,12 +153,19 @@ func (s *GRPCServer) checkAuth(ctx context.Context) error {
 
 	// Check x-api-key.
 	for _, val := range md.Get("x-api-key") {
-		if val == s.apiKey {
+		if s.hasAPIKey(val) {
 			return nil
 		}
 	}
 
 	return status.Error(codes.Unauthenticated, i18n.TCtx(ctx, "api.grpc.error.unauthorized"))
+}
+
+func (s *GRPCServer) hasAPIKey(key string) bool {
+	s.apiKeysMu.RLock()
+	defer s.apiKeysMu.RUnlock()
+	_, ok := s.apiKeys[key]
+	return ok
 }
 
 // RegisterServer registers the GRPCServer on the given gRPC server.
@@ -348,7 +377,7 @@ func (s *GRPCServer) ListSessions(ctx context.Context, _ *commonagentv1.ListSess
 	if err := s.checkAuth(ctx); err != nil {
 		return nil, err
 	}
-	metas, err := s.svc.ListSessions()
+	metas, err := s.svc.ListSessions(auth.DefaultUserID)
 	if err != nil {
 		return nil, status.Error(codes.FailedPrecondition, i18n.TCtx(ctx, "api.grpc.error.failed_precondition", "error", err.Error()))
 	}
@@ -370,7 +399,7 @@ func (s *GRPCServer) GetSession(ctx context.Context, req *commonagentv1.GetSessi
 	if err := s.checkAuth(ctx); err != nil {
 		return nil, err
 	}
-	sess, err := s.svc.LoadSession(req.Id)
+	sess, err := s.svc.LoadSession(req.Id, auth.DefaultUserID)
 	if err != nil {
 		if errors.Is(err, session.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, i18n.TCtx(ctx, "api.grpc.error.session_not_found", "id", req.Id))
@@ -400,7 +429,7 @@ func (s *GRPCServer) DeleteSession(ctx context.Context, req *commonagentv1.Delet
 	if err := s.checkAuth(ctx); err != nil {
 		return nil, err
 	}
-	if err := s.svc.DeleteSession(req.Id); err != nil {
+	if err := s.svc.DeleteSession(req.Id, auth.DefaultUserID); err != nil {
 		if errors.Is(err, session.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, i18n.TCtx(ctx, "api.grpc.error.session_not_found", "id", req.Id))
 		}

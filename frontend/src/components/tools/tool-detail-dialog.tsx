@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator"
 import { JsonViewer } from "@/components/artifact/json-viewer"
 import { Wrench } from "lucide-react"
 import { useTranslation } from "react-i18next"
+import { toolDisplayDescription, toolDisplayName } from "@/lib/tool-i18n"
 import type { ToolInfo } from "@/types/agent"
 
 interface ToolDetailDialogProps {
@@ -33,7 +34,7 @@ export function ToolDetailDialog({
             <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-muted">
               <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
-            <span className="font-mono">{tool.name}</span>
+            <span>{toolDisplayName(tool.name, t)}</span>
             <Badge
               variant="secondary"
               className="rounded-md px-1.5 py-0 text-[10px]"
@@ -44,8 +45,11 @@ export function ToolDetailDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
+          <p className="font-mono text-[10px] text-muted-foreground">
+            {t("tools.id")}: {tool.name}
+          </p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            {tool.description}
+            {toolDisplayDescription(tool.name, tool.description, t)}
           </p>
 
           <Separator />

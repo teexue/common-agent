@@ -8,10 +8,9 @@ import (
 	"text/tabwriter"
 
 	"github.com/teexue/common-agent/core/agent"
-	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/service"
-	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/store"
 	"github.com/teexue/common-agent/core/tui"
 )
 
@@ -48,14 +47,14 @@ func sessionsList(args []string, logger *slog.Logger) {
 		logger.Error("log.cmd.resolve_paths", "error", err)
 		os.Exit(1)
 	}
-
-	store, err := session.NewFileStore(config.SessionsDir(paths.home))
+	db, err := openStateDB(paths.home, logger)
 	if err != nil {
-		logger.Error("log.session.open_store", "error", err)
+		logger.Error("log.cmd.bootstrap", "error", err)
 		os.Exit(1)
 	}
+	defer db.Close()
 
-	metas, err := store.List()
+	metas, err := store.NewSessionStore(db).List()
 	if err != nil {
 		logger.Error("log.session.list", "error", err)
 		os.Exit(1)
@@ -96,21 +95,21 @@ func sessionsResume(args []string, logger *slog.Logger) {
 		os.Exit(1)
 	}
 
-	store, err := session.NewFileStore(config.SessionsDir(paths.home))
-	if err != nil {
-		logger.Error("log.session.open_store", "error", err)
-		os.Exit(1)
-	}
-
-	loaded, err := store.Load(*sessionID)
-	if err != nil {
-		logger.Error("log.session.load", "error", err)
-		os.Exit(1)
-	}
-
-	catalog, _, err := bootstrapRuntime(paths, *mock, logger)
+	catalog, _, stateDB, err := bootstrapRuntime(paths, *mock, logger)
 	if err != nil {
 		logger.Error("log.cmd.bootstrap", "error", err)
+		os.Exit(1)
+	}
+	if stateDB == nil {
+		logger.Error("log.cmd.bootstrap", "error", "state.db required to resume sessions")
+		os.Exit(1)
+	}
+	defer stateDB.Close()
+
+	sessStore := store.NewSessionStore(stateDB)
+	loaded, err := sessStore.Load(*sessionID)
+	if err != nil {
+		logger.Error("log.session.load", "error", err)
 		os.Exit(1)
 	}
 
@@ -133,7 +132,8 @@ func sessionsResume(args []string, logger *slog.Logger) {
 		agent:    a,
 		provider: p,
 		sess:     loaded,
-		reg:      newRegistry(""), // uses current working directory
+		reg:      newRegistry(""),
+		store:    sessStore,
 	}
 
 	fmt.Println(tui.Success(i18n.T("cli.sessions.resumed", "id", loaded.ID, "agent", loaded.Agent)))
@@ -166,14 +166,14 @@ func sessionsDelete(args []string, logger *slog.Logger) {
 		logger.Error("log.cmd.resolve_paths", "error", err)
 		os.Exit(1)
 	}
-
-	store, err := session.NewFileStore(config.SessionsDir(paths.home))
+	db, err := openStateDB(paths.home, logger)
 	if err != nil {
-		logger.Error("log.session.open_store", "error", err)
+		logger.Error("log.cmd.bootstrap", "error", err)
 		os.Exit(1)
 	}
+	defer db.Close()
 
-	if err := store.Delete(*sessionID); err != nil {
+	if err := store.NewSessionStore(db).Delete(*sessionID); err != nil {
 		logger.Error("log.session.delete", "error", err)
 		os.Exit(1)
 	}

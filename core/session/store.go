@@ -12,6 +12,7 @@ var ErrNotFound = errors.New("session not found")
 // It omits the full message payload for efficiency.
 type SessionMeta struct {
 	ID        string            `json:"id"`
+	UserID    string            `json:"user_id,omitempty"`
 	Agent     string            `json:"agent"`
 	Title     string            `json:"title,omitempty"`
 	Metadata  map[string]string `json:"metadata,omitempty"`

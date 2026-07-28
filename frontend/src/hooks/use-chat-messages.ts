@@ -1,65 +1,8 @@
 import type { ConversationEntry } from "@/types/agent"
 
-// ─── Message conversion (frontend → backend) ─────────────────────
-
-export interface BackendMessage {
-  role: "system" | "user" | "assistant" | "tool"
-  content: string
-  reasoning_content?: string
-  tool_calls?: Array<{ id: string; name: string; arguments: unknown }>
-  tool_call_id?: string
-  name?: string
-}
-
-export function toBackendMessages(
-  entries: ConversationEntry[]
-): BackendMessage[] {
-  const msgs: BackendMessage[] = []
-
-  for (const entry of entries) {
-    if (entry.role === "user") {
-      msgs.push({ role: "user", content: entry.content })
-    }
-
-    if (entry.role === "assistant") {
-      if (entry.toolCalls && entry.toolCalls.length > 0) {
-        msgs.push({
-          role: "assistant",
-          content: entry.content || "",
-          reasoning_content: entry.reasoningContent || undefined,
-          tool_calls: entry.toolCalls.map((tc) => ({
-            id: tc.toolCallId ?? tc.id,
-            name: tc.name,
-            arguments: tc.input ?? {},
-          })),
-        })
-        for (const tc of entry.toolCalls) {
-          if (tc.status === "completed" && tc.output !== undefined) {
-            msgs.push({
-              role: "tool",
-              tool_call_id: tc.toolCallId ?? tc.id,
-              name: tc.name,
-              content:
-                typeof tc.output === "string"
-                  ? tc.output
-                  : JSON.stringify(tc.output),
-            })
-          }
-        }
-      } else if (entry.content) {
-        msgs.push({
-          role: "assistant",
-          content: entry.content,
-          reasoning_content: entry.reasoningContent || undefined,
-        })
-      }
-    }
-  }
-
-  return msgs
-}
-
 // ─── Backend message → ConversationEntry conversion ───────────────
+// Runs are sent with only the latest user message; history flows the other
+// way (backend session → UI) when loading a session.
 
 export interface BackendMsg {
   role: string

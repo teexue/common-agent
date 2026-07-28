@@ -4,17 +4,43 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/teexue/common-agent/core/embedding"
+	"github.com/teexue/common-agent/core/store"
 	"gopkg.in/yaml.v3"
 )
 
 // Settings holds user-level defaults.
 type Settings struct {
-	DefaultAgent string `yaml:"default_agent"`
-	Locale       string `yaml:"locale,omitempty"`
+	DefaultAgent string            `yaml:"default_agent"`
+	Locale       string            `yaml:"locale,omitempty"`
+	Embedding    *embedding.Config `yaml:"embedding,omitempty"`
 }
 
-// LoadSettings reads config.yaml from home. Missing file returns defaults.
+// LoadSettings reads settings from SQLite when bound, else config.yaml.
 func LoadSettings(home string) (Settings, error) {
+	if stateDB != nil {
+		s, err := stateDB.LoadSettings()
+		if err != nil {
+			return Settings{}, err
+		}
+		return Settings{DefaultAgent: s.DefaultAgent, Locale: s.Locale, Embedding: s.Embedding}, nil
+	}
+	return loadSettingsFile(home)
+}
+
+// SaveSettings writes settings to SQLite when bound, else config.yaml.
+func SaveSettings(home string, s Settings) error {
+	if stateDB != nil {
+		return stateDB.SaveSettings(store.Settings{
+			DefaultAgent: s.DefaultAgent,
+			Locale:       s.Locale,
+			Embedding:    s.Embedding,
+		})
+	}
+	return saveSettingsFile(home, s)
+}
+
+func loadSettingsFile(home string) (Settings, error) {
 	path := SettingsFile(home)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -33,11 +59,14 @@ func LoadSettings(home string) (Settings, error) {
 	if s.Locale == "" {
 		s.Locale = "zh-CN"
 	}
+	if s.Embedding != nil {
+		n := s.Embedding.Normalize()
+		s.Embedding = &n
+	}
 	return s, nil
 }
 
-// SaveSettings writes config.yaml.
-func SaveSettings(home string, s Settings) error {
+func saveSettingsFile(home string, s Settings) error {
 	if err := ensureHome(home); err != nil {
 		return err
 	}

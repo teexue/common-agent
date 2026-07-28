@@ -1,4 +1,5 @@
 import i18n from "@/i18n"
+import { toolDisplayName } from "@/lib/tool-i18n"
 import type { ConversationEntry } from "@/types/agent"
 
 function dateLocale(): string {
@@ -10,7 +11,7 @@ function dateLocale(): string {
 function formatToolCall(tc: ConversationEntry["toolCalls"] extends (infer T)[] | undefined ? T : never): string[] {
   const lines: string[] = []
   const status = tc.status === "completed" ? "✅" : tc.status === "error" ? "❌" : "⏳"
-  lines.push(`### ${status} ${i18n.t("export.tool")}: \`${tc.name}\``, "")
+  lines.push(`### ${status} ${i18n.t("export.tool")}: ${toolDisplayName(tc.name)} (\`${tc.name}\`)`, "")
   if (tc.input) {
     lines.push(`**${i18n.t("export.input")}:**`, "```json", JSON.stringify(tc.input, null, 2), "```", "")
   }

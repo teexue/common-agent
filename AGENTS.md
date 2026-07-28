@@ -1,8 +1,6 @@
 # common-agent 编码规范
 
-通用 Agent 基座（Go 核心 + React 前端）。
-
-> **权威来源**: 完整编码规范见 [`docs/html/code-standards.html`](docs/html/code-standards.html)。本文档为各 AI 代理提供精简指引，如有冲突以 HTML 文档为准。
+通用 Agent 基座（Go 核心 + React 前端）。本文档为各 AI 代理提供编码指引。
 
 ## 架构约束（最高优先级）
 
@@ -15,7 +13,7 @@
 ## 目录与包布局
 
 ```
-cmd/agent-server/     # 入口，仅 wiring
+cmd/                  # 入口，仅 wiring
 core/{loop,event,session,agent,provider,config,permission,hook,telemetry,compaction,subagent,mcp,workflow,tenant,billing,skill}
 tools/{registry,builtin}
 server/{http,grpc}
@@ -92,9 +90,3 @@ sdk/{ts,python}
 - 新增 Tool 须同步：registry 注册 + agent 示例 + 测试
 - 修改 AgentEvent schema 视为 breaking change，须注明
 - 仅用户明确要求时才 git commit
-
-## 文档维护
-
-- `docs/html/` 是权威文档层，多页面纯 HTML 站点
-- 新增页面：创建 `.html` → 注册 `_assets/nav-config.js` → 沿用模板（`_assets/style.css` + `nav.js` + `theme.js`）
-- 共享样式在 `_assets/style.css`，页面特有样式写在 `<style>` 标签内

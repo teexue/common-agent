@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { emptyMcpServer, type AgentFormData, type McpServerFormItem } from "@/lib/agent-yaml"
+import { toolDisplayDescription, toolDisplayName } from "@/lib/tool-i18n"
 import type { ProviderInfo, ToolInfo } from "@/types/agent"
 import type { TFunction } from "i18next"
 
@@ -113,7 +114,7 @@ export function BasicTab({
           )}
           <Field label={t("agent.provider")}>
             <Select
-              value={form.provider ? { value: form.provider, label: form.provider } : null}
+              value={form.provider ? { value: form.provider, label: currentProvider ? `${currentProvider.display_name || currentProvider.name} (${currentProvider.api_style})` : form.provider } : null}
               onValueChange={(v) => {
                 if (!v || typeof v !== "object" || !("value" in v)) return
                 const name = (v as { value: string }).value
@@ -168,8 +169,17 @@ export function ToolsTab({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return tools
-    return tools.filter((tool) => tool.name.toLowerCase().includes(q) || tool.description.toLowerCase().includes(q))
-  }, [tools, query])
+    return tools.filter((tool) => {
+      const label = toolDisplayName(tool.name, t).toLowerCase()
+      const desc = toolDisplayDescription(tool.name, tool.description, t).toLowerCase()
+      return (
+        tool.name.toLowerCase().includes(q) ||
+        label.includes(q) ||
+        desc.includes(q) ||
+        tool.description.toLowerCase().includes(q)
+      )
+    })
+  }, [tools, query, t])
 
   const toggleTool = (name: string) => {
     setForm((prev) => {
@@ -223,8 +233,11 @@ export function ToolsTab({
                       className="mt-1 h-3.5 w-3.5 rounded border-border accent-primary"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="font-mono text-xs font-medium text-foreground">{tool.name}</p>
-                      <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">{tool.description}</p>
+                      <p className="text-xs font-medium text-foreground">{toolDisplayName(tool.name, t)}</p>
+                      <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{tool.name}</p>
+                      <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+                        {toolDisplayDescription(tool.name, tool.description, t)}
+                      </p>
                     </div>
                   </label>
                   {selected && (
@@ -258,14 +271,31 @@ export function ToolsTab({
 }
 
 export function RuntimeTab({
-  form, setForm,
+  form, setForm, knowledgeBases = [],
 }: {
   form: AgentFormData
   setForm: React.Dispatch<React.SetStateAction<AgentFormData>>
+  knowledgeBases?: Array<{ id: string; name: string }>
 }) {
   const { t } = useTranslation()
   const parallelLabel = t("common.parallel")
   const serialLabel = t("common.serial")
+
+  const toggleKb = (id: string) => {
+    setForm((prev) => {
+      const selected = prev.knowledgeBases.includes(id)
+      let tools = prev.tools
+      let knowledgeBases = prev.knowledgeBases
+      if (selected) {
+        knowledgeBases = knowledgeBases.filter((x) => x !== id)
+      } else {
+        knowledgeBases = [...knowledgeBases, id]
+        if (!tools.includes("knowledge_search")) tools = [...tools, "knowledge_search"]
+        if (!tools.includes("knowledge_list")) tools = [...tools, "knowledge_list"]
+      }
+      return { ...prev, knowledgeBases, tools }
+    })
+  }
 
   return (
     <div className="space-y-4">
@@ -277,8 +307,8 @@ export function RuntimeTab({
               value={form.maxTurns}
               onChange={(e) => setForm((f) => ({ ...f, maxTurns: Number(e.target.value) }))}
               className="h-9 rounded-xl font-mono text-sm"
-              min={1}
-              max={100}
+              min={0}
+              max={10000}
             />
           </Field>
           <Field label={t("agent.maxTokens")} hint={t("agent.maxTokensHint")}>
@@ -318,6 +348,83 @@ export function RuntimeTab({
             />
           </Field>
         </div>
+      </SectionCard>
+
+      <SectionCard title={t("agent.sectionKnowledge")} description={t("agent.sectionKnowledgeDesc")}>
+        <Field label={t("agent.knowledgeTopK")} hint={t("agent.knowledgeTopKHint")}>
+          <Input
+            type="number"
+            value={form.knowledgeTopK}
+            onChange={(e) => setForm((f) => ({ ...f, knowledgeTopK: Number(e.target.value) }))}
+            className="h-9 rounded-xl font-mono text-sm"
+            min={1}
+            max={20}
+          />
+        </Field>
+        {knowledgeBases.length === 0 ? (
+          <p className="mt-3 text-[11px] text-muted-foreground">{t("agent.knowledgeEmpty")}</p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {knowledgeBases.map((kb) => {
+              const selected = form.knowledgeBases.includes(kb.id)
+              return (
+                <button
+                  key={kb.id}
+                  type="button"
+                  onClick={() => toggleKb(kb.id)}
+                  className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-xs transition-colors ${
+                    selected ? "border-primary/30 bg-primary/5" : "border-border bg-background hover:bg-muted/40"
+                  }`}
+                >
+                  <span>
+                    <span className="font-medium text-foreground">{kb.name}</span>
+                    <span className="ml-2 font-mono text-[10px] text-muted-foreground">{kb.id}</span>
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">{selected ? t("common.selected") : t("common.select")}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard title={t("agent.sectionOptimize")} description={t("agent.sectionOptimizeDesc")}>
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            checked={form.optimizeSystemPrompt}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, optimizeSystemPrompt: e.target.checked }))
+            }
+            className="mt-0.5 h-3.5 w-3.5 rounded border-border accent-primary"
+          />
+          <span>
+            <span className="block text-xs font-medium text-foreground">
+              {t("agent.optimizeSystemPrompt")}
+            </span>
+            <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+              {t("agent.optimizeSystemPromptHint")}
+            </span>
+          </span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            checked={form.optimizeUserPrompt}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, optimizeUserPrompt: e.target.checked }))
+            }
+            className="mt-0.5 h-3.5 w-3.5 rounded border-border accent-primary"
+          />
+          <span>
+            <span className="block text-xs font-medium text-foreground">
+              {t("agent.optimizeUserPrompt")}
+            </span>
+            <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+              {t("agent.optimizeUserPromptHint")}
+            </span>
+          </span>
+        </label>
       </SectionCard>
     </div>
   )

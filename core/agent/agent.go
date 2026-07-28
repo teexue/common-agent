@@ -28,10 +28,27 @@ type MCPServerConfig struct {
 }
 
 // CompactionConfig configures context window compaction.
+// Compaction is driven by estimated token usage vs the model context window,
+// not by raw message count.
 type CompactionConfig struct {
-	Strategy    string `yaml:"strategy"`     // "truncation" (default) | "sliding_window"
-	MaxMessages int    `yaml:"max_messages"` // trigger when messages exceed this (0 = disabled)
-	KeepRecent  int    `yaml:"keep_recent"`  // number of recent messages to preserve
+	Strategy      string  `yaml:"strategy"`                 // "truncation" (default) | "sliding_window"
+	ContextWindow int     `yaml:"context_window,omitempty"` // model context size in tokens; 0 = use runtime/provider
+	TriggerRatio  float64 `yaml:"trigger_ratio,omitempty"`  // compact when usage exceeds window*ratio (default 0.85)
+	KeepRecent    int     `yaml:"keep_recent"`              // recent conversation messages to preserve when truncating
+	MaxMessages   int     `yaml:"max_messages,omitempty"`   // optional legacy secondary trigger; 0 = disabled
+}
+
+// KnowledgeConfig scopes RAG retrieval for an agent.
+type KnowledgeConfig struct {
+	Bases []string `yaml:"bases,omitempty" json:"bases,omitempty"` // empty = all bases
+	TopK  int      `yaml:"top_k,omitempty" json:"top_k,omitempty"`
+}
+
+// OptimizeConfig enables in-pipeline prompt optimization for an agent.
+// Optimization runs at assembly time (before loop.Run) via an extra LLM call.
+type OptimizeConfig struct {
+	SystemPrompt bool `yaml:"system_prompt,omitempty" json:"system_prompt,omitempty"` // optimize system prompt once per content (cached)
+	UserPrompt   bool `yaml:"user_prompt,omitempty" json:"user_prompt,omitempty"`     // optimize each user prompt before the run
 }
 
 // Agent configures agent behavior for a production use case.
@@ -44,12 +61,14 @@ type Agent struct {
 	Tools         []string                `yaml:"tools" json:"tools"`
 	Skills        []string                `yaml:"skills,omitempty" json:"skills,omitempty"`
 	Model         string                  `yaml:"model" json:"model"`
-	MaxTurns      int                     `yaml:"max_turns" json:"max_turns"`
+	MaxTurns      int                     `yaml:"max_turns" json:"max_turns"` // 0 = unlimited until model stops
 	MaxTokens     int                     `yaml:"max_tokens" json:"max_tokens"`
 	ToolExecution *ToolExecution          `yaml:"tool_execution,omitempty" json:"tool_execution,omitempty"`
 	Permissions   *permission.Permissions `yaml:"permissions,omitempty" json:"permissions,omitempty"`
 	MCPServers    []MCPServerConfig       `yaml:"mcp_servers,omitempty" json:"mcp_servers,omitempty"`
 	Compaction    *CompactionConfig       `yaml:"compaction,omitempty" json:"compaction,omitempty"`
+	Knowledge     *KnowledgeConfig        `yaml:"knowledge,omitempty" json:"knowledge,omitempty"`
+	Optimize      *OptimizeConfig         `yaml:"optimize,omitempty" json:"optimize,omitempty"`
 
 	// Runtime-only context parts (not persisted in YAML).
 	// These are kept separate for prompt caching optimization.
@@ -58,7 +77,7 @@ type Agent struct {
 }
 
 const (
-	defaultMaxTurns     = 10
+	// MaxTurns 0 means unlimited (run until the model returns without tool calls).
 	defaultMaxTokens    = 4096
 	defaultMaxParallel  = 4
 	defaultToolExecMode = "parallel"
@@ -175,9 +194,7 @@ func (a *Agent) validate() error {
 	if a.Model == "" {
 		return fmt.Errorf("model is required")
 	}
-	if a.MaxTurns <= 0 {
-		a.MaxTurns = defaultMaxTurns
-	}
+	// MaxTurns 0 = unlimited (loop until the model stops calling tools).
 	if a.MaxTokens <= 0 {
 		a.MaxTokens = defaultMaxTokens
 	}
@@ -225,6 +242,17 @@ func (a *Agent) validate() error {
 		}
 		if a.Compaction.KeepRecent <= 0 {
 			a.Compaction.KeepRecent = 20
+		}
+		if a.Compaction.TriggerRatio != 0 && (a.Compaction.TriggerRatio < 0 || a.Compaction.TriggerRatio >= 1) {
+			return fmt.Errorf("compaction.trigger_ratio must be in (0, 1)")
+		}
+	}
+	if a.Knowledge != nil {
+		if a.Knowledge.TopK < 0 {
+			return fmt.Errorf("knowledge.top_k must be >= 0")
+		}
+		if a.Knowledge.TopK == 0 {
+			a.Knowledge.TopK = 5
 		}
 	}
 	return nil

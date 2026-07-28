@@ -5,7 +5,7 @@ This file provides guidance to AI coding agents when working with code in this r
 ## Build and test commands
 
 ```bash
-go build -o bin/agent-server ./cmd/agent-server    # build
+go build -o bin/agent-server ./cmd                  # build
 go vet ./...                                        # vet
 golangci-lint run                                   # lint (config in .golangci.yml)
 go test ./...                                       # all tests
@@ -24,13 +24,13 @@ There is no `go generate`, `go install`, or Docker step at this phase.
 
 ## Architecture
 
-This is a Go agent runtime (`common-agent`). The project is in **Phase 1** (production base).
+This is a Go agent runtime (`common-agent`).
 
 **Dependency direction**: `cmd → server → core ← tools`. Core must not import `server` or `cmd`.
 
 | Layer | Package | Purpose |
 |-------|---------|---------|
-| Entry | `cmd/agent-server/` | CLI wiring only — subcommands: `chat`, `run`, `serve`, `config` |
+| Entry | `cmd/` | CLI wiring only — subcommands: `chat`, `run`, `serve`, `config` |
 | Transport | `server/http/` | HTTP/SSE handler — parse request → call core `loop.Run` → stream events |
 | Core | `core/loop/` | The single agent loop — all paths (CLI/HTTP/gRPC) must call this `Run` |
 | Core | `core/event/` | Unified event types: `text_delta`, `reasoning_delta`, `tool_start`, `tool_result`, `error`, `done` |
@@ -62,7 +62,7 @@ This is a Go agent runtime (`common-agent`). The project is in **Phase 1** (prod
 
 ## Coding standards
 
-编码规范的权威来源是 `docs/html/code-standards.html`，本文件仅记录 AI 代理工作时需要特别注意的要点：
+编码规范以 [AGENTS.md](AGENTS.md) 为准，本文件仅记录 AI 代理工作时需要特别注意的要点：
 
 ### 可维护性约束
 
@@ -95,21 +95,11 @@ This is a Go agent runtime (`common-agent`). The project is in **Phase 1** (prod
 - Commit: Conventional Commits 格式 — `feat(core/loop): description`
 - 分支: `feat/<name>`、`fix/<name>`
 
-## Documentation management
-
-- **权威来源**: `docs/html/` 是项目文档的唯一权威来源。
-- **站点结构**: 多页面纯 HTML 站点，由 `_assets/nav-config.js` 定义导航，`_assets/nav.js` 动态注入侧边栏。
-- **共享样式**: `docs/html/_assets/style.css`，页面特有样式写在各自的 `<style>` 标签内。
-- **导航分组**: 项目 / 入门 / 编码规范 / 核心—运行时 / 核心—扩展 / 核心—基础设施 / 执行流程 / 开发指南
-- **index.html**: 记录已完成的项目状态，每个 phase 完成后更新。
-- **roadmap.html**: 开发计划，每个 phase 开始时定义范围，过程中更新进度。
-- **code-standards.html**: 编码规范，全栈通用的编码标准。
-- **refactoring-plan.html**: 重构计划，基于编码规范的代码审查结果。
-
 ## Agent YAML reference
 
 ```yaml
-name: demo
+id: agt_demo01          # 稳定主键；文件名 agents/{id}.yaml
+name: demo              # 显示名，可改
 version: 1
 provider: anthropic
 model: claude-sonnet-4-20250514

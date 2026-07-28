@@ -59,6 +59,68 @@ export interface AgentDetail {
   tool_execution?: ToolExecutionConfig
   permissions?: PermissionsConfig
   mcp_servers?: McpServerConfig[]
+  knowledge?: KnowledgeConfig
+  optimize?: OptimizeConfig
+}
+
+export interface OptimizeConfig {
+  system_prompt?: boolean
+  user_prompt?: boolean
+}
+
+export interface KnowledgeConfig {
+  bases?: string[]
+  top_k?: number
+}
+
+export interface KnowledgeMeta {
+  id: string
+  name: string
+  description?: string
+  created_at: string
+  updated_at: string
+  doc_count: number
+  chunk_count: number
+}
+
+export interface KnowledgeDocument {
+  id: string
+  filename: string
+  size: number
+  created_at: string
+  chunk_count: number
+}
+
+export interface KnowledgeHit {
+  kb_id: string
+  doc_id: string
+  filename: string
+  chunk_index: number
+  text: string
+  score: number
+}
+
+export interface EmbeddingConfig {
+  vendor?: string
+  backend: "openai" | "ollama" | string
+  base_url?: string
+  api_key_env?: string
+  model: string
+  dimensions?: number
+  has_api_key?: boolean
+}
+
+export interface EmbeddingVendorInfo {
+  name: string
+  display_name: string
+  backend: string
+  base_url: string
+  api_key_env?: string
+  default_model: string
+  models?: string[]
+  default_dimensions?: number
+  dimensions?: number[]
+  max_batch?: number
 }
 
 export interface McpServerConfig {
@@ -173,8 +235,19 @@ export interface SkillInfo {
   version: string
   description: string
   format: string // "skill.md" | "skill.yaml"
+  scope: "global" | "agent"
+  agent?: string // agent name for agent-scoped skills
   author?: string
   tools: string[]
+}
+
+// Skill detail (SkillInfo + full body and frontmatter fields)
+export interface SkillDetail extends SkillInfo {
+  body: string
+  license?: string
+  compatibility?: string
+  metadata?: Record<string, string>
+  allowed_tools?: string
 }
 
 // MCP server info (mirrors Go MCPServerInfo)

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
-import { Pause, Play, Plus, Timer, Trash2, Zap } from "lucide-react"
+import { History, Pause, Play, Plus, Timer, Trash2, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { JobsCreateForm } from "@/components/manage/jobs-create-form"
+import { JobsRunsDialog } from "@/components/manage/jobs-runs-dialog"
 import {
   deleteJob,
   fetchAgents,
@@ -65,6 +66,7 @@ function JobListItem({
   onPause,
   onResume,
   onRun,
+  onRuns,
   onDelete,
   onOpen,
 }: {
@@ -74,6 +76,7 @@ function JobListItem({
   onPause: () => void
   onResume: () => void
   onRun: () => void
+  onRuns: () => void
   onDelete: () => void
   onOpen?: () => void
 }) {
@@ -116,6 +119,9 @@ function JobListItem({
         <JobActionBtn tooltip={t("manage.jobsRunNow")} disabled={busy} onClick={(e) => { e.stopPropagation(); onRun() }}>
           <Zap className="h-3 w-3 text-muted-foreground" />
         </JobActionBtn>
+        <JobActionBtn tooltip={t("manage.jobsRunsTitle")} disabled={busy} onClick={(e) => { e.stopPropagation(); onRuns() }}>
+          <History className="h-3 w-3 text-muted-foreground" />
+        </JobActionBtn>
         <JobActionBtn tooltip={t("common.delete")} disabled={busy} onClick={(e) => { e.stopPropagation(); onDelete() }}>
           <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
         </JobActionBtn>
@@ -132,6 +138,7 @@ export function SidebarJobsList() {
   const [agents, setAgents] = useState<AgentInfo[]>([])
   const [busyId, setBusyId] = useState("")
   const [creating, setCreating] = useState(false)
+  const [runsJob, setRunsJob] = useState<JobInfo | null>(null)
 
   const reload = useCallback(async () => {
     try {
@@ -198,6 +205,7 @@ export function SidebarJobsList() {
               onPause={() => void withBusy(job.id, async () => { await pauseJob(job.id) })}
               onResume={() => void withBusy(job.id, async () => { await resumeJob(job.id) })}
               onRun={() => void withBusy(job.id, async () => { await runJobNow(job.id) })}
+              onRuns={() => setRunsJob(job)}
               onDelete={() => {
                 if (!window.confirm(t("manage.jobsDeleteConfirm", { name: job.name }))) return
                 void withBusy(job.id, async () => { await deleteJob(job.id) })
@@ -211,6 +219,14 @@ export function SidebarJobsList() {
           ))}
         </div>
       )}
+
+      <JobsRunsDialog
+        job={runsJob}
+        open={runsJob !== null}
+        onOpenChange={(o) => {
+          if (!o) setRunsJob(null)
+        }}
+      />
 
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="max-w-lg rounded-2xl border-border bg-card">

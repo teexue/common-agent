@@ -15,6 +15,10 @@ export interface AgentFormData {
   autoApprove: string[]
   alwaysDeny: string[]
   mcpServers: McpServerFormItem[]
+  knowledgeBases: string[]
+  knowledgeTopK: number
+  optimizeSystemPrompt: boolean
+  optimizeUserPrompt: boolean
 }
 
 /** MCP server as edited in the form (args/env as editable strings). */
@@ -34,13 +38,17 @@ export const EMPTY_FORM: AgentFormData = {
   model: "",
   systemPrompt: "You are a helpful assistant.",
   tools: [],
-  maxTurns: 10,
+  maxTurns: 0,
   maxTokens: 4096,
   execMode: "parallel",
   maxParallel: 4,
   autoApprove: [],
   alwaysDeny: [],
   mcpServers: [],
+  knowledgeBases: [],
+  knowledgeTopK: 5,
+  optimizeSystemPrompt: false,
+  optimizeUserPrompt: false,
 }
 
 export function emptyMcpServer(): McpServerFormItem {
@@ -191,6 +199,29 @@ export function formDataToYaml(form: AgentFormData): string {
   const mcpBlock = mcpServersToYaml(form.mcpServers)
   if (mcpBlock) {
     lines.push(mcpBlock.slice(0, -1)) // trim trailing newline (join adds one)
+  }
+
+  if (form.knowledgeBases.length > 0 || form.knowledgeTopK > 0) {
+    lines.push(`knowledge:`)
+    if (form.knowledgeBases.length > 0) {
+      lines.push(`  bases:`)
+      for (const b of form.knowledgeBases) {
+        lines.push(`    - ${b}`)
+      }
+    }
+    if (form.knowledgeTopK > 0) {
+      lines.push(`  top_k: ${form.knowledgeTopK}`)
+    }
+  }
+
+  if (form.optimizeSystemPrompt || form.optimizeUserPrompt) {
+    lines.push(`optimize:`)
+    if (form.optimizeSystemPrompt) {
+      lines.push(`  system_prompt: true`)
+    }
+    if (form.optimizeUserPrompt) {
+      lines.push(`  user_prompt: true`)
+    }
   }
 
   return lines.join("\n") + "\n"

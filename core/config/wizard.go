@@ -7,6 +7,7 @@ import (
 
 	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/provider"
+	"github.com/teexue/common-agent/core/store"
 	"github.com/teexue/common-agent/core/tui"
 	"gopkg.in/yaml.v3"
 )
@@ -32,6 +33,12 @@ func InitInteractive(home string) error {
 	if err := ensureHome(home); err != nil {
 		return err
 	}
+	db, err := store.Open(home)
+	if err != nil {
+		return fmt.Errorf("open state.db: %w", err)
+	}
+	defer db.Close()
+	BindDB(db)
 
 	tui.PrintWelcome("setup", "config", "wizard")
 	fmt.Println(tui.Muted(i18n.T("wizard.config_dir", "path", home)))
@@ -70,7 +77,7 @@ system_prompt: |
 tools:
   - echo
   - get_time
-max_turns: 10
+max_turns: 0
 max_tokens: 4096
 tool_execution:
   mode: parallel
@@ -253,23 +260,33 @@ func defaultBaseURLHint(style provider.APIStyle) string {
 	}
 }
 
-// UpsertProvider adds or updates a provider in providers.yaml.
+// UpsertProvider adds or updates a provider (SQLite when bound, else providers.yaml).
 // For updates, empty APIKeyEnv preserves the existing value.
 func UpsertProvider(home string, spec ProviderSpec) error {
-	if err := ensureHome(home); err != nil {
-		return err
-	}
-
-	path := ProvidersFile(home)
 	providers := map[string]provider.ProfileEntry{}
-	if data, err := os.ReadFile(path); err == nil {
-		var file provider.CatalogFile
-		if err := yaml.Unmarshal(data, &file); err != nil {
-			return fmt.Errorf("parse providers: %w", err)
+	if stateDB != nil {
+		var err error
+		providers, err = stateDB.ListProviderEntries()
+		if err != nil {
+			return err
 		}
-		providers = file.Providers
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("read providers: %w", err)
+	} else {
+		if err := ensureHome(home); err != nil {
+			return err
+		}
+		path := ProvidersFile(home)
+		if data, err := os.ReadFile(path); err == nil {
+			var file provider.CatalogFile
+			if err := yaml.Unmarshal(data, &file); err != nil {
+				return fmt.Errorf("parse providers: %w", err)
+			}
+			providers = file.Providers
+			if providers == nil {
+				providers = map[string]provider.ProfileEntry{}
+			}
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("read providers: %w", err)
+		}
 	}
 
 	// For updates, preserve existing fields if not provided.
@@ -305,26 +322,32 @@ func UpsertProvider(home string, spec ProviderSpec) error {
 		APIVersion:   spec.APIVersion,
 		AuthStyle:    spec.AuthStyle,
 		DefaultModel: spec.DefaultModel,
-		DisplayName: spec.DisplayName,
+		DisplayName:  spec.DisplayName,
 		ModelsPath:   spec.ModelsPath,
 		Vision:       spec.Vision,
 	}
 	if spec.ThinkingType != "" {
 		entry.Thinking = &provider.ThinkingConfig{Type: spec.ThinkingType, Keep: spec.ThinkingKeep}
 	}
-	providers[spec.Name] = entry
 
+	if stateDB != nil {
+		return stateDB.UpsertProviderEntry(spec.Name, entry)
+	}
+	providers[spec.Name] = entry
 	data, err := yaml.Marshal(provider.CatalogFile{Providers: providers})
 	if err != nil {
 		return fmt.Errorf("marshal providers: %w", err)
 	}
-	return os.WriteFile(path, data, 0o644)
+	return os.WriteFile(ProvidersFile(home), data, 0o644)
 }
 
-// DeleteProvider removes a provider from providers.yaml.
+// DeleteProvider removes a provider (SQLite when bound, else providers.yaml).
 func DeleteProvider(home string, name string) error {
 	if name == "" {
 		return fmt.Errorf("provider name is required")
+	}
+	if stateDB != nil {
+		return stateDB.DeleteProviderEntry(name)
 	}
 	path := ProvidersFile(home)
 	data, err := os.ReadFile(path)

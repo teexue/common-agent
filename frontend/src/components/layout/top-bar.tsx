@@ -27,6 +27,8 @@ interface TopBarProps {
   onToggleArtifact: () => void
   theme: string
   onToggleTheme: () => void
+  /** actions rendered in the right-side button group (e.g. conversation search/export) */
+  actions?: React.ReactNode
 }
 
 function TopBarButton({ tooltip, onClick, children }: { tooltip: string; onClick: () => void; children: React.ReactNode }) {
@@ -122,7 +124,7 @@ function AgentSwitcher({
 
 export function TopBar({
   agent, agents = [], agentLocked = false, onSelectAgent,
-  status, artifactOpen, onToggleArtifact, theme, onToggleTheme,
+  status, artifactOpen, onToggleArtifact, theme, onToggleTheme, actions,
 }: TopBarProps) {
   const { t } = useTranslation()
   return (
@@ -133,6 +135,7 @@ export function TopBar({
       </div>
 
       <div className="flex items-center gap-0.5">
+        {actions}
         <HealthIndicator />
         <TopBarButton tooltip={t("layout.toggleTheme")} onClick={onToggleTheme}>
           {theme === "dark" ? <Sun className="h-3.5 w-3.5 text-muted-foreground" /> : <Moon className="h-3.5 w-3.5 text-muted-foreground" />}

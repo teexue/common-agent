@@ -5,26 +5,39 @@ import (
 	"os"
 	"sync"
 
+	"github.com/teexue/common-agent/core/store"
 	"gopkg.in/yaml.v3"
 )
 
-// CredentialStore is a thread-safe store for API credentials backed by a YAML file.
+// CredentialStore is a thread-safe store for API credentials.
 type CredentialStore struct {
 	mu    sync.RWMutex
 	cache map[string]string
 	home  string
+	db    *store.DB
 }
 
-// NewCredentialStore creates a store and loads existing credentials from home.
+// NewCredentialStore creates a store from SQLite when bound, else credentials.yaml.
 func NewCredentialStore(home string) (*CredentialStore, error) {
+	if stateDB != nil {
+		inner, err := store.NewCredentialStore(stateDB)
+		if err != nil {
+			return nil, err
+		}
+		cs := &CredentialStore{home: home, db: stateDB, cache: map[string]string{}}
+		for _, k := range inner.Keys() {
+			cs.cache[k] = inner.Get(k)
+		}
+		return cs, nil
+	}
 	cs := &CredentialStore{home: home}
-	if err := cs.load(); err != nil {
+	if err := cs.loadFile(); err != nil {
 		return nil, err
 	}
 	return cs, nil
 }
 
-func (cs *CredentialStore) load() error {
+func (cs *CredentialStore) loadFile() error {
 	path := CredentialsFile(cs.home)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -42,7 +55,7 @@ func (cs *CredentialStore) load() error {
 	return nil
 }
 
-// Set stores a credential key-value pair and persists to disk.
+// Set stores a credential key-value pair and persists.
 func (cs *CredentialStore) Set(envName, value string) error {
 	if envName == "" {
 		return fmt.Errorf("env name is required")
@@ -50,14 +63,16 @@ func (cs *CredentialStore) Set(envName, value string) error {
 	if value == "" {
 		return fmt.Errorf("value is required")
 	}
-
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	if cs.cache == nil {
 		cs.cache = map[string]string{}
 	}
 	cs.cache[envName] = value
-	return cs.writeLocked()
+	if cs.db != nil {
+		return cs.db.Save(&store.Credential{EnvName: envName, Value: value}).Error
+	}
+	return cs.writeFileLocked()
 }
 
 // Get returns a stored credential by env var name.
@@ -70,9 +85,7 @@ func (cs *CredentialStore) Get(envName string) string {
 	return cs.cache[envName]
 }
 
-// Lookup returns the credential for envName, first checking the environment
-// variable, then falling back to the store. This matches the signature
-// expected by provider.LoadCatalog.
+// Lookup returns env first, then store.
 func (cs *CredentialStore) Lookup(envName string) string {
 	if v := os.Getenv(envName); v != "" {
 		return v
@@ -80,7 +93,7 @@ func (cs *CredentialStore) Lookup(envName string) string {
 	return cs.Get(envName)
 }
 
-// Keys returns configured env var names (values redacted).
+// Keys returns configured env var names.
 func (cs *CredentialStore) Keys() []string {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
@@ -91,7 +104,7 @@ func (cs *CredentialStore) Keys() []string {
 	return keys
 }
 
-func (cs *CredentialStore) writeLocked() error {
+func (cs *CredentialStore) writeFileLocked() error {
 	if err := ensureHome(cs.home); err != nil {
 		return err
 	}
@@ -99,14 +112,10 @@ func (cs *CredentialStore) writeLocked() error {
 	if err != nil {
 		return fmt.Errorf("marshal credentials: %w", err)
 	}
-	path := CredentialsFile(cs.home)
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		return fmt.Errorf("write credentials: %w", err)
-	}
-	return nil
+	return os.WriteFile(CredentialsFile(cs.home), data, 0o600)
 }
 
-// --- Legacy package-level API (deprecated, kept for compatibility) ---
+// --- Legacy package-level API (deprecated) ---
 
 var (
 	legacyStore *CredentialStore
@@ -125,14 +134,13 @@ func initLegacy() error {
 	}
 	cs, err := NewCredentialStore(home)
 	if err != nil {
-		// If the home doesn't exist yet, create an in-memory-only store.
 		cs = &CredentialStore{home: home, cache: map[string]string{}}
 	}
 	legacyStore = cs
 	return nil
 }
 
-// LoadCredentials reads credentials.yaml from home into memory.
+// LoadCredentials reads credentials into memory.
 // Deprecated: use NewCredentialStore instead.
 func LoadCredentials(home string) error {
 	cs, err := NewCredentialStore(home)
@@ -145,7 +153,7 @@ func LoadCredentials(home string) error {
 	return nil
 }
 
-// SetCredential stores a key in credentials.yaml.
+// SetCredential stores a key.
 // Deprecated: use CredentialStore.Set instead.
 func SetCredential(home, envName, value string) error {
 	cs, err := NewCredentialStore(home)
@@ -155,7 +163,7 @@ func SetCredential(home, envName, value string) error {
 	return cs.Set(envName, value)
 }
 
-// GetCredential returns a stored credential by env var name.
+// GetCredential returns a stored credential.
 // Deprecated: use CredentialStore.Get instead.
 func GetCredential(envName string) string {
 	if legacyStore == nil {

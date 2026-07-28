@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react"
-import { Route, Routes, useLocation, useNavigate, useParams, Navigate } from "react-router-dom"
+import { Outlet, Route, Routes, useLocation, useNavigate, useParams, Navigate } from "react-router-dom"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ThemeProvider, useTheme } from "@/components/theme-provider"
 import { BackgroundProvider } from "@/components/background/background-provider"
 import { AppLayout } from "@/components/layout/app-layout"
 import { WorkspacePanel } from "@/components/conversation/workspace-panel"
+import { ConversationActions } from "@/components/conversation/conversation-actions"
 import { InspectorPanel } from "@/components/inspector/inspector-panel"
 import { ToolDetailDialog } from "@/components/tools/tool-detail-dialog"
 import { SettingsPage } from "@/components/settings/settings-page"
@@ -13,9 +14,14 @@ import { AgentDetailDialog } from "@/components/agents/agent-detail-dialog"
 import { AgentEditorPage } from "@/components/agents/agent-editor"
 import { AgentDeleteConfirm } from "@/components/agents/agent-delete-confirm"
 import { SessionReplay } from "@/components/sessions/session-replay"
+import { LoginPage } from "@/components/auth/login-page"
+import { RequireAuth } from "@/components/auth/require-auth"
+import { ApiDocsPage } from "@/components/docs/api-docs-page"
 import { useChat } from "@/hooks/use-chat"
 import { useAgentManager } from "@/hooks/use-agent-manager"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
+import { useMessageSearch } from "@/hooks/use-message-search"
+import { AuthProvider } from "@/lib/auth"
 import { fetchSessions, fetchSession, deleteSession, resolveApproval, fetchProviders } from "@/lib/api"
 import type { ConversationEntry, ToolCallEntry, ToolInfo, SessionMeta, StreamStatus, ProviderInfo } from "@/types/agent"
 
@@ -97,6 +103,7 @@ function useShellNav() {
     onToggleSidebar: () => setSidebarCollapsed((v) => !v),
     onOpenSettings: () => navigate("/settings"),
     onOpenManage: () => navigate("/manage"),
+    onOpenApiDocs: () => navigate("/api-docs"),
     onNewSession: () => navigate("/"),
     sessions: sessList.sessions,
     onResumeSession: handleResumeSession,
@@ -113,6 +120,7 @@ function WorkspaceRoute() {
   const location = useLocation()
   const navigate = useNavigate()
   const sessMgr = useSessions(chat)
+  const search = useMessageSearch(chat.messages)
 
   const [agent, setAgent] = useState(() => { const m = location.pathname.match(/^\/agents\/(.+)$/); return m ? decodeURIComponent(m[1]) : "" })
   const [selectedToolCallId, setSelectedToolCallId] = useState<string | null>(null)
@@ -199,6 +207,7 @@ function WorkspaceRoute() {
         onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
         onOpenSettings={() => navigate("/settings")}
         onOpenManage={() => navigate("/manage")}
+        onOpenApiDocs={() => navigate("/api-docs")}
         onNewSession={handleNewSession}
         sessions={sessMgr.sessions}
         activeSessionId={chat.sessionId}
@@ -215,6 +224,14 @@ function WorkspaceRoute() {
         theme={theme}
         onToggleTheme={handleToggleTheme}
         showInspector
+        topBarActions={
+          <ConversationActions
+            searchOpen={search.searchOpen}
+            onToggleSearch={search.toggleOpen}
+            messages={chat.messages}
+            agentName={agentInfo?.name || agent}
+          />
+        }
         leftPanel={
           <WorkspacePanel
             messages={chat.messages}
@@ -230,6 +247,7 @@ function WorkspaceRoute() {
             onCreateAgent={() => navigate("/manage/agents/new")}
             agentName={agentInfo?.name || agent}
             visionEnabled={visionEnabled}
+            search={search}
           />
         }
         rightPanel={<InspectorPanel entry={selectedEntry} toolCall={selectedToolCall} />}
@@ -252,6 +270,7 @@ function shellLayoutProps(shell: ReturnType<typeof useShellNav>, theme: string, 
     onToggleSidebar: shell.onToggleSidebar,
     onOpenSettings: shell.onOpenSettings,
     onOpenManage: shell.onOpenManage,
+    onOpenApiDocs: shell.onOpenApiDocs,
     onNewSession: shell.onNewSession,
     sessions: shell.sessions,
     onResumeSession: shell.onResumeSession,
@@ -353,20 +372,53 @@ function SettingsRoute() {
   )
 }
 
+function ApiDocsRoute() {
+  const { theme, setTheme } = useTheme()
+  const shell = useShellNav()
+
+  return (
+    <TooltipProvider delay={300}>
+      <AppLayout
+        {...shellLayoutProps(shell, theme, setTheme)}
+        leftPanel={<ApiDocsPage />}
+      />
+      <SessionReplay
+        sessionId={shell.replaySessionId}
+        open={!!shell.replaySessionId}
+        onOpenChange={(open) => { if (!open) shell.setReplaySessionId(null) }}
+      />
+    </TooltipProvider>
+  )
+}
+
+function AuthenticatedShell() {
+  return (
+    <RequireAuth>
+      <BackgroundProvider>
+        <Outlet />
+      </BackgroundProvider>
+    </RequireAuth>
+  )
+}
+
 export function App() {
   return (
     <ThemeProvider defaultMode="dark">
-      <BackgroundProvider>
+      <AuthProvider>
         <Routes>
-        <Route path="/settings" element={<SettingsRoute />} />
-        <Route path="/manage" element={<ManageRoute />} />
-        <Route path="/manage/agents/new" element={<AgentEditorRoute mode="create" />} />
-        <Route path="/manage/agents/:agentId/edit" element={<AgentEditorRoute mode="edit" />} />
-        <Route path="/agents/:agentName" element={<WorkspaceRoute />} />
-        <Route path="/" element={<WorkspaceRoute />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<AuthenticatedShell />}>
+            <Route path="/settings" element={<SettingsRoute />} />
+            <Route path="/api-docs" element={<ApiDocsRoute />} />
+            <Route path="/manage" element={<ManageRoute />} />
+            <Route path="/manage/agents/new" element={<AgentEditorRoute mode="create" />} />
+            <Route path="/manage/agents/:agentId/edit" element={<AgentEditorRoute mode="edit" />} />
+            <Route path="/agents/:agentName" element={<WorkspaceRoute />} />
+            <Route path="/" element={<WorkspaceRoute />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
         </Routes>
-      </BackgroundProvider>
+      </AuthProvider>
     </ThemeProvider>
   )
 }

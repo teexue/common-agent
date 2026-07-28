@@ -50,6 +50,20 @@ type CatalogFile struct {
 	Providers map[string]ProfileEntry `yaml:"providers"`
 }
 
+// NewCatalog builds a Catalog from in-memory entries (e.g. loaded from SQLite).
+// An empty map is reported via IsMissingCatalogError.
+func NewCatalog(entries map[string]ProfileEntry, credLookup func(string) string) (*Catalog, error) {
+	if len(entries) == 0 {
+		return nil, &missingCatalogError{path: "db", empty: true}
+	}
+	for name, entry := range entries {
+		if err := entry.validate(); err != nil {
+			return nil, fmt.Errorf("provider %q: %w", name, err)
+		}
+	}
+	return &Catalog{entries: entries, credLookup: credLookup}, nil
+}
+
 // LoadCatalog reads providers.yaml. credLookup is an optional fallback for API key resolution
 // (e.g. from a credentials file); pass nil to use environment variables only.
 // A missing file or an empty providers map is reported via IsMissingCatalogError and
@@ -66,17 +80,7 @@ func LoadCatalog(path string, credLookup func(string) string) (*Catalog, error) 
 	if err := yaml.Unmarshal(data, &file); err != nil {
 		return nil, fmt.Errorf("parse providers %q: %w", path, err)
 	}
-	if len(file.Providers) == 0 {
-		return nil, &missingCatalogError{path: path, empty: true}
-	}
-
-	for name, entry := range file.Providers {
-		if err := entry.validate(); err != nil {
-			return nil, fmt.Errorf("provider %q: %w", name, err)
-		}
-	}
-
-	return &Catalog{entries: file.Providers, credLookup: credLookup}, nil
+	return NewCatalog(file.Providers, credLookup)
 }
 
 // missingCatalogError indicates the providers file is absent or contains no providers.

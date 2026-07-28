@@ -4,7 +4,7 @@ import { ArrowLeft, Bot, Loader2, Plug, Save, Settings2, Shield, Wrench } from "
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { fetchAgentDetail, fetchProviders, fetchTools, createAgent, updateAgent, validateAgent } from "@/lib/api"
+import { fetchAgentDetail, fetchKnowledgeBases, fetchProviders, fetchTools, createAgent, updateAgent, validateAgent } from "@/lib/api"
 import { EMPTY_FORM, formDataToYaml, mcpConfigToForm } from "@/lib/agent-yaml"
 import type { AgentFormData } from "@/lib/agent-yaml"
 import type { ProviderInfo, ToolInfo } from "@/types/agent"
@@ -21,6 +21,7 @@ export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditor
   const [form, setForm] = useState<AgentFormData>(EMPTY_FORM)
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [tools, setTools] = useState<ToolInfo[]>([])
+  const [knowledgeBases, setKnowledgeBases] = useState<Array<{ id: string; name: string }>>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +31,9 @@ export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditor
   useEffect(() => {
     fetchProviders().then(setProviders).catch(() => setProviders([]))
     fetchTools().then(setTools).catch(() => setTools([]))
+    fetchKnowledgeBases()
+      .then((bases) => setKnowledgeBases(bases.map((b) => ({ id: b.id, name: b.name }))))
+      .catch(() => setKnowledgeBases([]))
   }, [])
 
   useEffect(() => {
@@ -47,13 +51,17 @@ export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditor
         model: d.model,
         systemPrompt: d.system_prompt || "",
         tools: d.tools || [],
-        maxTurns: d.max_turns || 10,
+        maxTurns: d.max_turns ?? 0,
         maxTokens: d.max_tokens || 4096,
         execMode: (d.tool_execution?.Mode as "parallel" | "serial") || "parallel",
         maxParallel: d.tool_execution?.MaxParallel || 4,
         autoApprove: d.permissions?.auto_approve || [],
         alwaysDeny: d.permissions?.always_deny || [],
         mcpServers: (d.mcp_servers ?? []).map(mcpConfigToForm),
+        knowledgeBases: d.knowledge?.bases ?? [],
+        knowledgeTopK: d.knowledge?.top_k || 5,
+        optimizeSystemPrompt: d.optimize?.system_prompt ?? false,
+        optimizeUserPrompt: d.optimize?.user_prompt ?? false,
       }))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
@@ -150,7 +158,7 @@ export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditor
                 <McpTab form={form} setForm={setForm} />
               </TabsContent>
               <TabsContent value="runtime" className="mt-0">
-                <RuntimeTab form={form} setForm={setForm} />
+                <RuntimeTab form={form} setForm={setForm} knowledgeBases={knowledgeBases} />
               </TabsContent>
             </Tabs>
           )}

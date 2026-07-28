@@ -6,17 +6,23 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/audit"
+	"github.com/teexue/common-agent/core/auth"
 	"github.com/teexue/common-agent/core/config"
+	"github.com/teexue/common-agent/core/embedding"
 	"github.com/teexue/common-agent/core/job"
+	"github.com/teexue/common-agent/core/knowledge"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/store"
 	"github.com/teexue/common-agent/core/telemetry"
 	"github.com/teexue/common-agent/tools/registry"
 )
@@ -24,7 +30,7 @@ import (
 // Server exposes agent HTTP endpoints via Gin.
 type Server struct {
 	agentsDir   string
-	skillsDir   string
+	home        string // ~/.common-agent root; skills dirs derive from it
 	registry    *registry.Registry
 	newProvider func(a *agent.Agent) (provider.Provider, error)
 	staticFS    fs.FS // optional embedded frontend; nil disables static serving
@@ -39,8 +45,12 @@ type Server struct {
 	health      *telemetry.HealthServer
 	watcher     *agent.Watcher  // watches agents dir for changes
 	shutdownCtx context.Context // cancelled on server shutdown; nil = no shutdown propagation
-	apiKey      string          // when non-empty, all /v1/ routes require this key
-	scheduler   *job.Scheduler  // optional job scheduler
+	stateDB     *store.DB
+	tokens      *auth.TokenService
+	cliAPIKeys  []string // raw keys from --api-key (ephemeral, hashed in-memory)
+	cliKeyMu    sync.RWMutex
+	cliKeyHash  map[string]string // hash -> synthetic key id
+	scheduler   *job.Scheduler    // optional job scheduler
 
 	// changeCh broadcasts agent file change events to SSE subscribers.
 	changeCh chan agentChange
@@ -49,12 +59,18 @@ type Server struct {
 // ServerConfig holds configuration for creating a new HTTP server.
 type ServerConfig struct {
 	AgentsDir   string
+	HomeDir     string
 	Registry    *registry.Registry
 	NewProvider func(a *agent.Agent) (provider.Provider, error)
 	StaticFS    fs.FS
 	Logger      *slog.Logger
 	Store       session.Store
 	Jobs        job.Store
+	Knowledge   *knowledge.Manager
+	Ingester    *knowledge.Ingester
+	Retriever   *knowledge.Retriever
+	Embedder    embedding.Embedder
+	KnowledgeRuntime *knowledge.Runtime
 }
 
 // NewServer creates an HTTP server wiring.
@@ -67,15 +83,21 @@ func NewServer(cfg ServerConfig) *Server {
 	}
 	svc := service.New(service.ServiceConfig{
 		AgentsDir:   cfg.AgentsDir,
+		HomeDir:     cfg.HomeDir,
 		Registry:    cfg.Registry,
 		NewProvider: cfg.NewProvider,
 		Logger:      logger,
 		Store:       cfg.Store,
 		Jobs:        cfg.Jobs,
+		Knowledge:   cfg.Knowledge,
+		Ingester:    cfg.Ingester,
+		Retriever:   cfg.Retriever,
+		Embedder:    cfg.Embedder,
+		KnowledgeRuntime: cfg.KnowledgeRuntime,
 	})
 	return &Server{
 		agentsDir:   cfg.AgentsDir,
-		skillsDir:   filepath.Join(filepath.Dir(cfg.AgentsDir), "skills"),
+		home:        filepath.Dir(cfg.AgentsDir),
 		registry:    cfg.Registry,
 		newProvider: cfg.NewProvider,
 		staticFS:    cfg.StaticFS,
@@ -120,12 +142,111 @@ func (s *Server) SetShutdownCtx(ctx context.Context) {
 	s.shutdownCtx = ctx
 }
 
-// SetAPIKey enables API key authentication for all /v1/ routes.
-// When set to a non-empty value, clients must send the key via
-// the "Authorization: Bearer <key>" or "X-API-Key" header.
-// Health endpoints (/healthz, /readyz, /metrics) are always exempt.
+// SetStateDB attaches the SQLite store and initializes JWT services.
+func (s *Server) SetStateDB(db *store.DB) error {
+	s.stateDB = db
+	if db == nil {
+		s.tokens = nil
+		return nil
+	}
+	secret, err := db.EnsureJWTSecret()
+	if err != nil {
+		return err
+	}
+	s.tokens = auth.NewTokenService(secret, s.keyIDActive, s.userIDActive)
+	return nil
+}
+
+func (s *Server) userIDActive(userID string) bool {
+	if s.stateDB == nil || userID == "" {
+		return false
+	}
+	return s.stateDB.HasUser(userID)
+}
+
+func (s *Server) keyIDActive(keyID string) bool {
+	if s.stateDB != nil && s.stateDB.HasAPIKeyID(keyID) {
+		return true
+	}
+	s.cliKeyMu.RLock()
+	defer s.cliKeyMu.RUnlock()
+	for _, id := range s.cliKeyHash {
+		if id == keyID {
+			return true
+		}
+	}
+	return false
+}
+
+// SetAPIKey enables authentication with a single ephemeral CLI key.
 func (s *Server) SetAPIKey(key string) {
-	s.apiKey = key
+	if key == "" {
+		s.SetAPIKeys(nil)
+		return
+	}
+	s.SetAPIKeys([]string{key})
+}
+
+// SetAPIKeys replaces ephemeral CLI-sourced API keys (not persisted).
+func (s *Server) SetAPIKeys(keys []string) {
+	s.cliAPIKeys = append([]string(nil), keys...)
+	next := make(map[string]string, len(keys))
+	for i, k := range keys {
+		if k == "" {
+			continue
+		}
+		next[store.HashAPIKey(k)] = "cli_" + strconv.Itoa(i)
+	}
+	s.cliKeyMu.Lock()
+	s.cliKeyHash = next
+	s.cliKeyMu.Unlock()
+}
+
+// authEnabled reports whether /v1 requires credentials.
+// When a state DB is attached (normal serve), auth is always required so
+// unauthenticated clients cannot read data. Tests without a state DB stay open.
+func (s *Server) authEnabled() (bool, error) {
+	s.cliKeyMu.RLock()
+	cliN := len(s.cliKeyHash)
+	s.cliKeyMu.RUnlock()
+	if cliN > 0 {
+		return true, nil
+	}
+	if s.stateDB != nil {
+		return true, nil
+	}
+	return false, nil
+}
+
+// resolveIdentity validates a JWT or raw API key and returns the identity.
+func (s *Server) resolveIdentity(token string) (auth.Identity, bool) {
+	if token == "" {
+		return auth.Identity{}, false
+	}
+	if s.tokens != nil && auth.LooksLikeJWT(token) {
+		id, err := s.tokens.Parse(token)
+		if err == nil {
+			return id, true
+		}
+	}
+	if s.stateDB != nil {
+		entry, ok, err := s.stateDB.VerifyAPIKey(token)
+		if err == nil && ok {
+			return auth.Identity{UserID: entry.UserID, KeyID: entry.ID}, true
+		}
+	}
+	return s.resolveCLIKey(token)
+}
+
+func (s *Server) resolveCLIKey(raw string) (auth.Identity, bool) {
+	h := store.HashAPIKey(raw)
+	s.cliKeyMu.RLock()
+	kid, ok := s.cliKeyHash[h]
+	s.cliKeyMu.RUnlock()
+	if !ok {
+		return auth.Identity{}, false
+	}
+	return auth.Identity{UserID: auth.DefaultUserID, KeyID: kid}, true
 }
 
 // SetCatalog sets the provider catalog for listing available providers.
@@ -142,6 +263,9 @@ func (s *Server) SetCatalog(c *provider.Catalog) {
 // SetCredentialStore sets the credential store used when saving provider API keys.
 func (s *Server) SetCredentialStore(cs *config.CredentialStore) {
 	s.creds = cs
+	if s.svc != nil {
+		s.svc.Creds = cs
+	}
 }
 
 // StartWatcher begins watching the agents directory for file changes.
@@ -189,7 +313,7 @@ func (s *Server) Health() *telemetry.HealthServer {
 
 // Handler returns the root Gin engine.
 func (s *Server) Handler() *gin.Engine {
-	if s.apiKey == "" {
+	if enabled, _ := s.authEnabled(); !enabled {
 		s.logger.Warn("log.http.api_key_not_set")
 	}
 
@@ -204,8 +328,18 @@ func (s *Server) Handler() *gin.Engine {
 	r.GET("/readyz", gin.WrapF(s.health.HandleReady))
 	r.GET("/metrics", gin.WrapF(s.health.HandleMetrics))
 
-	// API routes — protected by auth middleware when apiKey is set.
+	// Public auth endpoints (status / register / login / raw-key → JWT).
+	r.GET("/v1/auth/status", s.handleAuthStatus)
+	r.POST("/v1/auth/register", s.handleAuthRegister)
+	r.POST("/v1/auth/login", s.handleAuthLogin)
+	r.POST("/v1/auth/token", s.handleAuthToken)
+
+	// API routes — protected when password users or API keys exist.
 	v1 := r.Group("/v1", s.authMiddleware())
+	v1.GET("/auth/keys", s.handleAuthKeysList)
+	v1.POST("/auth/keys", s.handleAuthKeysCreate)
+	v1.DELETE("/auth/keys/:id", s.handleAuthKeysDelete)
+	v1.GET("/auth/me", s.handleAuthMe)
 	v1.POST("/agents/run", s.handleRun)
 	v1.POST("/agents/approve", s.handleApprove)
 	v1.POST("/agents/optimize", s.handleOptimizePrompt)
@@ -223,7 +357,25 @@ func (s *Server) Handler() *gin.Engine {
 	v1.HEAD("/background", s.handleBackgroundGet)
 	v1.POST("/background", s.handleBackgroundUpload)
 	v1.DELETE("/background", s.handleBackgroundDelete)
+	v1.GET("/knowledge", s.handleKnowledgeList)
+	v1.POST("/knowledge", s.handleKnowledgeCreate)
+	v1.POST("/knowledge/search", s.handleKnowledgeSearch)
+	v1.GET("/knowledge/:id", s.handleKnowledgeGet)
+	v1.PATCH("/knowledge/:id", s.handleKnowledgeUpdate)
+	v1.DELETE("/knowledge/:id", s.handleKnowledgeDelete)
+	v1.GET("/knowledge/:id/documents", s.handleKnowledgeDocsList)
+	v1.POST("/knowledge/:id/documents", s.handleKnowledgeDocUpload)
+	v1.DELETE("/knowledge/:id/documents/:docId", s.handleKnowledgeDocDelete)
+	v1.POST("/knowledge/:id/reindex", s.handleKnowledgeReindex)
+	v1.GET("/embedding", s.handleEmbeddingGet)
+	v1.PUT("/embedding", s.handleEmbeddingPut)
+	v1.GET("/embedding/vendors", s.handleEmbeddingVendors)
 	v1.GET("/skills", s.handleSkillsList)
+	v1.POST("/skills", s.handleSkillCreate)
+	v1.POST("/skills/install", s.handleSkillsInstall)
+	v1.GET("/skills/:name", s.handleSkillGet)
+	v1.PUT("/skills/:name", s.handleSkillUpdate)
+	v1.DELETE("/skills/:name", s.handleSkillDelete)
 	v1.GET("/fs/list", s.handleFSList)
 	v1.GET("/events", s.handleEvents)
 

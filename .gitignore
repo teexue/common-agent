@@ -7,7 +7,7 @@ agent-server
 **/.DS_Store
 
 # local docs (not committed)
-docs/
+/docs/
 
 # frontend build output for go:embed (make build)
 cmd/dist/

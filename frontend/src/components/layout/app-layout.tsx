@@ -17,6 +17,7 @@ interface AppLayoutProps {
   onToggleSidebar: () => void
   onOpenSettings: () => void
   onOpenManage?: () => void
+  onOpenApiDocs?: () => void
   onNewSession?: () => void
   sessions?: SessionMeta[]
   activeSessionId?: string | null
@@ -35,10 +36,12 @@ interface AppLayoutProps {
   showInspector?: boolean
   leftPanel: React.ReactNode
   rightPanel?: React.ReactNode
+  /** actions rendered in the TopBar right-side button group */
+  topBarActions?: React.ReactNode
 }
 
 export function AppLayout({
-  inspectorOpen, showInspector = true, leftPanel, rightPanel,
+  inspectorOpen, showInspector = true, leftPanel, rightPanel, topBarActions,
   agent, agents, agentLocked, onSelectAgent,
   status, onToggleInspector, theme, onToggleTheme,
   ...sidebarProps
@@ -65,6 +68,7 @@ export function AppLayout({
             onToggleArtifact={onToggleInspector}
             theme={theme}
             onToggleTheme={onToggleTheme}
+            actions={topBarActions}
           />
         )}
 

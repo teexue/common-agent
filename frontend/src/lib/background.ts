@@ -1,4 +1,5 @@
 import i18n from "@/i18n"
+import { apiHeaders, getAccessToken } from "@/lib/api"
 
 export interface BackgroundSettings {
   enabled: boolean
@@ -18,8 +19,21 @@ export const DEFAULT_BACKGROUND: BackgroundSettings = {
   hasImage: false,
 }
 
-/** Background image URL served by the backend. */
+/** Kind of media stored as the background. */
+export type BackgroundMediaKind = "image" | "video"
+
+/** Background image/video URL served by the backend. */
 export const BACKGROUND_URL = "/v1/background"
+
+/** Background URL with optional access_token query for <img>/<video>/CSS when auth is on. */
+export function backgroundImageURL(cacheBust?: number): string {
+  const params = new URLSearchParams()
+  const token = getAccessToken()
+  if (token) params.set("access_token", token)
+  if (cacheBust) params.set("t", String(cacheBust))
+  const qs = params.toString()
+  return qs ? `${BACKGROUND_URL}?${qs}` : BACKGROUND_URL
+}
 
 export function loadBackgroundSettings(): BackgroundSettings {
   try {
@@ -36,35 +50,39 @@ export function saveBackgroundSettings(s: BackgroundSettings): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(s))
 }
 
-/** Probes the backend for a stored background image; resolves to true if present. */
-export async function probeBackground(): Promise<boolean> {
+/** Probes the backend for a stored background; resolves to its media kind, or null if absent. */
+export async function probeBackground(): Promise<BackgroundMediaKind | null> {
   try {
-    const res = await fetch(BACKGROUND_URL, { method: "HEAD" })
-    return res.ok
+    const res = await fetch(BACKGROUND_URL, { method: "HEAD", headers: apiHeaders() })
+    if (!res.ok) return null
+    return (res.headers.get("Content-Type") ?? "").startsWith("video/") ? "video" : "image"
   } catch {
-    return false
+    return null
   }
 }
 
-/** Uploads an image file as the background; returns the cache-busted URL. */
-export async function uploadBackground(file: File): Promise<string> {
+/** Uploads an image or video file as the background; returns the cache-busted URL and media kind. */
+export async function uploadBackground(file: File): Promise<{ url: string; kind: BackgroundMediaKind }> {
   const form = new FormData()
   form.append("file", file)
   const res = await fetch(BACKGROUND_URL, {
     method: "POST",
     body: form,
-    headers: { Accept: "application/json" },
+    headers: apiHeaders({ Accept: "application/json" }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throw new Error(err?.message ?? i18n.t("api.backgroundUploadFailed", { status: res.status }))
   }
-  return `${BACKGROUND_URL}?t=${Date.now()}`
+  return {
+    url: backgroundImageURL(Date.now()),
+    kind: file.type.startsWith("video/") ? "video" : "image",
+  }
 }
 
 /** Removes the stored background image. */
 export async function removeBackground(): Promise<void> {
-  await fetch(BACKGROUND_URL, { method: "DELETE" })
+  await fetch(BACKGROUND_URL, { method: "DELETE", headers: apiHeaders() })
 }
 
 // ─── Auto-adapt: dominant color extraction + accent injection ──────────────
@@ -100,23 +118,40 @@ export interface AdaptResult {
   luminance: number // 0..1 average image luminance
 }
 
-/** Loads the image and extracts its dominant color + average luminance via canvas. */
-export async function extractDominant(imgUrl: string): Promise<AdaptResult | null> {
-  const img = new Image()
-  img.crossOrigin = "anonymous"
-  img.src = imgUrl
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve()
-    img.onerror = () => reject(new Error("image load failed"))
-  }).catch(() => null)
-  if (!img.complete || img.naturalWidth === 0) return null
+function loadImage(url: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(null)
+    img.src = url
+  })
+}
+
+function loadVideoFrame(url: string): Promise<HTMLVideoElement | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video")
+    video.crossOrigin = "anonymous"
+    video.muted = true
+    video.preload = "auto"
+    video.onloadeddata = () => resolve(video)
+    video.onerror = () => resolve(null)
+    video.src = url
+  })
+}
+
+/** Loads the media and extracts its dominant color + average luminance via canvas. */
+export async function extractDominant(mediaUrl: string, kind: BackgroundMediaKind = "image"): Promise<AdaptResult | null> {
+  const source = kind === "video" ? await loadVideoFrame(mediaUrl) : await loadImage(mediaUrl)
+  if (!source) return null
+  if (source instanceof HTMLImageElement && source.naturalWidth === 0) return null
 
   const size = 64
   const canvas = document.createElement("canvas")
   canvas.width = size; canvas.height = size
   const ctx = canvas.getContext("2d")
   if (!ctx) return null
-  ctx.drawImage(img, 0, 0, size, size)
+  ctx.drawImage(source, 0, 0, size, size)
   let data: Uint8ClampedArray
   try {
     data = ctx.getImageData(0, 0, size, size).data

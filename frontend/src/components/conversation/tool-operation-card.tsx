@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
 import { truncate } from "@/lib/format"
+import { toolDisplayName } from "@/lib/tool-i18n"
 import type { ToolCallEntry } from "@/types/agent"
 import type { TFunction } from "i18next"
 
@@ -125,7 +126,7 @@ export function ToolOperationCard({ toolCall, isSelected, onSelect, onApprove, o
           <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-md", config.bg)}>
             <StatusIcon status={toolCall.status} config={config} />
           </div>
-          <span className="cursor-pointer font-mono text-sm font-medium text-foreground hover:text-primary hover:underline" onClick={onSelect}>{toolCall.name}</span>
+          <span className="cursor-pointer text-sm font-medium text-foreground hover:text-primary hover:underline" onClick={onSelect} title={toolCall.name}>{toolDisplayName(toolCall.name, t)}</span>
           {inputSummary && <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">{inputSummary}</span>}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
             {duration && <span className="font-mono text-[10px] text-muted-foreground">{duration}</span>}

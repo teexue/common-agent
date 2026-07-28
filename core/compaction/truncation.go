@@ -1,35 +1,41 @@
 package compaction
 
 import (
+	"fmt"
+
 	"github.com/teexue/common-agent/core/provider"
 )
 
-// TruncationCompactor keeps the system prompt and the most recent messages,
-// dropping older messages to fit within the context window. Tool result messages
-// are kept paired with their corresponding assistant tool-call messages.
+// TruncationCompactor keeps the system prompt and recent messages, dropping
+// older conversation turns until estimated tokens fit under TokenLimit
+// (and/or an optional MaxMessages secondary trigger).
 type TruncationCompactor struct {
+	tokenLimit  int
 	maxMessages int
 	keepRecent  int
 }
 
 // NewTruncationCompactor creates a TruncationCompactor.
-func NewTruncationCompactor(maxMessages, keepRecent int) *TruncationCompactor {
+func NewTruncationCompactor(tokenLimit, maxMessages, keepRecent int) *TruncationCompactor {
+	if keepRecent <= 0 {
+		keepRecent = defaultKeepRecent
+	}
 	return &TruncationCompactor{
+		tokenLimit:  tokenLimit,
 		maxMessages: maxMessages,
 		keepRecent:  keepRecent,
 	}
 }
 
-// Compact drops older messages, keeping the system prompt and recent messages.
+// Compact drops older messages until under the token/message thresholds.
 // Returns nil if no compaction is needed.
 func (c *TruncationCompactor) Compact(messages []provider.Message) (*Result, error) {
-	if !NeedsCompaction(messages, c.maxMessages) {
+	if !NeedsCompactionByTokens(messages, c.tokenLimit) && !NeedsCompaction(messages, c.maxMessages) {
 		return nil, nil
 	}
 
 	oldCount := len(messages)
 
-	// Separate system messages from conversation messages.
 	var systemMsgs []provider.Message
 	var convMsgs []provider.Message
 	for _, m := range messages {
@@ -40,28 +46,33 @@ func (c *TruncationCompactor) Compact(messages []provider.Message) (*Result, err
 		}
 	}
 
-	// Keep the most recent messages.
-	keepCount := c.keepRecent
-	if keepCount > len(convMsgs) {
-		keepCount = len(convMsgs)
+	start := 0
+	maxStart := len(convMsgs) - c.keepRecent
+	if maxStart < 0 {
+		maxStart = 0
+	}
+	for start <= maxStart {
+		recent := ensureToolPairs(convMsgs[start:])
+		trial := append(append([]provider.Message{}, systemMsgs...), recent...)
+		overTokens := c.tokenLimit > 0 && EstimateTokens(trial) > c.tokenLimit
+		overMsgs := c.maxMessages > 0 && len(trial) > c.maxMessages
+		if !overTokens && !overMsgs {
+			break
+		}
+		if start == maxStart {
+			break
+		}
+		start++
 	}
 
-	recent := convMsgs[len(convMsgs)-keepCount:]
-
-	// Ensure tool result messages have their corresponding assistant message.
-	recent = ensureToolPairs(recent)
-
-	// Rebuild: system messages + summary + recent.
+	recent := ensureToolPairs(convMsgs[start:])
+	summary := buildTruncationSummary(oldCount, len(systemMsgs)+1+len(recent))
 	compacted := make([]provider.Message, 0, len(systemMsgs)+1+len(recent))
 	compacted = append(compacted, systemMsgs...)
-
-	// Add a summary message indicating compaction happened.
-	summary := buildTruncationSummary(oldCount, len(systemMsgs)+len(recent))
 	compacted = append(compacted, provider.Message{
 		Role:    provider.RoleUser,
 		Content: summary,
 	})
-
 	compacted = append(compacted, recent...)
 
 	return &Result{
@@ -73,10 +84,8 @@ func (c *TruncationCompactor) Compact(messages []provider.Message) (*Result, err
 }
 
 // ensureToolPairs ensures that tool result messages have a preceding assistant
-// message with the matching tool call. If a tool result is orphaned (its
-// assistant message was truncated), the tool result is also removed.
+// message with the matching tool call. Orphaned tool results are removed.
 func ensureToolPairs(messages []provider.Message) []provider.Message {
-	// Collect all tool call IDs from assistant messages.
 	knownToolCallIDs := make(map[string]bool)
 	for _, m := range messages {
 		if m.Role == provider.RoleAssistant {
@@ -85,13 +94,11 @@ func ensureToolPairs(messages []provider.Message) []provider.Message {
 			}
 		}
 	}
-
-	// Filter out orphaned tool results.
 	var result []provider.Message
 	for _, m := range messages {
 		if m.Role == provider.RoleTool {
 			if m.ToolCallID != "" && !knownToolCallIDs[m.ToolCallID] {
-				continue // orphaned tool result
+				continue
 			}
 		}
 		result = append(result, m)
@@ -101,25 +108,5 @@ func ensureToolPairs(messages []provider.Message) []provider.Message {
 
 func buildTruncationSummary(oldCount, newCount int) string {
 	dropped := oldCount - newCount
-	return "[Context compacted: " + itoa(dropped) + " older messages removed to stay within context window]"
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	s := ""
-	neg := false
-	if n < 0 {
-		neg = true
-		n = -n
-	}
-	for n > 0 {
-		s = string(rune('0'+n%10)) + s
-		n /= 10
-	}
-	if neg {
-		s = "-" + s
-	}
-	return s
+	return fmt.Sprintf("[Context compacted: %d older messages removed to stay within context window]", dropped)
 }

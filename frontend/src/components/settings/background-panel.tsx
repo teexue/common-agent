@@ -42,10 +42,10 @@ function Slider({ label, value, min, max, step, unit, onChange }: { label: strin
   )
 }
 
-/** Background image settings: upload, opacity, blur, enable, auto-adapt. */
+/** Background image/video settings: upload, opacity, blur, enable, auto-adapt. */
 export function BackgroundPanel() {
   const { t } = useTranslation()
-  const { settings, imageUrl, uploading, upload, remove, update } = useBackground()
+  const { settings, imageUrl, mediaKind, uploading, upload, remove, update } = useBackground()
   const fileRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -67,12 +67,16 @@ export function BackgroundPanel() {
     <div className="space-y-3">
       <p className="text-[11px] leading-relaxed text-muted-foreground">{t("settings.backgroundHint")}</p>
 
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+      <input ref={fileRef} type="file" accept="image/*,video/mp4,video/webm" className="hidden" onChange={handleFile} />
 
       {settings.hasImage && imageUrl ? (
         <div className="overflow-hidden rounded-xl border border-border">
           <div className="relative h-28 bg-muted">
-            <img src={imageUrl} alt="background" className="h-full w-full object-cover" />
+            {mediaKind === "video" ? (
+              <video src={imageUrl} autoPlay muted loop playsInline className="h-full w-full object-cover" />
+            ) : (
+              <img src={imageUrl} alt="background" className="h-full w-full object-cover" />
+            )}
             <div className="absolute right-2 top-2 flex gap-1">
               <Button variant="secondary" size="icon-xs" className="h-7 w-7 rounded-lg bg-background/80 backdrop-blur" onClick={handlePick} disabled={uploading}>
                 {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -24,6 +25,12 @@ func runSkills(args []string) {
 		runSkillsValidate(args[1:])
 	case "info":
 		runSkillsInfo(args[1:])
+	case "install":
+		runSkillsInstall(args[1:])
+	case "create":
+		runSkillsCreate(args[1:])
+	case "remove":
+		runSkillsRemove(args[1:])
 	default:
 		fmt.Fprintln(os.Stderr, i18n.T("cli.error.unknown_subcommand", "name", args[0]))
 		printSkillsUsage()
@@ -36,7 +43,7 @@ func printSkillsUsage() {
 }
 
 func skillsDir(home string) string {
-	return filepath.Join(home, "skills")
+	return config.SkillsDir(home)
 }
 
 func runSkillsList(args []string) {
@@ -170,4 +177,83 @@ func resolveHome(homeFlag string) string {
 		os.Exit(1)
 	}
 	return home
+}
+
+// skillsDestRoot resolves the install/create/remove target root from --agent.
+func skillsDestRoot(home, agentName string) string {
+	if agentName != "" {
+		return config.AgentSkillsDir(home, agentName)
+	}
+	return config.SkillsDir(home)
+}
+
+func runSkillsInstall(args []string) {
+	fs := flag.NewFlagSet("skills install", flag.ExitOnError)
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home"))
+	agentFlag := fs.String("agent", "", i18n.T("cli.skills.flag_agent"))
+	overwrite := fs.Bool("overwrite", false, i18n.T("cli.skills.flag_overwrite"))
+	_ = fs.Parse(args)
+
+	if fs.NArg() == 0 {
+		fmt.Fprintln(os.Stderr, i18n.T("cli.usage.skills_install"))
+		os.Exit(1)
+	}
+	home := resolveHome(*homeFlag)
+
+	installed, err := skill.Install(context.Background(), fs.Arg(0), skillsDestRoot(home, *agentFlag), *overwrite)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.generic", "error", err.Error()))
+		os.Exit(1)
+	}
+	for _, name := range installed {
+		fmt.Println(i18n.T("cli.skills.installed", "name", name))
+	}
+}
+
+func runSkillsCreate(args []string) {
+	fs := flag.NewFlagSet("skills create", flag.ExitOnError)
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home"))
+	agentFlag := fs.String("agent", "", i18n.T("cli.skills.flag_agent"))
+	desc := fs.String("description", "", i18n.T("cli.skills.flag_description"))
+	_ = fs.Parse(args)
+
+	if fs.NArg() == 0 {
+		fmt.Fprintln(os.Stderr, i18n.T("cli.usage.skills_create"))
+		os.Exit(1)
+	}
+	name := fs.Arg(0)
+	home := resolveHome(*homeFlag)
+	dir := filepath.Join(skillsDestRoot(home, *agentFlag), name)
+
+	if *desc == "" {
+		*desc = fmt.Sprintf("TODO: describe what %s does and when to use it.", name)
+	}
+	fm := &skill.SkillFrontmatter{Name: name, Description: *desc}
+	body := fmt.Sprintf("# %s\n\n## Instructions\n\n1. ...\n", name)
+	if err := skill.WriteSkill(dir, fm, body); err != nil {
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.generic", "error", err.Error()))
+		os.Exit(1)
+	}
+	fmt.Println(i18n.T("cli.skills.created", "name", name, "path", dir))
+}
+
+func runSkillsRemove(args []string) {
+	fs := flag.NewFlagSet("skills remove", flag.ExitOnError)
+	homeFlag := fs.String("home", "", i18n.T("cli.flag.home"))
+	agentFlag := fs.String("agent", "", i18n.T("cli.skills.flag_agent"))
+	_ = fs.Parse(args)
+
+	if fs.NArg() == 0 {
+		fmt.Fprintln(os.Stderr, i18n.T("cli.usage.skills_remove"))
+		os.Exit(1)
+	}
+	name := fs.Arg(0)
+	home := resolveHome(*homeFlag)
+	dir := filepath.Join(skillsDestRoot(home, *agentFlag), name)
+
+	if err := skill.RemoveSkill(dir); err != nil {
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.generic", "error", err.Error()))
+		os.Exit(1)
+	}
+	fmt.Println(i18n.T("cli.skills.removed", "name", name))
 }

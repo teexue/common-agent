@@ -14,6 +14,7 @@ import (
 	"github.com/teexue/common-agent/core/compaction"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/hook"
+	"github.com/teexue/common-agent/core/knowledge"
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/telemetry"
@@ -87,6 +88,12 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 	if cfg.WorkDir != "" {
 		ctx = WithWorkDir(ctx, cfg.WorkDir)
 	}
+	if cfg.Agent.Knowledge != nil {
+		ctx = knowledge.WithScope(ctx, knowledge.Scope{
+			Bases: cfg.Agent.Knowledge.Bases,
+			TopK:  cfg.Agent.Knowledge.TopK,
+		})
+	}
 
 	out := make(chan event.Event)
 	go func() {
@@ -103,7 +110,7 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 }
 
 func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition, out chan<- event.Event) {
-	maxTurns := cfg.Agent.MaxTurns
+	maxTurns := cfg.Agent.MaxTurns // 0 = unlimited until model returns without tool calls
 	log := cfg.Logger
 	tel := cfg.Telemetry
 
@@ -129,7 +136,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		approver = DenyAllApprover{}
 	}
 
-	for turn := 1; turn <= maxTurns; turn++ {
+	for turn := 1; maxTurns <= 0 || turn <= maxTurns; turn++ {
 		select {
 		case <-ctx.Done():
 			emitCancelled(out, cfg.Session.ID, turn, totalInputTokens, totalOutputTokens)
@@ -331,13 +338,31 @@ func recordToolResults(cfg Config, results []pendingResult) {
 }
 
 func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, turn int, log *slog.Logger) {
-	if cfg.Agent.Compaction == nil {
-		return
+	comp := cfg.Agent.Compaction
+	window := cfg.ContextWindow
+	ratio := 0.0
+	keepRecent := 0
+	maxMessages := 0
+	strategy := compaction.StrategyTruncation
+	if comp != nil {
+		if comp.ContextWindow > 0 {
+			window = comp.ContextWindow
+		}
+		ratio = comp.TriggerRatio
+		keepRecent = comp.KeepRecent
+		maxMessages = comp.MaxMessages
+		strategy = compaction.Strategy(comp.Strategy)
 	}
+	tokenLimit := compaction.ResolveTokenLimit(window, cfg.Agent.MaxTokens, ratio)
+	if tokenLimit <= 0 && maxMessages <= 0 {
+		return // no context window and no legacy message trigger
+	}
+
 	cmp := compaction.NewCompactor(compaction.Config{
-		Strategy:    compaction.Strategy(cfg.Agent.Compaction.Strategy),
-		MaxMessages: cfg.Agent.Compaction.MaxMessages,
-		KeepRecent:  cfg.Agent.Compaction.KeepRecent,
+		Strategy:    strategy,
+		TokenLimit:  tokenLimit,
+		MaxMessages: maxMessages,
+		KeepRecent:  keepRecent,
 	})
 	result, err := cmp.Compact(cfg.Session.GetMessages())
 	if err != nil {
@@ -345,7 +370,13 @@ func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, tu
 	} else if result != nil {
 		cfg.Session.SetMessages(result.Compacted)
 		emit(ctx, out, event.Event{Type: event.TypeCompaction, Content: result.Summary})
-		log.Info("log.compaction.compacted", "turn", turn, "old_messages", result.OldCount, "new_messages", result.NewCount)
+		log.Info("log.compaction.compacted",
+			"turn", turn,
+			"old_messages", result.OldCount,
+			"new_messages", result.NewCount,
+			"token_limit", tokenLimit,
+			"est_tokens", compaction.EstimateTokens(result.Compacted),
+		)
 	}
 }
 

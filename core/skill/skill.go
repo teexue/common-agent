@@ -227,6 +227,8 @@ type Skill struct {
 	Version     string
 	Dir         string
 	Format      string // "skill.md" or "skill.yaml"
+	Scope       string // "global" or "agent" (ScopeGlobal / ScopeAgent)
+	Agent       string // owning agent name when Scope is "agent"
 
 	// For Agent Skills standard
 	MDManifest *SkillManifest

@@ -54,8 +54,11 @@ version: 1
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if a.MaxTurns != 10 {
-		t.Fatalf("MaxTurns = %d, want 10", a.MaxTurns)
+	if a.MaxTurns != 0 {
+		t.Fatalf("MaxTurns = %d, want 0 (unlimited)", a.MaxTurns)
+	}
+	if a.Compaction != nil {
+		t.Fatal("expected Compaction to remain nil when unset")
 	}
 	if a.MaxTokens != 4096 {
 		t.Fatalf("MaxTokens = %d, want 4096", a.MaxTokens)

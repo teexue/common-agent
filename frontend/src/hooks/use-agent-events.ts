@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
+import { eventsURL, SERVER_API_KEY_CHANGED } from "@/lib/api"
 
 interface AgentEvent {
   type: "agent_created" | "agent_updated" | "agent_deleted" | "ping"
@@ -17,11 +18,18 @@ interface UseAgentEventsOptions {
 export function useAgentEvents({ onAgentChange, enabled = true }: UseAgentEventsOptions) {
   const callbackRef = useRef(onAgentChange)
   callbackRef.current = onAgentChange
+  const [keyEpoch, setKeyEpoch] = useState(0)
+
+  useEffect(() => {
+    const onKeyChange = () => setKeyEpoch((n) => n + 1)
+    window.addEventListener(SERVER_API_KEY_CHANGED, onKeyChange)
+    return () => window.removeEventListener(SERVER_API_KEY_CHANGED, onKeyChange)
+  }, [])
 
   useEffect(() => {
     if (!enabled) return
 
-    const es = new EventSource("/v1/events")
+    const es = new EventSource(eventsURL())
 
     es.onmessage = (msg) => {
       try {
@@ -40,5 +48,5 @@ export function useAgentEvents({ onAgentChange, enabled = true }: UseAgentEvents
     return () => {
       es.close()
     }
-  }, [enabled])
+  }, [enabled, keyEpoch])
 }

@@ -3,13 +3,24 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/provider"
+	"github.com/teexue/common-agent/core/store"
 )
+
+// bindHomeDB opens state.db for config CLI commands and returns a closer.
+func bindHomeDB(home string) (func(), error) {
+	db, err := openStateDB(home, slog.Default())
+	if err != nil {
+		return nil, err
+	}
+	return func() { _ = db.Close() }, nil
+}
 
 func runConfig(args []string) {
 	if len(args) == 0 {
@@ -71,6 +82,12 @@ func runConfigShow(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	closeDB, err := bindHomeDB(paths.home)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer closeDB()
 	printPaths(paths)
 
 	settings, err := config.LoadSettings(paths.home)
@@ -94,7 +111,7 @@ func runConfigShow(args []string) {
 		}
 	}
 
-	catalog, err := provider.LoadCatalog(paths.providers, nil)
+	catalog, err := config.DB().LoadCatalog(nil)
 	if err != nil {
 		fmt.Fprint(os.Stderr, i18n.T("cli.config.providers_not_configured", "error", err.Error()))
 		fmt.Fprintln(os.Stderr)
@@ -104,6 +121,7 @@ func runConfigShow(args []string) {
 	for _, name := range catalog.Names() {
 		fmt.Printf("  - %s\n", name)
 	}
+	_ = store.StateFile(paths.home)
 }
 
 func runConfigPath(args []string) {
@@ -131,6 +149,12 @@ func runConfigSetKey(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	closeDB, err := bindHomeDB(paths.home)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer closeDB()
 	creds, err := config.NewCredentialStore(paths.home)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -140,7 +164,7 @@ func runConfigSetKey(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println(i18n.T("cli.config.key_saved", "env", fs.Args()[0], "path", config.CredentialsFile(paths.home)))
+	fmt.Println(i18n.T("cli.config.key_saved", "env", fs.Args()[0], "path", store.StateFile(paths.home)))
 }
 
 func runConfigSet(args []string) {
@@ -172,7 +196,15 @@ func runConfigSetDefaultAgent(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	if err := config.SaveSettings(paths.home, config.Settings{DefaultAgent: fs.Args()[0]}); err != nil {
+	closeDB, err := bindHomeDB(paths.home)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer closeDB()
+	settings, _ := config.LoadSettings(paths.home)
+	settings.DefaultAgent = fs.Args()[0]
+	if err := config.SaveSettings(paths.home, settings); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -203,6 +235,12 @@ func runConfigSetProvider(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	closeDB, err := bindHomeDB(paths.home)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer closeDB()
 
 	spec, _, apiKeyEnv, err := config.RunProviderWizard()
 	if err != nil {
@@ -214,7 +252,7 @@ func runConfigSetProvider(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println(i18n.T("cli.config.provider_updated", "name", spec.Name, "path", config.ProvidersFile(paths.home)))
+	fmt.Println(i18n.T("cli.config.provider_updated", "name", spec.Name, "path", store.StateFile(paths.home)))
 
 	// Prompt for API key if not already set.
 	creds, err := config.NewCredentialStore(paths.home)
@@ -262,6 +300,12 @@ func runConfigSetProviderFlags(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	closeDB, err := bindHomeDB(paths.home)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer closeDB()
 
 	spec := config.ProviderSpec{
 		Name:         fs.Args()[0],
@@ -271,7 +315,7 @@ func runConfigSetProviderFlags(args []string) {
 		APIVersion:   *apiVersion,
 		AuthStyle:    provider.AuthStyle(*authStyle),
 		DefaultModel: *model,
-		DisplayName: *displayName,
+		DisplayName:  *displayName,
 		ModelsPath:   *modelsPath,
 		ThinkingType: *thinking,
 		ThinkingKeep: *thinkingKeep,
@@ -286,5 +330,5 @@ func runConfigSetProviderFlags(args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println(i18n.T("cli.config.provider_updated", "name", spec.Name, "path", config.ProvidersFile(paths.home)))
+	fmt.Println(i18n.T("cli.config.provider_updated", "name", spec.Name, "path", store.StateFile(paths.home)))
 }

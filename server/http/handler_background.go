@@ -10,13 +10,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// allowedBackgroundExts defines image extensions accepted for background upload.
+// allowedBackgroundExts defines image and video extensions accepted for
+// background upload. Videos (e.g. mp4) are used as animated wallpapers.
 var allowedBackgroundExts = map[string]string{
 	".jpg":  "image/jpeg",
 	".jpeg": "image/jpeg",
 	".png":  "image/png",
 	".webp": "image/webp",
 	".gif":  "image/gif",
+	".mp4":  "video/mp4",
+	".webm": "video/webm",
 }
 
 // backgroundGlob is the prefix used to find the stored background file.
@@ -31,7 +34,7 @@ func findBackground(home string) string {
 	return matches[0]
 }
 
-// handleBackgroundGet serves the stored background image (or 404).
+// handleBackgroundGet serves the stored background image or video (or 404).
 func (s *Server) handleBackgroundGet(c *gin.Context) {
 	home := filepath.Dir(s.agentsDir)
 	path := findBackground(home)
@@ -47,8 +50,8 @@ func (s *Server) handleBackgroundGet(c *gin.Context) {
 	c.File(path)
 }
 
-// handleBackgroundUpload stores an uploaded image as the background, replacing
-// any existing one.
+// handleBackgroundUpload stores an uploaded image or video as the background,
+// replacing any existing one.
 func (s *Server) handleBackgroundUpload(c *gin.Context) {
 	home := filepath.Dir(s.agentsDir)
 	file, err := c.FormFile("file")
@@ -77,7 +80,7 @@ func (s *Server) handleBackgroundUpload(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"url": "/v1/background"})
 }
 
-// handleBackgroundDelete removes the stored background image.
+// handleBackgroundDelete removes the stored background image or video.
 func (s *Server) handleBackgroundDelete(c *gin.Context) {
 	home := filepath.Dir(s.agentsDir)
 	path := findBackground(home)

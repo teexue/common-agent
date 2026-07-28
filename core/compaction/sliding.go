@@ -1,12 +1,13 @@
 package compaction
 
 import (
+	"fmt"
+
 	"github.com/teexue/common-agent/core/provider"
 )
 
 // SlidingWindowCompactor keeps a fixed window of the most recent messages.
-// Unlike TruncationCompactor, it doesn't use a maxMessages threshold —
-// it always compacts to the configured window size.
+// Prefer truncation with TokenLimit for context-window-driven compaction.
 type SlidingWindowCompactor struct {
 	keepRecent int
 }
@@ -25,7 +26,6 @@ func (c *SlidingWindowCompactor) Compact(messages []provider.Message) (*Result, 
 
 	oldCount := len(messages)
 
-	// Keep system messages and the most recent messages.
 	var systemMsgs []provider.Message
 	var convMsgs []provider.Message
 	for _, m := range messages {
@@ -52,6 +52,6 @@ func (c *SlidingWindowCompactor) Compact(messages []provider.Message) (*Result, 
 		Compacted: compacted,
 		OldCount:  oldCount,
 		NewCount:  len(compacted),
-		Summary:   "[Context compacted: sliding window kept " + itoa(len(recent)) + " recent messages]",
+		Summary:   fmt.Sprintf("[Context compacted: sliding window kept %d recent messages]", len(recent)),
 	}, nil
 }

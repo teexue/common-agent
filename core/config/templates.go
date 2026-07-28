@@ -36,11 +36,17 @@ system_prompt: |
 tools:
   - echo
   - get_time
-max_turns: 10
+  - create_job
+max_turns: 0
 max_tokens: 4096
 tool_execution:
   mode: parallel
   max_parallel: 4
+permissions:
+  auto_approve:
+    - echo
+    - get_time
+  always_deny: []
 `,
 	},
 	{
@@ -64,7 +70,7 @@ tools:
   - list_directory
   - search_files
   - get_time
-max_turns: 15
+max_turns: 0
 max_tokens: 8192
 tool_execution:
   mode: parallel
@@ -93,7 +99,7 @@ tools:
   - run_command
   - search_files
   - get_time
-max_turns: 20
+max_turns: 0
 max_tokens: 8192
 tool_execution:
   mode: serial
@@ -133,7 +139,7 @@ tools:
   - create_directory
   - web_fetch
   - get_time
-max_turns: 20
+max_turns: 0
 max_tokens: 8192
 tool_execution:
   mode: serial
@@ -181,7 +187,8 @@ tools:
   - create_directory
   - web_fetch
   - get_time
-max_turns: 30
+  - create_job
+max_turns: 0
 max_tokens: 8192
 tool_execution:
   mode: parallel

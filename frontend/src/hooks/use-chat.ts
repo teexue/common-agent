@@ -1,8 +1,8 @@
-import { useCallback, useRef, useReducer } from "react"
+import { useCallback, useEffect, useRef, useReducer } from "react"
+import { apiHeaders } from "@/lib/api"
 import { chatReducer } from "./use-chat-state"
 import type { ChatAction } from "./use-chat-state"
 import {
-  toBackendMessages,
   fromBackendMessages,
   parseSSELine,
 } from "./use-chat-messages"
@@ -116,7 +116,6 @@ function dispatchSSEEvent(
 async function sendRunRequest(
   agent: string,
   prompt: string,
-  messages: BackendMsg[],
   sessionId: string | null,
   workDir: string | undefined,
   signal: AbortSignal,
@@ -124,7 +123,10 @@ async function sendRunRequest(
   dispatch: (action: ChatAction) => void,
   images?: { dataUrl: string; name: string }[],
 ) {
-  const body: Record<string, unknown> = { agent, prompt, messages }
+  // Only the latest user message is sent; the backend assembles the full
+  // context (system prompt + history) from the stored session, which keeps
+  // the prompt prefix stable for provider-side caching.
+  const body: Record<string, unknown> = { agent, prompt }
   if (sessionId) body.session_id = sessionId
   if (workDir) body.workdir = workDir
   if (images && images.length > 0) {
@@ -133,7 +135,7 @@ async function sendRunRequest(
 
   const res = await fetch("/v1/agents/run", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...apiHeaders() },
     body: JSON.stringify(body),
     signal,
   })
@@ -159,8 +161,10 @@ export function useChat() {
   })
 
   const abortRef = useRef<AbortController | null>(null)
-  const messagesRef = useRef(state.messages); messagesRef.current = state.messages
-  const sessionIdRef = useRef(state.sessionId); sessionIdRef.current = state.sessionId
+  const sessionIdRef = useRef(state.sessionId)
+  useEffect(() => {
+    sessionIdRef.current = state.sessionId
+  }, [state.sessionId])
 
   const sendMessage = useCallback(
     async (text: string, agent: string, workDir?: string, images?: { dataUrl: string; name: string }[]) => {
@@ -168,14 +172,13 @@ export function useChat() {
       const controller = new AbortController()
       abortRef.current = controller
 
-      const history = toBackendMessages(messagesRef.current)
       dispatch({ type: "ADD_USER_MESSAGE", text })
 
       const entryId = `assistant-${Date.now()}`
       dispatch({ type: "START_ASSISTANT", entryId })
 
       try {
-        await sendRunRequest(agent, text, history, sessionIdRef.current, workDir, controller.signal, entryId, dispatch, images)
+        await sendRunRequest(agent, text, sessionIdRef.current, workDir, controller.signal, entryId, dispatch, images)
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === "AbortError") return
         dispatch({ type: "STREAM_ERROR", message: err instanceof Error ? err.message : "Unknown error" })

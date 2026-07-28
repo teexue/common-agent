@@ -254,7 +254,7 @@ function ProviderForm({ provider, onSaved, onCancel }: { provider?: ProviderInfo
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">{t("settings.providerAuthStyle")}</Label>
           <Select
-            value={{ value: authStyle || "x-api-key", label: authStyle || "x-api-key" }}
+            value={{ value: authStyle || "x-api-key", label: (authStyle || "x-api-key") === "bearer" ? "Authorization: Bearer" : "x-api-key" }}
             onValueChange={(v) => {
               if (v && typeof v === "object" && "value" in v) setAuthStyle((v as { value: string }).value as "x-api-key" | "bearer")
             }}

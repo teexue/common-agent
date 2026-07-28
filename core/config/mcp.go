@@ -8,14 +8,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// mcpFile wraps a list of global MCP servers for YAML (de)serialization.
 type mcpFile struct {
 	Servers []mcp.ServerConfig `yaml:"servers"`
 }
 
-// LoadGlobalMCP reads the shared MCP servers from mcp.yaml under home.
-// A missing file returns an empty (non-nil) slice and no error.
+// LoadGlobalMCP reads global MCP servers from SQLite when bound, else mcp.yaml.
 func LoadGlobalMCP(home string) ([]mcp.ServerConfig, error) {
+	if stateDB != nil {
+		return stateDB.LoadGlobalMCP()
+	}
 	data, err := os.ReadFile(MCPFile(home))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -33,8 +34,23 @@ func LoadGlobalMCP(home string) ([]mcp.ServerConfig, error) {
 	return f.Servers, nil
 }
 
-// SaveGlobalMCP persists the full list of global MCP servers to mcp.yaml.
+// SaveGlobalMCP persists the full list of global MCP servers.
 func SaveGlobalMCP(home string, servers []mcp.ServerConfig) error {
+	if stateDB != nil {
+		existing, err := stateDB.LoadGlobalMCP()
+		if err != nil {
+			return err
+		}
+		for _, s := range existing {
+			_ = stateDB.DeleteGlobalMCP(s.Name)
+		}
+		for _, s := range servers {
+			if err := stateDB.UpsertGlobalMCP(s); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	if err := ensureHome(home); err != nil {
 		return err
 	}
@@ -42,14 +58,14 @@ func SaveGlobalMCP(home string, servers []mcp.ServerConfig) error {
 	if err != nil {
 		return fmt.Errorf("marshal global mcp: %w", err)
 	}
-	if err := os.WriteFile(MCPFile(home), data, 0o644); err != nil {
-		return fmt.Errorf("write global mcp: %w", err)
-	}
-	return nil
+	return os.WriteFile(MCPFile(home), data, 0o644)
 }
 
 // UpsertGlobalMCP adds or replaces a global MCP server by name.
 func UpsertGlobalMCP(home string, srv mcp.ServerConfig) error {
+	if stateDB != nil {
+		return stateDB.UpsertGlobalMCP(srv)
+	}
 	if srv.Name == "" {
 		return fmt.Errorf("mcp server name is required")
 	}
@@ -68,8 +84,10 @@ func UpsertGlobalMCP(home string, srv mcp.ServerConfig) error {
 }
 
 // DeleteGlobalMCP removes a global MCP server by name.
-// Returns os.ErrNotExist if no server matches.
 func DeleteGlobalMCP(home, name string) error {
+	if stateDB != nil {
+		return stateDB.DeleteGlobalMCP(name)
+	}
 	servers, err := LoadGlobalMCP(home)
 	if err != nil {
 		return err

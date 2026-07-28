@@ -17,7 +17,8 @@ func (s *Server) handleSessionsList(c *gin.Context) {
 		respondError(c, http.StatusServiceUnavailable, "session_error", "api.error.session_not_configured")
 		return
 	}
-	metas, err := s.svc.ListSessions()
+	userID := identityFromGin(c).UserID
+	metas, err := s.svc.ListSessions(userID)
 	if err != nil {
 		respondErrorDetails(c, http.StatusInternalServerError, "session_error", "api.error.session_error", err.Error())
 		return
@@ -34,7 +35,8 @@ func (s *Server) handleSessionsGet(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	sess, err := s.svc.LoadSession(id)
+	userID := identityFromGin(c).UserID
+	sess, err := s.svc.LoadSession(id, userID)
 	if err != nil {
 		if errors.Is(err, session.ErrNotFound) {
 			respondError(c, http.StatusNotFound, "not_found", "api.error.session_not_found")
@@ -46,6 +48,7 @@ func (s *Server) handleSessionsGet(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":         sess.ID,
+		"user_id":    sess.UserID,
 		"agent":      sess.Agent,
 		"title":      sess.GetTitle(),
 		"messages":   sess.GetMessages(),
@@ -61,12 +64,13 @@ func (s *Server) handleSessionsDelete(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
-	if err := s.svc.DeleteSession(id); err != nil {
+	userID := identityFromGin(c).UserID
+	if err := s.svc.DeleteSession(id, userID); err != nil {
 		if errors.Is(err, session.ErrNotFound) {
 			respondError(c, http.StatusNotFound, "not_found", "api.error.session_not_found")
 			return
 		}
-		respondErrorDetails(c, http.StatusInternalServerError, "session_error", "api.error.session_error", err.Error())
+		respondErrorDetails(c, http.StatusInternalServerError, "delete_error", "api.error.delete_error", err.Error())
 		return
 	}
 
@@ -77,6 +81,15 @@ func (s *Server) handleSessionReplay(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.session_id_required")
+		return
+	}
+	userID := identityFromGin(c).UserID
+	if _, err := s.svc.LoadSession(id, userID); err != nil {
+		if errors.Is(err, session.ErrNotFound) {
+			respondError(c, http.StatusNotFound, "not_found", "api.error.session_not_found")
+			return
+		}
+		respondErrorDetails(c, http.StatusInternalServerError, "session_error", "api.error.session_error", err.Error())
 		return
 	}
 

@@ -8,13 +8,15 @@ import {
   removeBackground,
   saveBackgroundSettings,
   uploadBackground,
-  BACKGROUND_URL,
+  backgroundImageURL,
+  type BackgroundMediaKind,
   type BackgroundSettings,
 } from "@/lib/background"
 
 interface BackgroundContextValue {
   settings: BackgroundSettings
   imageUrl: string | null
+  mediaKind: BackgroundMediaKind | null
   uploading: boolean
   upload: (file: File) => Promise<void>
   remove: () => Promise<void>
@@ -27,6 +29,7 @@ export function BackgroundProvider({ children }: { children: React.ReactNode }) 
   const { setMode } = useTheme()
   const [settings, setSettings] = React.useState<BackgroundSettings>(() => loadBackgroundSettings())
   const [imageUrl, setImageUrl] = React.useState<string | null>(null)
+  const [mediaKind, setMediaKind] = React.useState<BackgroundMediaKind | null>(null)
   const [uploading, setUploading] = React.useState(false)
 
   const persist = React.useCallback((s: BackgroundSettings) => {
@@ -34,27 +37,28 @@ export function BackgroundProvider({ children }: { children: React.ReactNode }) 
     setSettings(s)
   }, [])
 
-  // Auto-adapt: switch light/dark based on the image's average luminance only.
+  // Auto-adapt: switch light/dark based on the media's average luminance only.
   // A complex (non-solid) image's dominant hue makes an arbitrary accent, so
   // we no longer recolor the theme — only the mode adapts.
-  const runAdapt = React.useCallback(async (url: string) => {
-    const result = await extractDominant(url)
+  const runAdapt = React.useCallback(async (url: string, kind: BackgroundMediaKind) => {
+    const result = await extractDominant(url, kind)
     if (!result) return
     setMode(result.luminance < 0.5 ? "dark" : "light")
   }, [setMode])
 
-  // On mount: probe backend for an existing background image.
+  // On mount: probe backend for an existing background image or video.
   React.useEffect(() => {
     let active = true
-    probeBackground().then((exists) => {
+    probeBackground().then((kind) => {
       if (!active) return
-      if (exists) {
-        const url = `${BACKGROUND_URL}?t=${Date.now()}`
+      if (kind) {
+        const url = backgroundImageURL(Date.now())
         setImageUrl(url)
+        setMediaKind(kind)
         setSettings((prev) => {
           const next = { ...prev, hasImage: true }
           saveBackgroundSettings(next)
-          if (next.autoAdapt && next.enabled) void runAdapt(url)
+          if (next.autoAdapt && next.enabled) void runAdapt(url, kind)
           return next
         })
       } else {
@@ -77,11 +81,12 @@ export function BackgroundProvider({ children }: { children: React.ReactNode }) 
   const upload = React.useCallback(async (file: File) => {
     setUploading(true)
     try {
-      const url = await uploadBackground(file)
+      const { url, kind } = await uploadBackground(file)
       setImageUrl(url)
+      setMediaKind(kind)
       const next: BackgroundSettings = { ...settings, hasImage: true, enabled: true }
       persist(next)
-      if (next.autoAdapt) await runAdapt(url)
+      if (next.autoAdapt) await runAdapt(url, kind)
     } finally {
       setUploading(false)
     }
@@ -90,6 +95,7 @@ export function BackgroundProvider({ children }: { children: React.ReactNode }) 
   const remove = React.useCallback(async () => {
     await removeBackground()
     setImageUrl(null)
+    setMediaKind(null)
     persist({ ...settings, hasImage: false, enabled: false })
   }, [settings, persist])
 
@@ -97,16 +103,16 @@ export function BackgroundProvider({ children }: { children: React.ReactNode }) 
     setSettings((prev) => {
       const next = { ...prev, ...partial }
       saveBackgroundSettings(next)
-      if (partial.autoAdapt === true && next.enabled && imageUrl) {
-        void runAdapt(imageUrl)
+      if (partial.autoAdapt === true && next.enabled && imageUrl && mediaKind) {
+        void runAdapt(imageUrl, mediaKind)
       }
       return next
     })
-  }, [imageUrl, runAdapt])
+  }, [imageUrl, mediaKind, runAdapt])
 
   const value = React.useMemo<BackgroundContextValue>(() => ({
-    settings, imageUrl, uploading, upload, remove, update,
-  }), [settings, imageUrl, uploading, upload, remove, update])
+    settings, imageUrl, mediaKind, uploading, upload, remove, update,
+  }), [settings, imageUrl, mediaKind, uploading, upload, remove, update])
 
   return <BackgroundContext.Provider value={value}>{children}</BackgroundContext.Provider>
 }

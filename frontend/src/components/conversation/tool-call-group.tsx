@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { ChevronDown, ChevronRight, Check, X, Loader2, Wrench } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { truncate } from "@/lib/format"
+import { toolDisplayName } from "@/lib/tool-i18n"
 import { ToolOperationCard } from "./tool-operation-card"
 import type { ToolCallEntry } from "@/types/agent"
 import type { TFunction } from "i18next"
@@ -28,17 +29,17 @@ function getGroupStatus(toolCalls: ToolCallEntry[], t: TFunction): { label: stri
   return { label: t("conversation.groupWaiting"), icon: Wrench, color: "text-muted-foreground" }
 }
 
-function formatToolSummary(toolCalls: ToolCallEntry[]): string {
+function formatToolSummary(toolCalls: ToolCallEntry[], t: TFunction): string {
   const summaries = toolCalls.map((tc) => {
     const input = tc.input as Record<string, unknown> | undefined
     switch (tc.name) {
       case "read_file":
       case "list_directory":
-        return input?.path ? String(input.path) : tc.name
+        return input?.path ? String(input.path) : toolDisplayName(tc.name, t)
       case "run_command":
-        return input?.command ? truncate(String(input.command), 30) : tc.name
+        return input?.command ? truncate(String(input.command), 30) : toolDisplayName(tc.name, t)
       default:
-        return tc.name
+        return toolDisplayName(tc.name, t)
     }
   })
   if (summaries.length <= 3) return summaries.join(", ")
@@ -82,7 +83,7 @@ export function ToolCallGroup({ toolCalls, selectedToolCallId, onSelectToolCall,
             {t("conversation.toolCallsCount", { count: toolCalls.length })}
           </span>
           <span className="ml-2 text-xs text-muted-foreground truncate">
-            {formatToolSummary(toolCalls)}
+            {formatToolSummary(toolCalls, t)}
           </span>
         </div>
         <span className={cn("text-xs font-medium", status.color)}>{status.label}</span>

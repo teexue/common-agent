@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/chzyer/readline"
@@ -20,6 +21,7 @@ import (
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/store"
 	"github.com/teexue/common-agent/core/tui"
 	"github.com/teexue/common-agent/tools/registry"
 )
@@ -33,6 +35,7 @@ type chatState struct {
 	sess     *session.Session
 	reg      *registry.Registry
 	store    session.Store
+	optCache sync.Map // memoizes system prompt optimization per content
 }
 
 func runChat(args []string, logger *slog.Logger) {
@@ -47,10 +50,13 @@ func runChat(args []string, logger *slog.Logger) {
 		logger.Error("log.cmd.resolve_paths", "error", err)
 		os.Exit(1)
 	}
-	catalog, _, err := bootstrapRuntime(paths, *mock, logger)
+	catalog, creds, stateDB, err := bootstrapRuntime(paths, *mock, logger)
 	if err != nil {
 		logger.Error("log.cmd.bootstrap", "error", err)
 		os.Exit(1)
+	}
+	if stateDB != nil {
+		defer stateDB.Close()
 	}
 
 	settings, err := config.LoadSettings(paths.home)
@@ -63,11 +69,15 @@ func runChat(args []string, logger *slog.Logger) {
 		name = settings.DefaultAgent
 	}
 
-	state, err := newChatState(catalog, *mock, paths, name)
+	state, err := newChatState(catalog, *mock, paths, name, stateDB)
 	if err != nil {
 		logger.Error("log.chat.init", "error", err)
 		os.Exit(1)
 	}
+	if !*mock {
+		registerRuntimeTools(state.reg, paths, settings, creds, logger)
+	}
+	service.OptimizeSystemPrompt(context.Background(), &state.optCache, state.agent, state.provider, logger)
 
 	tui.PrintWelcome(state.agent.Name, state.agent.Provider, state.agent.Model)
 
@@ -92,7 +102,7 @@ func newChatReadline(home string) (*readline.Instance, error) {
 	})
 }
 
-func newChatState(catalog *provider.Catalog, mock bool, paths runtimePaths, agentName string) (*chatState, error) {
+func newChatState(catalog *provider.Catalog, mock bool, paths runtimePaths, agentName string, stateDB *store.DB) (*chatState, error) {
 	a, err := agent.LoadByName(paths.agentsDir, service.NormalizeAgentName(agentName))
 	if err != nil {
 		return nil, err
@@ -102,12 +112,9 @@ func newChatState(catalog *provider.Catalog, mock bool, paths runtimePaths, agen
 		return nil, err
 	}
 
-	var store session.Store
-	if !mock {
-		store, err = session.NewFileStore(config.SessionsDir(paths.home))
-		if err != nil {
-			return nil, fmt.Errorf("open session store: %w", err)
-		}
+	var sessStore session.Store
+	if !mock && stateDB != nil {
+		sessStore = store.NewSessionStore(stateDB)
 	}
 
 	return &chatState{
@@ -118,7 +125,7 @@ func newChatState(catalog *provider.Catalog, mock bool, paths runtimePaths, agen
 		provider: p,
 		sess:     session.New(a.Name),
 		reg:      newRegistry(""), // uses current working directory
-		store:    store,
+		store:    sessStore,
 	}, nil
 }
 
@@ -154,6 +161,7 @@ func runChatLoop(rl *readline.Instance, state *chatState) {
 
 		// Derive a per-run cancel context from the signal context.
 		runCtx, runCancel := context.WithCancel(sigCtx)
+		line = service.OptimizeUserPrompt(runCtx, state.agent, state.provider, line, nil)
 		events, err := loop.Run(runCtx, loop.Config{
 			Provider: state.provider,
 			Registry: state.reg,
@@ -239,6 +247,7 @@ func handleAgentCommand(parts []string, state *chatState) bool {
 	state.agent = loaded
 	state.provider = p
 	state.sess = session.New(loaded.Name)
+	service.OptimizeSystemPrompt(context.Background(), &state.optCache, loaded, p, nil)
 	fmt.Println(tui.Success(i18n.T("tui.chat.agent_switched", "agent", loaded.Name, "provider", loaded.Provider, "model", loaded.Model)))
 	return false
 }

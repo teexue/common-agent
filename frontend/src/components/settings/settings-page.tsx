@@ -12,11 +12,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, FolderOpen, ImageIcon, Keyboard, Monitor, Plug, Server, Settings } from "lucide-react"
+import { ArrowLeft, Brain, FolderOpen, ImageIcon, Keyboard, KeyRound, Monitor, Plug, Server, Settings } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { MetricsPanel } from "@/components/monitoring/metrics-panel"
+import { ApiKeysPanel } from "@/components/settings/api-keys-panel"
 import { BackgroundPanel } from "@/components/settings/background-panel"
 import { DirPickerDialog } from "@/components/settings/dir-picker-dialog"
+import { EmbeddingPanel } from "@/components/settings/embedding-panel"
 import { McpPanel } from "@/components/settings/mcp-panel"
 import { ProviderPanel } from "@/components/settings/provider-panel"
 
@@ -30,7 +32,9 @@ export function SettingsPage() {
     { value: "general", icon: Settings, label: t("settings.tabGeneral") },
     { value: "monitoring", icon: Monitor, label: t("settings.tabMonitoring") },
     { value: "providers", icon: Server, label: t("settings.tabProviders") },
+    { value: "embedding", icon: Brain, label: t("settings.tabEmbedding") },
     { value: "mcp", icon: Plug, label: t("settings.tabMcp") },
+    { value: "security", icon: KeyRound, label: t("settings.tabSecurity") },
   ] as const
 
   const handleTabChange = (value: string) => {
@@ -50,7 +54,7 @@ export function SettingsPage() {
       </header>
 
       <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-3xl px-6 py-6">
+        <div className="w-full px-6 py-6">
           <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList className="w-full rounded-xl bg-muted p-0.5 mb-6">
               {tabTriggers.map((tab) => (
@@ -73,9 +77,19 @@ export function SettingsPage() {
                 <ProviderPanel />
               </Section>
             </TabsContent>
+            <TabsContent value="embedding" className="mt-0 space-y-4">
+              <Section title={t("settings.embedding")} icon={<Brain className="h-3.5 w-3.5" />}>
+                <EmbeddingPanel />
+              </Section>
+            </TabsContent>
             <TabsContent value="mcp" className="mt-0 space-y-4">
               <Section title={t("settings.mcpServers")} icon={<Plug className="h-3.5 w-3.5" />}>
                 <McpPanel />
+              </Section>
+            </TabsContent>
+            <TabsContent value="security" className="mt-0 space-y-4">
+              <Section title={t("settings.apiKeys")} icon={<KeyRound className="h-3.5 w-3.5" />}>
+                <ApiKeysPanel />
               </Section>
             </TabsContent>
           </Tabs>

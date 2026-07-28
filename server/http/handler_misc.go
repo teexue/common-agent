@@ -18,7 +18,6 @@ import (
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/mcp"
 	"github.com/teexue/common-agent/core/provider"
-	"github.com/teexue/common-agent/core/skill"
 )
 
 // ToolInfo is the HTTP DTO for tool information.
@@ -36,16 +35,6 @@ type MCPServerInfo struct {
 	URL       string `json:"url,omitempty"`
 	Agent     string `json:"agent"`            // agent id/name for agent-scoped servers; "" for global
 	Scope     string `json:"scope"`            // "global" | "agent"
-}
-
-// SkillInfo is the JSON DTO for skill listing.
-type SkillInfo struct {
-	Name        string   `json:"name"`
-	Version     string   `json:"version"`
-	Description string   `json:"description"`
-	Format      string   `json:"format"`
-	Author      string   `json:"author,omitempty"`
-	Tools       []string `json:"tools"`
 }
 
 // ApproveRequest is the HTTP DTO for POST /v1/agents/approve.
@@ -342,7 +331,13 @@ func (s *Server) reloadCatalog() error {
 			lookup = cs.Lookup
 		}
 	}
-	cat, err := provider.LoadCatalog(config.ProvidersFile(home), lookup)
+	var cat *provider.Catalog
+	var err error
+	if s.stateDB != nil {
+		cat, err = s.stateDB.LoadCatalog(lookup)
+	} else {
+		cat, err = provider.LoadCatalog(config.ProvidersFile(home), lookup)
+	}
 	if err != nil {
 		return err
 	}
@@ -446,37 +441,6 @@ func (s *Server) handleMCPGlobalDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"deleted": name})
 }
 
-func (s *Server) handleSkillsList(c *gin.Context) {
-	loader := skill.NewLoader(s.skillsDir)
-	skills, err := loader.LoadAll()
-	if err != nil {
-		s.logger.Warn("log.skill.load_partial", "error", err)
-	}
-
-	result := make([]SkillInfo, 0, len(skills))
-	for _, sk := range skills {
-		var author string
-		if sk.MDManifest != nil {
-			author = sk.MDManifest.Frontmatter.Metadata["author"]
-		} else if sk.LegacyManifest != nil {
-			author = sk.LegacyManifest.Author
-		}
-		tools := sk.ToolNames()
-		if tools == nil {
-			tools = []string{}
-		}
-		result = append(result, SkillInfo{
-			Name:        sk.Name,
-			Version:     sk.Version,
-			Description: sk.Description,
-			Format:      sk.Format,
-			Author:      author,
-			Tools:       tools,
-		})
-	}
-	c.JSON(http.StatusOK, result)
-}
-
 func (s *Server) handleAuditExport(c *gin.Context) {
 	if s.auditStore == nil {
 		respondError(c, http.StatusServiceUnavailable, "no_audit", "api.error.no_audit")
@@ -526,9 +490,18 @@ func (s *Server) handleEvents(c *gin.Context) {
 	fmt.Fprintf(c.Writer, "data: {\"type\":\"ping\"}\n\n")
 	flusher.Flush()
 
+	// Also wake on server shutdown: otherwise this long-lived SSE connection
+	// keeps http.Server.Shutdown blocked until its timeout expires.
+	var shutdown <-chan struct{}
+	if s.shutdownCtx != nil {
+		shutdown = s.shutdownCtx.Done()
+	}
+
 	for {
 		select {
 		case <-c.Request.Context().Done():
+			return
+		case <-shutdown:
 			return
 		case change := <-s.changeCh:
 			data, _ := json.Marshal(change)

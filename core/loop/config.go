@@ -68,6 +68,11 @@ type Config struct {
 
 	// Telemetry for OpenTelemetry tracing and metrics. Optional.
 	Telemetry *telemetry.Telemetry
+
+	// ContextWindow is the model context size in tokens used for compaction.
+	// When 0, agent.Compaction.ContextWindow is used if set; otherwise compaction
+	// is skipped unless a legacy max_messages trigger is configured.
+	ContextWindow int
 }
 
 // GetWorkDir returns the working directory from context, or empty string.
