@@ -313,6 +313,21 @@ export async function deleteSession(id: string): Promise<void> {
   }
 }
 
+/** Sets (or clears, with an empty string) the per-session working directory. */
+export async function updateSessionWorkdir(
+  id: string,
+  workdir: string
+): Promise<Record<string, string>> {
+  const res = await fetch(`/v1/sessions/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: langHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ workdir }),
+  })
+  await ensureOK(res, "api.updateSessionFailed")
+  const data = (await res.json()) as { metadata?: Record<string, string> }
+  return data.metadata ?? {}
+}
+
 /** Fetches replay events for a session, optionally filtered by turn range. */
 export async function fetchSessionReplay(
   id: string,

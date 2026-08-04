@@ -396,6 +396,7 @@ func (s *Server) Handler() *gin.Engine {
 	if s.store != nil {
 		v1.GET("/sessions", s.handleSessionsList)
 		v1.GET("/sessions/:id", s.handleSessionsGet)
+		v1.PATCH("/sessions/:id", s.handleSessionPatch)
 		v1.DELETE("/sessions/:id", s.handleSessionsDelete)
 	}
 

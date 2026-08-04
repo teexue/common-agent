@@ -58,6 +58,44 @@ func (s *Server) handleSessionsGet(c *gin.Context) {
 	})
 }
 
+// SessionPatchRequest is the HTTP DTO for PATCH /v1/sessions/:id. Fields left
+// null are unchanged.
+type SessionPatchRequest struct {
+	WorkDir *string `json:"workdir"`
+}
+
+func (s *Server) handleSessionPatch(c *gin.Context) {
+	if s.store == nil {
+		respondError(c, http.StatusServiceUnavailable, "session_error", "api.error.session_not_configured")
+		return
+	}
+	id := c.Param("id")
+	userID := identityFromGin(c).UserID
+	sess, err := s.svc.LoadSession(id, userID)
+	if err != nil {
+		if errors.Is(err, session.ErrNotFound) {
+			respondError(c, http.StatusNotFound, "not_found", "api.error.session_not_found")
+			return
+		}
+		respondErrorDetails(c, http.StatusInternalServerError, "session_error", "api.error.session_error", err.Error())
+		return
+	}
+
+	var req SessionPatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		return
+	}
+	if req.WorkDir != nil {
+		sess.SetMetadata(session.MetadataKeyWorkdir, *req.WorkDir)
+	}
+	if err := s.store.Save(sess); err != nil {
+		respondErrorDetails(c, http.StatusInternalServerError, "session_error", "api.error.session_error", err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"id": sess.ID, "metadata": sess.GetMetadata()})
+}
+
 func (s *Server) handleSessionsDelete(c *gin.Context) {
 	if s.store == nil {
 		respondError(c, http.StatusServiceUnavailable, "session_error", "api.error.session_not_configured")

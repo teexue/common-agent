@@ -72,9 +72,6 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		return nil, fmt.Errorf("load agent: %w", err)
 	}
 
-	// Load context file from working directory (AGENTS.md > CLAUDE.md).
-	a.ProjectContext = loadContextFile(req.WorkDir)
-
 	// Inject skill tools into the registry.
 	tempToolNames := injectSkills(a, s.AgentsDir, s.Registry, s.Logger)
 
@@ -108,6 +105,19 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		sess.SetMessages(req.Messages)
 	}
 
+	// Resolve the effective working directory: an explicit request value
+	// wins and is remembered by the session; otherwise fall back to the
+	// session's stored choice. Empty means the tools' registered default.
+	workDir := req.WorkDir
+	if workDir == "" {
+		workDir = sess.GetMetadata()[session.MetadataKeyWorkdir]
+	} else if sess.GetMetadata()[session.MetadataKeyWorkdir] != workDir {
+		sess.SetMetadata(session.MetadataKeyWorkdir, workDir)
+	}
+
+	// Load context file from working directory (AGENTS.md > CLAUDE.md).
+	a.ProjectContext = loadContextFile(workDir)
+
 	// Connect MCP servers (global + agent) last, so subprocesses only spawn
 	// once the run is otherwise guaranteed to proceed.
 	mcpMgr, mcpToolNames := injectMCP(ctx, a, s.AgentsDir, s.Registry, s.Logger)
@@ -130,7 +140,7 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		SessionID: req.SessionID,
 		Policy:    pol,
 		Approver:  approver,
-		WorkDir:   req.WorkDir,
+		WorkDir:   workDir,
 		Images:    req.Images,
 	}
 

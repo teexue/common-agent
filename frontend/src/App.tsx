@@ -6,6 +6,7 @@ import { BackgroundProvider } from "@/components/background/background-provider"
 import { AppLayout } from "@/components/layout/app-layout"
 import { WorkspacePanel } from "@/components/conversation/workspace-panel"
 import { ConversationActions } from "@/components/conversation/conversation-actions"
+import { SessionWorkdir } from "@/components/conversation/session-workdir"
 import { InspectorPanel } from "@/components/inspector/inspector-panel"
 import { ToolDetailDialog } from "@/components/tools/tool-detail-dialog"
 import { SettingsPage } from "@/components/settings/settings-page"
@@ -22,7 +23,7 @@ import { useAgentManager } from "@/hooks/use-agent-manager"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
 import { useMessageSearch } from "@/hooks/use-message-search"
 import { AuthProvider } from "@/lib/auth"
-import { fetchSessions, fetchSession, deleteSession, resolveApproval, fetchProviders } from "@/lib/api"
+import { fetchSessions, fetchSession, deleteSession, resolveApproval, fetchProviders, updateSessionWorkdir } from "@/lib/api"
 import type { ConversationEntry, ToolCallEntry, ToolInfo, SessionMeta, StreamStatus, ProviderInfo } from "@/types/agent"
 
 function AppDialogs({ agentMgr, selectedTool, setSelectedTool, replaySessionId, setReplaySessionId, onEditAgent }: {
@@ -63,7 +64,7 @@ function useSessions(chat: ReturnType<typeof useChat>) {
     try {
       const sess = await fetchSession(id)
       await chat.loadSession(id, sess.messages as Array<{ role: string; content?: string; reasoning_content?: string; tool_calls?: Array<{ id: string; name: string; arguments: unknown }>; tool_call_id?: string; name?: string }>)
-      return sess.agent
+      return { agent: sess.agent, workdir: sess.metadata?.workdir || null }
     } catch (err) { console.error("Failed to resume session:", err); return null }
   }, [chat.loadSession])
   const remove = useCallback(async (id: string) => {
@@ -127,7 +128,10 @@ function WorkspaceRoute() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [inspectorOpen, setInspectorOpen] = useState(true)
   const [replaySessionId, setReplaySessionId] = useState<string | null>(null)
-  const workDir = localStorage.getItem("workDir") || ""
+  const [sessionWorkDir, setSessionWorkDir] = useState<string | null>(null)
+  const globalWorkDir = localStorage.getItem("workDir") || ""
+  // Per-session choice wins; otherwise fall back to the global setting.
+  const workDir = sessionWorkDir ?? globalWorkDir
   const [providers, setProviders] = useState<ProviderInfo[]>([])
 
   const agentMgr = useAgentManager()
@@ -153,11 +157,12 @@ function WorkspaceRoute() {
     if (!resumeId) return
     let cancelled = false
     ;(async () => {
-      const a = await sessMgr.resume(resumeId)
-      if (cancelled || !a) return
-      setAgent(a)
+      const r = await sessMgr.resume(resumeId)
+      if (cancelled || !r) return
+      setAgent(r.agent)
+      setSessionWorkDir(r.workdir)
       setSelectedToolCallId(null)
-      navigate(`/agents/${encodeURIComponent(a)}`, { replace: true })
+      navigate(`/agents/${encodeURIComponent(r.agent)}`, { replace: true })
     })()
     return () => { cancelled = true }
   }, [location.search]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -177,15 +182,26 @@ function WorkspaceRoute() {
     navigate(`/agents/${encodeURIComponent(id)}`, { replace: true })
   }, [chat.messages.length, navigate])
   const handleToggleTheme = useCallback(() => setTheme(theme === "dark" ? "light" : "dark"), [theme, setTheme])
-  const handleNewSession = useCallback(() => { chat.clear(); setSelectedToolCallId(null); sessMgr.refresh() }, [chat.clear, sessMgr.refresh])
+  const handleNewSession = useCallback(() => { chat.clear(); setSelectedToolCallId(null); setSessionWorkDir(null); sessMgr.refresh() }, [chat.clear, sessMgr.refresh])
   const handleResumeSession = useCallback(async (id: string) => {
-    const a = await sessMgr.resume(id)
-    if (a) {
-      setAgent(a)
+    const r = await sessMgr.resume(id)
+    if (r) {
+      setAgent(r.agent)
+      setSessionWorkDir(r.workdir)
       setSelectedToolCallId(null)
-      navigate(`/agents/${encodeURIComponent(a)}`, { replace: true })
+      navigate(`/agents/${encodeURIComponent(r.agent)}`, { replace: true })
     }
   }, [sessMgr.resume, navigate])
+  const handleWorkdirChange = useCallback(async (dir: string) => {
+    setSessionWorkDir(dir || null)
+    if (chat.sessionId) {
+      try { await updateSessionWorkdir(chat.sessionId, dir) } catch (e) { console.error(e) }
+    }
+  }, [chat.sessionId])
+  const handleDeleteSession = useCallback((id: string) => {
+    if (id === chat.sessionId) setSessionWorkDir(null)
+    sessMgr.remove(id)
+  }, [chat.sessionId, sessMgr.remove])
   const resolveToolApproval = useCallback(async (id: string, approve: boolean) => { try { await resolveApproval(id, approve) } catch (e) { console.error(e) } }, [])
   const handleReplaySession = useCallback((id: string) => setReplaySessionId(id), [])
 
@@ -212,7 +228,7 @@ function WorkspaceRoute() {
         sessions={sessMgr.sessions}
         activeSessionId={chat.sessionId}
         onResumeSession={handleResumeSession}
-        onDeleteSession={sessMgr.remove}
+        onDeleteSession={handleDeleteSession}
         onReplaySession={handleReplaySession}
         agent={agentInfo ?? { id: "", name: "common-agent", provider: "", model: "", tools: [], maxTurns: 10 }}
         agents={agents}
@@ -248,6 +264,14 @@ function WorkspaceRoute() {
             agentName={agentInfo?.name || agent}
             visionEnabled={visionEnabled}
             search={search}
+            inputAccessory={
+              <SessionWorkdir
+                workDir={workDir}
+                sessionScoped={sessionWorkDir !== null}
+                onPick={(dir) => void handleWorkdirChange(dir)}
+                onClear={() => void handleWorkdirChange("")}
+              />
+            }
           />
         }
         rightPanel={<InspectorPanel entry={selectedEntry} toolCall={selectedToolCall} />}

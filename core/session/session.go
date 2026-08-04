@@ -11,6 +11,11 @@ import (
 	"github.com/teexue/common-agent/core/provider"
 )
 
+// MetadataKeyWorkdir is the session metadata key that stores the per-session
+// working directory. Empty or absent means the caller falls back to the
+// global/default working directory.
+const MetadataKeyWorkdir = "workdir"
+
 // Session holds in-memory conversation state for one agent run.
 // It is safe for concurrent use by a single producer (the loop) and
 // multiple readers.

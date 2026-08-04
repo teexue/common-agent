@@ -26,6 +26,7 @@ interface WorkspacePanelProps {
   agentName?: string
   visionEnabled?: boolean
   search: MessageSearch
+  inputAccessory?: React.ReactNode
 }
 
 function EmptyState({ noAgent, onCreateAgent }: { noAgent?: boolean; onCreateAgent?: () => void }) {
@@ -62,7 +63,7 @@ function EmptyState({ noAgent, onCreateAgent }: { noAgent?: boolean; onCreateAge
   )
 }
 
-export function WorkspacePanel({ messages, isStreaming, error, onSendMessage, onStop, selectedToolCallId, onSelectToolCall, onApproveTool, onDenyTool, noAgent, onCreateAgent, agentName = "agent", visionEnabled, search }: WorkspacePanelProps) {
+export function WorkspacePanel({ messages, isStreaming, error, onSendMessage, onStop, selectedToolCallId, onSelectToolCall, onApproveTool, onDenyTool, noAgent, onCreateAgent, agentName = "agent", visionEnabled, search, inputAccessory }: WorkspacePanelProps) {
   const { containerRef, handleScroll } = useAutoScroll(messages)
   const isEmpty = messages.length === 0 && !error
   const [optimizing, setOptimizing] = useState(false)
@@ -107,7 +108,7 @@ export function WorkspacePanel({ messages, isStreaming, error, onSendMessage, on
           </div>
         </ScrollArea>
       </div>
-      <InputBar onSend={onSendMessage} onStop={onStop} onOptimize={handleOptimize} disabled={noAgent ?? false} isStreaming={isStreaming} visionEnabled={visionEnabled} optimizing={optimizing} />
+      <InputBar onSend={onSendMessage} onStop={onStop} onOptimize={handleOptimize} disabled={noAgent ?? false} isStreaming={isStreaming} visionEnabled={visionEnabled} optimizing={optimizing} accessory={inputAccessory} />
     </div>
   )
 }

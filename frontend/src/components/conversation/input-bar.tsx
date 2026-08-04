@@ -18,6 +18,7 @@ interface InputBarProps {
   isStreaming?: boolean
   visionEnabled?: boolean
   optimizing?: boolean
+  accessory?: React.ReactNode
 }
 
 function HintText({ isStreaming }: { isStreaming: boolean }) {
@@ -33,7 +34,7 @@ function HintText({ isStreaming }: { isStreaming: boolean }) {
   )
 }
 
-export function InputBar({ onSend, onStop, onOptimize, disabled, isStreaming, visionEnabled, optimizing }: InputBarProps) {
+export function InputBar({ onSend, onStop, onOptimize, disabled, isStreaming, visionEnabled, optimizing, accessory }: InputBarProps) {
   const { t } = useTranslation()
   const [text, setText] = useState("")
   const [images, setImages] = useState<ImageAttachment[]>([])
@@ -58,7 +59,11 @@ export function InputBar({ onSend, onStop, onOptimize, disabled, isStreaming, vi
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
-      isStreaming ? onStop?.() : handleSend()
+      if (isStreaming) {
+        onStop?.()
+      } else {
+        handleSend()
+      }
     }
   }
 
@@ -100,6 +105,7 @@ export function InputBar({ onSend, onStop, onOptimize, disabled, isStreaming, vi
           className="min-h-[2.75rem] resize-none border-0 bg-transparent px-4 py-3 text-sm shadow-none focus-visible:ring-0" rows={1} />
         <div className="flex items-center justify-between border-t border-border/50 px-3 py-2">
           <div className="flex items-center gap-1">
+            {accessory}
             <HintText isStreaming={!!isStreaming} />
             {visionEnabled && (
               <Tooltip>
