@@ -4,6 +4,7 @@ import {
   BookOpen,
   ChevronLeft,
   ChevronRight,
+  KanbanSquare,
   Layers,
   LogOut,
   Plus,
@@ -15,7 +16,6 @@ import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAuth } from "@/lib/auth"
 import type { AgentInfo, SessionMeta } from "@/types/agent"
-import { SidebarJobsList } from "./sidebar-jobs-list"
 import { SessionList } from "./sidebar-session-list"
 
 interface SidebarProps {
@@ -23,6 +23,7 @@ interface SidebarProps {
   onToggle: () => void
   onOpenSettings: () => void
   onOpenManage?: () => void
+  onOpenKanban?: () => void
   onOpenApiDocs?: () => void
   onNewSession?: () => void
   sessions?: SessionMeta[]
@@ -34,8 +35,8 @@ interface SidebarProps {
 }
 
 function CollapsedSidebar({
-  onToggle, onOpenSettings, onOpenManage, onOpenApiDocs, onNewSession,
-}: Pick<SidebarProps, "onToggle" | "onOpenSettings" | "onOpenManage" | "onOpenApiDocs" | "onNewSession">) {
+  onToggle, onOpenSettings, onOpenManage, onOpenKanban, onOpenApiDocs, onNewSession,
+}: Pick<SidebarProps, "onToggle" | "onOpenSettings" | "onOpenManage" | "onOpenKanban" | "onOpenApiDocs" | "onNewSession">) {
   const { t } = useTranslation()
   return (
     <div className="flex h-full w-12 flex-col items-center gap-1 border-r border-border bg-sidebar py-3">
@@ -63,6 +64,14 @@ function CollapsedSidebar({
           <TooltipContent side="right">{t("layout.manage")}</TooltipContent>
         </Tooltip>
       )}
+      {onOpenKanban && (
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={onOpenKanban} className="rounded-lg" />}>
+            <KanbanSquare className="h-3.5 w-3.5" />
+          </TooltipTrigger>
+          <TooltipContent side="right">{t("layout.kanban")}</TooltipContent>
+        </Tooltip>
+      )}
       {onOpenApiDocs && (
         <Tooltip>
           <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={onOpenApiDocs} className="rounded-lg" />}>
@@ -82,14 +91,14 @@ function CollapsedSidebar({
 }
 
 export function Sidebar({
-  collapsed, onToggle, onOpenSettings, onOpenManage, onOpenApiDocs, onNewSession,
+  collapsed, onToggle, onOpenSettings, onOpenManage, onOpenKanban, onOpenApiDocs, onNewSession,
   sessions = [], agents = [], activeSessionId, onResumeSession, onDeleteSession, onReplaySession,
 }: SidebarProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   if (collapsed) {
-    return <CollapsedSidebar {...{ onToggle, onOpenSettings, onOpenManage, onOpenApiDocs, onNewSession }} />
+    return <CollapsedSidebar {...{ onToggle, onOpenSettings, onOpenManage, onOpenKanban, onOpenApiDocs, onNewSession }} />
   }
 
   const agentLabels: Record<string, string> = {}
@@ -119,7 +128,6 @@ export function Sidebar({
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
-        <SidebarJobsList />
         <SessionList
           sessions={sessions}
           activeSessionId={activeSessionId}
@@ -139,6 +147,11 @@ export function Sidebar({
         {onOpenManage && (
           <Button variant="ghost" size="sm" className="w-full justify-start gap-2 rounded-xl text-xs text-muted-foreground" onClick={onOpenManage}>
             <Layers className="h-3.5 w-3.5" /> {t("layout.manage")}
+          </Button>
+        )}
+        {onOpenKanban && (
+          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 rounded-xl text-xs text-muted-foreground" onClick={onOpenKanban}>
+            <KanbanSquare className="h-3.5 w-3.5" /> {t("layout.kanban")}
           </Button>
         )}
         {onOpenApiDocs && (

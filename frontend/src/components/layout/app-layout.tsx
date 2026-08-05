@@ -17,6 +17,7 @@ interface AppLayoutProps {
   onToggleSidebar: () => void
   onOpenSettings: () => void
   onOpenManage?: () => void
+  onOpenKanban?: () => void
   onOpenApiDocs?: () => void
   onNewSession?: () => void
   sessions?: SessionMeta[]

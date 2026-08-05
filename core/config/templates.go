@@ -36,7 +36,6 @@ system_prompt: |
 tools:
   - echo
   - get_time
-  - create_job
 max_turns: 0
 max_tokens: 4096
 tool_execution:
@@ -187,7 +186,6 @@ tools:
   - create_directory
   - web_fetch
   - get_time
-  - create_job
 max_turns: 0
 max_tokens: 8192
 tool_execution:

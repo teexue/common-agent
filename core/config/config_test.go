@@ -56,7 +56,7 @@ func TestEnsureDirs(t *testing.T) {
 	if err := config.EnsureDirs(dir); err != nil {
 		t.Fatal(err)
 	}
-	for _, sub := range []string{"agents", "sessions", "jobs", "knowledge"} {
+	for _, sub := range []string{"agents", "sessions", "knowledge"} {
 		if _, err := os.Stat(filepath.Join(dir, sub)); err != nil {
 			t.Fatalf("expected %s dir: %v", sub, err)
 		}

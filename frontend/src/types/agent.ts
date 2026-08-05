@@ -290,48 +290,28 @@ export interface HealthStatus {
   details?: ComponentHealth[]
 }
 
-export interface JobSchedule {
-  type: "cron" | "interval" | "once"
-  cron?: string
-  interval?: string
-  at?: string
-}
+// Kanban task item (mirrors Go kanban item struct)
 
-export interface JobInfo {
+export type KanbanStatus = "pending" | "running" | "review" | "done" | "failed"
+
+export interface KanbanItem {
   id: string
-  name: string
-  enabled: boolean
-  agent: string
+  user_id: string
+  title: string
   prompt: string
+  agent: string
   workdir?: string
-  schedule: JobSchedule
-  session_mode: "new_each_run" | "continue"
+  status: KanbanStatus
+  priority: number // 1=low 2=medium 3=high
+  tags: string[]
+  due_at?: string
+  feedback?: string
+  result?: string
   session_id?: string
-  policy: {
-    max_runs: number
-    timeout?: string
-    overlap: "skip" | "queue"
-  }
-  status: {
-    next_run_at?: string
-    last_run_at?: string
-    last_status?: string
-    last_error?: string
-    run_count: number
-    running?: boolean
-  }
+  attempts: number
   created_at: string
   updated_at: string
-}
-
-export interface JobRunRecord {
-  id: string
-  job_id: string
-  session_id?: string
-  status: string
-  error?: string
-  started_at: string
-  ended_at: string
+  finished_at?: string
 }
 
 // Session replay types (mirrors Go audit.EventRecord)

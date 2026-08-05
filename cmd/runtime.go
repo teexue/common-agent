@@ -8,7 +8,6 @@ import (
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/embedding"
 	"github.com/teexue/common-agent/core/i18n"
-	"github.com/teexue/common-agent/core/job"
 	"github.com/teexue/common-agent/core/knowledge"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/store"
@@ -95,7 +94,7 @@ func printPaths(paths runtimePaths) {
 	fmt.Println("state.db:", store.StateFile(paths.home))
 }
 
-// registerRuntimeTools registers knowledge and job tools backed by the user's
+// registerRuntimeTools registers knowledge tools backed by the user's
 // home directory, mirroring the server wiring so CLI runs (run / chat) support
 // agents that reference them. Non-fatal: failures are logged and skipped.
 func registerRuntimeTools(reg *registry.Registry, paths runtimePaths, settings config.Settings, creds *config.CredentialStore, logger *slog.Logger) {
@@ -116,11 +115,4 @@ func registerRuntimeTools(reg *registry.Registry, paths runtimePaths, settings c
 		}
 		builtin.RegisterKnowledge(reg, knowledge.NewRuntime(kbMgr, emb))
 	}
-
-	jobStore, err := job.NewFileStore(config.JobsDir(paths.home))
-	if err != nil {
-		logger.Warn("log.job.open_store", "error", err)
-		return
-	}
-	reg.MustRegister(builtin.CreateJob{Store: jobStore})
 }

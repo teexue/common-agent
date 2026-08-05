@@ -92,6 +92,7 @@ func (db *DB) autoMigrate() error {
 		&Credential{},
 		&MCPServerRow{},
 		&SessionRow{},
+		&KanbanRow{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}

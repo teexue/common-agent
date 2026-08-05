@@ -11,6 +11,7 @@ import { InspectorPanel } from "@/components/inspector/inspector-panel"
 import { ToolDetailDialog } from "@/components/tools/tool-detail-dialog"
 import { SettingsPage } from "@/components/settings/settings-page"
 import { ManagePage } from "@/components/manage/manage-page"
+import { KanbanPage } from "@/components/kanban/kanban-page"
 import { AgentDetailDialog } from "@/components/agents/agent-detail-dialog"
 import { AgentEditorPage } from "@/components/agents/agent-editor"
 import { AgentDeleteConfirm } from "@/components/agents/agent-delete-confirm"
@@ -104,6 +105,7 @@ function useShellNav() {
     onToggleSidebar: () => setSidebarCollapsed((v) => !v),
     onOpenSettings: () => navigate("/settings"),
     onOpenManage: () => navigate("/manage"),
+    onOpenKanban: () => navigate("/kanban"),
     onOpenApiDocs: () => navigate("/api-docs"),
     onNewSession: () => navigate("/"),
     sessions: sessList.sessions,
@@ -223,6 +225,7 @@ function WorkspaceRoute() {
         onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
         onOpenSettings={() => navigate("/settings")}
         onOpenManage={() => navigate("/manage")}
+        onOpenKanban={() => navigate("/kanban")}
         onOpenApiDocs={() => navigate("/api-docs")}
         onNewSession={handleNewSession}
         sessions={sessMgr.sessions}
@@ -294,6 +297,7 @@ function shellLayoutProps(shell: ReturnType<typeof useShellNav>, theme: string, 
     onToggleSidebar: shell.onToggleSidebar,
     onOpenSettings: shell.onOpenSettings,
     onOpenManage: shell.onOpenManage,
+    onOpenKanban: shell.onOpenKanban,
     onOpenApiDocs: shell.onOpenApiDocs,
     onNewSession: shell.onNewSession,
     sessions: shell.sessions,
@@ -343,6 +347,25 @@ function ManageRoute() {
         replaySessionId={shell.replaySessionId}
         setReplaySessionId={shell.setReplaySessionId}
         onEditAgent={(id) => navigate(`/manage/agents/${encodeURIComponent(id)}/edit`)}
+      />
+    </TooltipProvider>
+  )
+}
+
+function KanbanRoute() {
+  const { theme, setTheme } = useTheme()
+  const shell = useShellNav()
+
+  return (
+    <TooltipProvider delay={300}>
+      <AppLayout
+        {...shellLayoutProps(shell, theme, setTheme)}
+        leftPanel={<KanbanPage />}
+      />
+      <SessionReplay
+        sessionId={shell.replaySessionId}
+        open={!!shell.replaySessionId}
+        onOpenChange={(open) => { if (!open) shell.setReplaySessionId(null) }}
       />
     </TooltipProvider>
   )
@@ -435,6 +458,7 @@ export function App() {
             <Route path="/settings" element={<SettingsRoute />} />
             <Route path="/api-docs" element={<ApiDocsRoute />} />
             <Route path="/manage" element={<ManageRoute />} />
+            <Route path="/kanban" element={<KanbanRoute />} />
             <Route path="/manage/agents/new" element={<AgentEditorRoute mode="create" />} />
             <Route path="/manage/agents/:agentId/edit" element={<AgentEditorRoute mode="edit" />} />
             <Route path="/agents/:agentName" element={<WorkspaceRoute />} />

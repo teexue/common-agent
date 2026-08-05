@@ -21,7 +21,7 @@ import (
 	"github.com/teexue/common-agent/core/embedding"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/i18n"
-	"github.com/teexue/common-agent/core/job"
+	"github.com/teexue/common-agent/core/kanban"
 	"github.com/teexue/common-agent/core/knowledge"
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/provider"
@@ -168,18 +168,6 @@ func runServe(args []string, logger *slog.Logger) {
 		sessStore = store.NewSessionStore(stateDB)
 	}
 
-	var jobStore job.Store
-	if !*mock {
-		jobStore, err = job.NewFileStore(config.JobsDir(paths.home))
-		if err != nil {
-			logger.Error("log.job.open_store", "error", err)
-			os.Exit(1)
-		}
-	}
-	if jobStore != nil {
-		reg.MustRegister(builtin.CreateJob{Store: jobStore})
-	}
-
 	// Event logger for session replay.
 	eventLogger := audit.NewEventLogger(filepath.Join(paths.home, "events"))
 
@@ -192,7 +180,6 @@ func runServe(args []string, logger *slog.Logger) {
 		StaticFS:    distFS(),
 		Logger:      logger,
 		Store:       sessStore,
-		Jobs:        jobStore,
 		Knowledge:   kbMgr,
 		Ingester:    nil,
 		Retriever:   nil,
@@ -225,18 +212,16 @@ func runServe(args []string, logger *slog.Logger) {
 	defer stop()
 	srv.SetShutdownCtx(ctx)
 
-	var sched *job.Scheduler
-	if jobStore != nil {
-		sched = job.NewScheduler(job.SchedulerConfig{
-			Store:       jobStore,
-			Runner:      srv.Service().JobRunner(),
-			Logger:      logger,
-			TickEvery:   time.Second,
-			MaxParallel: 2,
+	// Kanban worker executes pending items in the background.
+	if stateDB != nil {
+		worker := kanban.NewWorker(kanban.WorkerConfig{
+			Store:     stateDB,
+			Runner:    srv.Service().KanbanRunner(),
+			Logger:    logger,
+			TickEvery: 5 * time.Second,
 		})
-		srv.SetScheduler(sched)
-		sched.Start(ctx)
-		defer sched.Stop()
+		worker.Start(ctx)
+		defer worker.Stop()
 	}
 
 	httpServer := &http.Server{

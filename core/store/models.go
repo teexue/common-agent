@@ -62,3 +62,27 @@ type SessionRow struct {
 	CreatedAt    time.Time `gorm:"not null"`
 	UpdatedAt    time.Time `gorm:"index:idx_sessions_user_updated,priority:2;not null"`
 }
+
+// KanbanRow persists a kanban work item.
+type KanbanRow struct {
+	ID         string     `gorm:"primaryKey;size:64" json:"id"`
+	UserID     string     `gorm:"index;not null;size:64" json:"user_id"`
+	Title      string     `gorm:"not null" json:"title"`
+	Prompt     string     `gorm:"not null" json:"prompt"`
+	Agent      string     `gorm:"not null" json:"agent"`
+	WorkDir    string     `gorm:"" json:"workdir,omitempty"`
+	Status     string     `gorm:"index;not null" json:"status"`
+	Priority   int        `gorm:"not null" json:"priority"`
+	TagsJSON   string     `gorm:"" json:"-"`
+	DueAt      *time.Time `gorm:"" json:"due_at,omitempty"`
+	Feedback   string     `gorm:"" json:"feedback,omitempty"`
+	Result     string     `gorm:"" json:"result,omitempty"`
+	SessionID  string     `gorm:"" json:"session_id,omitempty"`
+	Attempts   int        `gorm:"not null" json:"attempts"`
+	CreatedAt  time.Time  `gorm:"not null" json:"created_at"`
+	UpdatedAt  time.Time  `gorm:"not null" json:"updated_at"`
+	FinishedAt *time.Time `gorm:"" json:"finished_at,omitempty"`
+}
+
+// TableName sets the kanban table name.
+func (KanbanRow) TableName() string { return "kanban_items" }

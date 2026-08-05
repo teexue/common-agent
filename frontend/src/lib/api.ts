@@ -12,8 +12,7 @@ import type {
   MCPServerInfo,
   SkillInfo,
   SkillDetail,
-  JobInfo,
-  JobRunRecord,
+  KanbanItem,
   EmbeddingConfig,
   EmbeddingVendorInfo,
   KnowledgeDocument,
@@ -765,80 +764,95 @@ export async function fetchDirList(path?: string): Promise<DirListResponse> {
   return res.json()
 }
 
-// ─── Jobs API ─────────────────────────────────────────────────────
+// ─── Kanban API ───────────────────────────────────────────────────
 
-/** Lists all scheduled jobs. */
-export async function fetchJobs(): Promise<JobInfo[]> {
-  const res = await fetch("/v1/jobs", { headers: langHeaders() })
-  if (!res.ok) throw new Error(i18n.t("api.fetchJobsFailed", { status: res.status }))
+/** Lists all kanban items. */
+export async function fetchKanbanItems(): Promise<KanbanItem[]> {
+  const res = await fetch("/v1/kanban", { headers: langHeaders() })
+  await ensureOK(res, "api.fetchKanbanFailed")
   return (await res.json()) ?? []
 }
 
-/** Creates a job. */
-export async function createJob(data: {
-  name: string
-  agent: string
+/** Payload for creating a kanban item. */
+export interface KanbanCreatePayload {
+  title: string
   prompt: string
+  agent: string
   workdir?: string
-  schedule: { type: string; cron?: string; interval?: string }
-  session_mode?: string
-  enabled?: boolean
-}): Promise<JobInfo> {
-  const res = await fetch("/v1/jobs", {
+  priority?: number
+  tags?: string[]
+  due_at?: string
+}
+
+/** Creates a kanban item. */
+export async function createKanbanItem(data: KanbanCreatePayload): Promise<KanbanItem> {
+  const res = await fetch("/v1/kanban", {
     method: "POST",
     headers: langHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(data),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.message ?? i18n.t("api.createJobFailed", { status: res.status }))
+    throw new Error(err?.message ?? i18n.t("api.createKanbanFailed", { status: res.status }))
   }
   return res.json()
 }
 
-/** Pauses a job. */
-export async function pauseJob(id: string): Promise<JobInfo> {
-  const res = await fetch(`/v1/jobs/${encodeURIComponent(id)}/pause`, {
-    method: "POST",
-    headers: langHeaders(),
+/** Updates a kanban item with a subset of editable fields. */
+export async function updateKanbanItem(
+  id: string,
+  data: Partial<KanbanCreatePayload & { status: string }>
+): Promise<KanbanItem> {
+  const res = await fetch(`/v1/kanban/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: langHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(data),
   })
-  if (!res.ok) throw new Error(i18n.t("api.pauseJobFailed", { status: res.status }))
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.message ?? i18n.t("api.updateKanbanFailed", { status: res.status }))
+  }
   return res.json()
 }
 
-/** Resumes a job. */
-export async function resumeJob(id: string): Promise<JobInfo> {
-  const res = await fetch(`/v1/jobs/${encodeURIComponent(id)}/resume`, {
-    method: "POST",
-    headers: langHeaders(),
-  })
-  if (!res.ok) throw new Error(i18n.t("api.resumeJobFailed", { status: res.status }))
-  return res.json()
-}
-
-/** Triggers a job run immediately. */
-export async function runJobNow(id: string): Promise<void> {
-  const res = await fetch(`/v1/jobs/${encodeURIComponent(id)}/run`, {
-    method: "POST",
-    headers: langHeaders(),
-  })
-  if (!res.ok) throw new Error(i18n.t("api.runJobFailed", { status: res.status }))
-}
-
-/** Deletes a job. */
-export async function deleteJob(id: string): Promise<void> {
-  const res = await fetch(`/v1/jobs/${encodeURIComponent(id)}`, {
+/** Deletes a kanban item. */
+export async function deleteKanbanItem(id: string): Promise<void> {
+  const res = await fetch(`/v1/kanban/${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: langHeaders(),
   })
-  if (!res.ok) throw new Error(i18n.t("api.deleteJobFailed", { status: res.status }))
+  if (!res.ok) throw new Error(i18n.t("api.deleteKanbanFailed", { status: res.status }))
 }
 
-/** Lists recent runs for a job. */
-export async function fetchJobRuns(id: string): Promise<JobRunRecord[]> {
-  const res = await fetch(`/v1/jobs/${encodeURIComponent(id)}/runs`, { headers: langHeaders() })
-  if (!res.ok) throw new Error(i18n.t("api.fetchJobRunsFailed", { status: res.status }))
-  return (await res.json()) ?? []
+/** Approves a kanban item in review (review → done). */
+export async function approveKanbanItem(id: string): Promise<KanbanItem> {
+  const res = await fetch(`/v1/kanban/${encodeURIComponent(id)}/approve`, {
+    method: "POST",
+    headers: langHeaders(),
+  })
+  if (!res.ok) throw new Error(i18n.t("api.approveKanbanFailed", { status: res.status }))
+  return res.json()
+}
+
+/** Rejects a kanban item in review with feedback (review → pending). */
+export async function rejectKanbanItem(id: string, feedback: string): Promise<KanbanItem> {
+  const res = await fetch(`/v1/kanban/${encodeURIComponent(id)}/reject`, {
+    method: "POST",
+    headers: langHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ feedback }),
+  })
+  if (!res.ok) throw new Error(i18n.t("api.rejectKanbanFailed", { status: res.status }))
+  return res.json()
+}
+
+/** Requeues a failed kanban item (failed → pending). */
+export async function requeueKanbanItem(id: string): Promise<KanbanItem> {
+  const res = await fetch(`/v1/kanban/${encodeURIComponent(id)}/requeue`, {
+    method: "POST",
+    headers: langHeaders(),
+  })
+  if (!res.ok) throw new Error(i18n.t("api.requeueKanbanFailed", { status: res.status }))
+  return res.json()
 }
 
 // ─── Knowledge API ────────────────────────────────────────────────

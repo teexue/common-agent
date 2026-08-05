@@ -10,10 +10,10 @@ import (
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/embedding"
-	"github.com/teexue/common-agent/core/job"
 	"github.com/teexue/common-agent/core/knowledge"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/store"
 	"github.com/teexue/common-agent/tools/registry"
 )
 
@@ -25,7 +25,7 @@ type Service struct {
 	NewProvider func(a *agent.Agent) (provider.Provider, error)
 	Logger      *slog.Logger
 	Store       session.Store
-	Jobs        job.Store
+	StateDB     *store.DB
 	Creds       *config.CredentialStore
 
 	Knowledge        *knowledge.Manager
@@ -52,7 +52,7 @@ func New(cfg ServiceConfig) *Service {
 		NewProvider:      cfg.NewProvider,
 		Logger:           logger,
 		Store:            cfg.Store,
-		Jobs:             cfg.Jobs,
+		StateDB:          cfg.StateDB,
 		Creds:            cfg.Creds,
 		Knowledge:        cfg.Knowledge,
 		Ingester:         cfg.Ingester,
@@ -70,7 +70,7 @@ type ServiceConfig struct {
 	NewProvider      func(a *agent.Agent) (provider.Provider, error)
 	Logger           *slog.Logger
 	Store            session.Store
-	Jobs             job.Store
+	StateDB          *store.DB
 	Creds            *config.CredentialStore
 	Knowledge        *knowledge.Manager
 	Ingester         *knowledge.Ingester

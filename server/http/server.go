@@ -17,7 +17,6 @@ import (
 	"github.com/teexue/common-agent/core/auth"
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/embedding"
-	"github.com/teexue/common-agent/core/job"
 	"github.com/teexue/common-agent/core/knowledge"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/service"
@@ -50,7 +49,6 @@ type Server struct {
 	cliAPIKeys  []string // raw keys from --api-key (ephemeral, hashed in-memory)
 	cliKeyMu    sync.RWMutex
 	cliKeyHash  map[string]string // hash -> synthetic key id
-	scheduler   *job.Scheduler    // optional job scheduler
 
 	// changeCh broadcasts agent file change events to SSE subscribers.
 	changeCh chan agentChange
@@ -65,7 +63,6 @@ type ServerConfig struct {
 	StaticFS    fs.FS
 	Logger      *slog.Logger
 	Store       session.Store
-	Jobs        job.Store
 	Knowledge   *knowledge.Manager
 	Ingester    *knowledge.Ingester
 	Retriever   *knowledge.Retriever
@@ -88,7 +85,6 @@ func NewServer(cfg ServerConfig) *Server {
 		NewProvider: cfg.NewProvider,
 		Logger:      logger,
 		Store:       cfg.Store,
-		Jobs:        cfg.Jobs,
 		Knowledge:   cfg.Knowledge,
 		Ingester:    cfg.Ingester,
 		Retriever:   cfg.Retriever,
@@ -108,16 +104,6 @@ func NewServer(cfg ServerConfig) *Server {
 		health:      telemetry.NewHealthServer(),
 		changeCh:    make(chan agentChange, 16),
 	}
-}
-
-// SetJobStore sets the job store and optionally starts a scheduler.
-func (s *Server) SetJobStore(store job.Store) {
-	s.svc.Jobs = store
-}
-
-// SetScheduler attaches a job scheduler for run-now and background ticks.
-func (s *Server) SetScheduler(sched *job.Scheduler) {
-	s.scheduler = sched
 }
 
 // Service returns the shared business service.
@@ -145,6 +131,9 @@ func (s *Server) SetShutdownCtx(ctx context.Context) {
 // SetStateDB attaches the SQLite store and initializes JWT services.
 func (s *Server) SetStateDB(db *store.DB) error {
 	s.stateDB = db
+	if s.svc != nil {
+		s.svc.StateDB = db
+	}
 	if db == nil {
 		s.tokens = nil
 		return nil
@@ -379,25 +368,23 @@ func (s *Server) Handler() *gin.Engine {
 	v1.GET("/fs/list", s.handleFSList)
 	v1.GET("/events", s.handleEvents)
 
-	// Job endpoints (when job store is configured).
-	if s.svc.Jobs != nil {
-		v1.GET("/jobs", s.handleJobsList)
-		v1.POST("/jobs", s.handleJobsCreate)
-		v1.GET("/jobs/:id", s.handleJobsGet)
-		v1.PUT("/jobs/:id", s.handleJobsUpdate)
-		v1.DELETE("/jobs/:id", s.handleJobsDelete)
-		v1.POST("/jobs/:id/pause", s.handleJobsPause)
-		v1.POST("/jobs/:id/resume", s.handleJobsResume)
-		v1.POST("/jobs/:id/run", s.handleJobsRun)
-		v1.GET("/jobs/:id/runs", s.handleJobsRuns)
-	}
-
 	// Conditional endpoints (auth middleware applies via group).
 	if s.store != nil {
 		v1.GET("/sessions", s.handleSessionsList)
 		v1.GET("/sessions/:id", s.handleSessionsGet)
 		v1.PATCH("/sessions/:id", s.handleSessionPatch)
 		v1.DELETE("/sessions/:id", s.handleSessionsDelete)
+	}
+
+	// Kanban endpoints (when the state DB is configured).
+	if s.stateDB != nil {
+		v1.GET("/kanban", s.handleKanbanList)
+		v1.POST("/kanban", s.handleKanbanCreate)
+		v1.PATCH("/kanban/:id", s.handleKanbanPatch)
+		v1.DELETE("/kanban/:id", s.handleKanbanDelete)
+		v1.POST("/kanban/:id/approve", s.handleKanbanApprove)
+		v1.POST("/kanban/:id/reject", s.handleKanbanReject)
+		v1.POST("/kanban/:id/requeue", s.handleKanbanRequeue)
 	}
 
 	if s.eventLogger != nil {

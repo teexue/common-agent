@@ -25,9 +25,6 @@ func Home(ensure bool) (string, error) {
 		if err := os.MkdirAll(SessionsDir(dir), 0o755); err != nil {
 			return "", fmt.Errorf("create sessions dir: %w", err)
 		}
-		if err := os.MkdirAll(JobsDir(dir), 0o755); err != nil {
-			return "", fmt.Errorf("create jobs dir: %w", err)
-		}
 	}
 	return dir, nil
 }
@@ -57,11 +54,6 @@ func SessionsDir(home string) string {
 	return filepath.Join(home, "sessions")
 }
 
-// JobsDir returns the jobs directory under home.
-func JobsDir(home string) string {
-	return filepath.Join(home, "jobs")
-}
-
 // KnowledgeDir returns the knowledge bases directory under home.
 func KnowledgeDir(home string) string {
 	return filepath.Join(home, "knowledge")
@@ -88,11 +80,11 @@ func MCPFile(home string) string {
 }
 
 // EnsureDirs creates the ~/.common-agent directory structure (home, agents,
-// sessions, jobs, knowledge, skills) without writing any default content. Use this on startup so
+// sessions, knowledge, skills) without writing any default content. Use this on startup so
 // the runtime has a place to read/write without pre-installing vendors or
 // agents — initial content is provided by `config init` or the Settings UI.
 func EnsureDirs(home string) error {
-	for _, d := range []string{home, AgentsDir(home), SessionsDir(home), JobsDir(home), KnowledgeDir(home), SkillsDir(home)} {
+	for _, d := range []string{home, AgentsDir(home), SessionsDir(home), KnowledgeDir(home), SkillsDir(home)} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return fmt.Errorf("create dir %s: %w", d, err)
 		}
