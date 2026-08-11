@@ -9,9 +9,15 @@ import (
 )
 
 // OptimizeRequest is the HTTP DTO for POST /v1/agents/optimize.
+// Kind selects the optimizer: "user" (default) or "system".
+// Provider/Model optionally pin which model performs the optimization
+// (used by the agent editor so an unsaved form's selection is honored).
 type OptimizeRequest struct {
-	Prompt string `json:"prompt"`
-	Agent  string `json:"agent,omitempty"`
+	Prompt   string `json:"prompt"`
+	Agent    string `json:"agent,omitempty"`
+	Kind     string `json:"kind,omitempty"`
+	Provider string `json:"provider,omitempty"`
+	Model    string `json:"model,omitempty"`
 }
 
 // OptimizeResponse is the HTTP DTO returned by POST /v1/agents/optimize.
@@ -26,7 +32,14 @@ func (s *Server) handleOptimizePrompt(c *gin.Context) {
 		return
 	}
 
-	result, err := s.svc.OptimizePrompt(c.Request.Context(), req.Prompt, req.Agent)
+	opts := service.OptimizeOptions{Agent: req.Agent, Provider: req.Provider, Model: req.Model}
+	var result string
+	var err error
+	if req.Kind == "system" {
+		result, err = s.svc.OptimizeSystemPromptOnce(c.Request.Context(), req.Prompt, opts)
+	} else {
+		result, err = s.svc.OptimizePrompt(c.Request.Context(), req.Prompt, opts)
+	}
 	if err != nil {
 		code := "optimize_error"
 		msgKey := "api.error.optimize_error"

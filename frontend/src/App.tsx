@@ -12,6 +12,7 @@ import { ToolDetailDialog } from "@/components/tools/tool-detail-dialog"
 import { SettingsPage } from "@/components/settings/settings-page"
 import { ManagePage } from "@/components/manage/manage-page"
 import { KanbanPage } from "@/components/kanban/kanban-page"
+import { RequestLogsPage } from "@/components/audit/request-logs-page"
 import { AgentDetailDialog } from "@/components/agents/agent-detail-dialog"
 import { AgentEditorPage } from "@/components/agents/agent-editor"
 import { AgentDeleteConfirm } from "@/components/agents/agent-delete-confirm"
@@ -106,6 +107,7 @@ function useShellNav() {
     onOpenSettings: () => navigate("/settings"),
     onOpenManage: () => navigate("/manage"),
     onOpenKanban: () => navigate("/kanban"),
+    onOpenRequestLogs: () => navigate("/request-logs"),
     onOpenApiDocs: () => navigate("/api-docs"),
     onNewSession: () => navigate("/"),
     sessions: sessList.sessions,
@@ -226,6 +228,7 @@ function WorkspaceRoute() {
         onOpenSettings={() => navigate("/settings")}
         onOpenManage={() => navigate("/manage")}
         onOpenKanban={() => navigate("/kanban")}
+        onOpenRequestLogs={() => navigate("/request-logs")}
         onOpenApiDocs={() => navigate("/api-docs")}
         onNewSession={handleNewSession}
         sessions={sessMgr.sessions}
@@ -298,6 +301,7 @@ function shellLayoutProps(shell: ReturnType<typeof useShellNav>, theme: string, 
     onOpenSettings: shell.onOpenSettings,
     onOpenManage: shell.onOpenManage,
     onOpenKanban: shell.onOpenKanban,
+    onOpenRequestLogs: shell.onOpenRequestLogs,
     onOpenApiDocs: shell.onOpenApiDocs,
     onNewSession: shell.onNewSession,
     sessions: shell.sessions,
@@ -361,6 +365,25 @@ function KanbanRoute() {
       <AppLayout
         {...shellLayoutProps(shell, theme, setTheme)}
         leftPanel={<KanbanPage />}
+      />
+      <SessionReplay
+        sessionId={shell.replaySessionId}
+        open={!!shell.replaySessionId}
+        onOpenChange={(open) => { if (!open) shell.setReplaySessionId(null) }}
+      />
+    </TooltipProvider>
+  )
+}
+
+function RequestLogsRoute() {
+  const { theme, setTheme } = useTheme()
+  const shell = useShellNav()
+
+  return (
+    <TooltipProvider delay={300}>
+      <AppLayout
+        {...shellLayoutProps(shell, theme, setTheme)}
+        leftPanel={<RequestLogsPage />}
       />
       <SessionReplay
         sessionId={shell.replaySessionId}
@@ -459,6 +482,7 @@ export function App() {
             <Route path="/api-docs" element={<ApiDocsRoute />} />
             <Route path="/manage" element={<ManageRoute />} />
             <Route path="/kanban" element={<KanbanRoute />} />
+            <Route path="/request-logs" element={<RequestLogsRoute />} />
             <Route path="/manage/agents/new" element={<AgentEditorRoute mode="create" />} />
             <Route path="/manage/agents/:agentId/edit" element={<AgentEditorRoute mode="edit" />} />
             <Route path="/agents/:agentName" element={<WorkspaceRoute />} />

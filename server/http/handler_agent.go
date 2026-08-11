@@ -36,6 +36,9 @@ type AgentDetail struct {
 	ToolExecution *agent.ToolExecution    `json:"tool_execution,omitempty"`
 	Permissions   *permission.Permissions `json:"permissions,omitempty"`
 	MCPServers    []agent.MCPServerConfig  `json:"mcp_servers,omitempty"`
+	Knowledge     *agent.KnowledgeConfig  `json:"knowledge,omitempty"`
+	Optimize      *agent.OptimizeConfig   `json:"optimize,omitempty"`
+	Compaction    *agent.CompactionConfig `json:"compaction,omitempty"`
 }
 
 func (s *Server) handleAgents(c *gin.Context) {
@@ -78,6 +81,9 @@ func (s *Server) handleAgentGet(c *gin.Context) {
 		ToolExecution: a.ToolExecution,
 		Permissions:   a.Permissions,
 		MCPServers:    a.MCPServers,
+		Knowledge:     a.Knowledge,
+		Optimize:      a.Optimize,
+		Compaction:    a.Compaction,
 	})
 }
 

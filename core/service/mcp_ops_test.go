@@ -64,7 +64,7 @@ name: mcp-demo
 provider: mock
 model: mock-1
 system_prompt: you are a helper
-tools: [echo]
+tools: [get_time]
 mcp_servers:
   - name: mock-srv
     type: stdio
@@ -146,7 +146,7 @@ name: plain
 provider: mock
 model: mock-1
 system_prompt: hi
-tools: [echo]
+tools: [get_time]
 `), 0o644))
 
 	reg := registry.New()
@@ -185,7 +185,7 @@ name: g-demo
 provider: mock
 model: mock-1
 system_prompt: hi
-tools: [echo]
+tools: [get_time]
 `), 0o644))
 
 	// Global MCP server in ~/.common-agent/mcp.yaml (here: home/mcp.yaml).

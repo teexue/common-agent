@@ -22,19 +22,21 @@ import (
 
 // RunRequest is the transport-agnostic DTO for a run request.
 type RunRequest struct {
-	Agent     string              `json:"agent"`
-	Prompt    string              `json:"prompt"`
-	SessionID string              `json:"session_id,omitempty"`
-	Messages  []provider.Message  `json:"messages,omitempty"`
-	WorkDir   string              `json:"workdir,omitempty"`
+	Agent     string                 `json:"agent"`
+	Prompt    string                 `json:"prompt"`
+	SessionID string                 `json:"session_id,omitempty"`
+	Messages  []provider.Message     `json:"messages,omitempty"`
+	WorkDir   string                 `json:"workdir,omitempty"`
 	Images    []provider.ContentPart `json:"images,omitempty"`
+	// Source attributes the run for request auditing (e.g. "http", "kanban").
+	Source string `json:"-"`
 }
 
 // RunResult holds the outcome of a run preparation.
 type RunResult struct {
 	Config        loop.Config
 	Session       *session.Session
-	TempToolNames []string // skill tools registered during preparation; caller should unregister
+	TempToolNames []string     // skill tools registered during preparation; caller should unregister
 	MCPManager    *mcp.Manager // MCP manager connected during preparation; caller must close
 	MCPToolNames  []string     // MCP tools registered during preparation; caller should unregister
 }
@@ -79,12 +81,12 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 	if err != nil {
 		return nil, &ServerError{Message: fmt.Sprintf("create provider: %v", err)}
 	}
+	p = provider.WrapAudited(p, s.RequestLogger)
 
-	// In-pipeline prompt optimization (agent-driven, non-fatal).
-	// The system prompt is optimized once per content (memoized); the user
-	// prompt is optimized per run. The session title keeps the raw prompt.
-	OptimizeSystemPrompt(ctx, &s.optimizeCache, a, p, s.Logger)
-	prompt := OptimizeUserPrompt(ctx, a, p, req.Prompt, s.Logger)
+	// In-pipeline user prompt optimization (agent-driven, non-fatal).
+	// The session title keeps the raw prompt.
+	optCtx := provider.WithRunMeta(ctx, provider.RunMeta{Agent: a.Name, Source: "optimize"})
+	prompt := OptimizeUserPrompt(optCtx, a, p, req.Prompt, s.Logger)
 
 	userID := auth.IdentityFromContext(ctx).UserID
 	var sess *session.Session
@@ -142,6 +144,7 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		Approver:  approver,
 		WorkDir:   workDir,
 		Images:    req.Images,
+		Source:    req.Source,
 	}
 
 	return &RunResult{

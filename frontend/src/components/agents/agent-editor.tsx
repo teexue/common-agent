@@ -52,7 +52,7 @@ export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditor
         systemPrompt: d.system_prompt || "",
         tools: d.tools || [],
         maxTurns: d.max_turns ?? 0,
-        maxTokens: d.max_tokens || 4096,
+        maxTokens: d.max_tokens ?? 0,
         execMode: (d.tool_execution?.Mode as "parallel" | "serial") || "parallel",
         maxParallel: d.tool_execution?.MaxParallel || 4,
         autoApprove: d.permissions?.auto_approve || [],
@@ -60,8 +60,8 @@ export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditor
         mcpServers: (d.mcp_servers ?? []).map(mcpConfigToForm),
         knowledgeBases: d.knowledge?.bases ?? [],
         knowledgeTopK: d.knowledge?.top_k || 5,
-        optimizeSystemPrompt: d.optimize?.system_prompt ?? false,
         optimizeUserPrompt: d.optimize?.user_prompt ?? false,
+        contextWindow: d.compaction?.context_window ?? 0,
       }))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))

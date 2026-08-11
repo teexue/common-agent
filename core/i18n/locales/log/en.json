@@ -70,5 +70,15 @@
   "log.mcp.sse.connect_failed": "mcp sse connect failed",
   "log.mcp.sse.read_error": "mcp sse read error",
   "log.workflow.executing_node": "executing workflow node",
-  "log.workflow.node_failed": "workflow node failed"
+  "log.workflow.node_failed": "workflow node failed",
+  "log.kanban.process_failed": "kanban task processing failed",
+  "log.kanban.item_processed": "kanban task processed",
+  "log.agent.created": "agent created",
+  "log.embedding.init_failed": "embedding init failed",
+  "log.embedding.legacy_provider_ignored": "legacy embedding provider ignored",
+  "log.knowledge.open": "open knowledge base",
+  "log.mcp.load_global": "load global MCP config",
+  "log.mcp.register_tool": "register MCP tool",
+  "log.optimize.user_prompt_failed": "user prompt optimization failed",
+  "log.runtime.state_db": "open state database"
 }

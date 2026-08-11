@@ -191,6 +191,7 @@
   "api.error.provider_error": "Provider 错误",
   "api.error.session_error": "会话错误",
   "api.error.replay_error": "回放错误",
+  "api.error.audit_error": "审计查询错误",
   "api.error.agent_error": "Agent 错误",
   "api.error.skill_error": "Skill 操作失败",
   "api.error.skill_not_found": "Skill 不存在",

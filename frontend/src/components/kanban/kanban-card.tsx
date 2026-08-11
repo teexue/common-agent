@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { Check, RotateCcw, X } from "lucide-react"
+import { Check, Loader2, RotateCcw, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -12,6 +12,7 @@ interface KanbanCardProps {
   onApprove: (id: string) => void
   onReject: (id: string) => void
   onRequeue: (id: string) => void
+  onViewProgress: (item: KanbanItem) => void
 }
 
 function priorityClass(priority: number): string {
@@ -25,7 +26,15 @@ function priorityClass(priority: number): string {
   }
 }
 
-export function KanbanCard({ item, now, onOpen, onApprove, onReject, onRequeue }: KanbanCardProps) {
+export function KanbanCard({
+  item,
+  now,
+  onOpen,
+  onApprove,
+  onReject,
+  onRequeue,
+  onViewProgress,
+}: KanbanCardProps) {
   const { t } = useTranslation()
   const priorityLabel =
     item.priority === 3
@@ -35,7 +44,11 @@ export function KanbanCard({ item, now, onOpen, onApprove, onReject, onRequeue }
         : t("kanban.priorityLow")
 
   const dueDate = item.due_at ? new Date(item.due_at) : null
-  const overdue = dueDate !== null && !Number.isNaN(dueDate.getTime()) && dueDate.getTime() < now && item.status !== "done"
+  const overdue =
+    dueDate !== null &&
+    !Number.isNaN(dueDate.getTime()) &&
+    dueDate.getTime() < now &&
+    item.status !== "done"
 
   return (
     <button
@@ -43,15 +56,29 @@ export function KanbanCard({ item, now, onOpen, onApprove, onReject, onRequeue }
       onClick={() => onOpen(item)}
       className="flex w-full flex-col gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-left transition-colors hover:border-primary/20 hover:bg-muted/30"
     >
-      <p className="text-xs font-medium leading-snug text-foreground">{item.title}</p>
-      <p className="truncate font-mono text-[10px] text-muted-foreground">{item.agent}</p>
+      <p className="text-xs leading-snug font-medium text-foreground">
+        {item.title}
+      </p>
+      <p className="truncate font-mono text-[10px] text-muted-foreground">
+        {item.agent}
+      </p>
 
       <div className="flex flex-wrap items-center gap-1">
-        <Badge variant="outline" className={cn("rounded-md border-transparent px-1.5 py-0.5 text-[10px]", priorityClass(item.priority))}>
+        <Badge
+          variant="outline"
+          className={cn(
+            "rounded-md border-transparent px-1.5 py-0.5 text-[10px]",
+            priorityClass(item.priority)
+          )}
+        >
           {priorityLabel}
         </Badge>
         {(item.tags ?? []).map((tag) => (
-          <Badge key={tag} variant="secondary" className="rounded-md px-1.5 py-0.5 text-[10px]">
+          <Badge
+            key={tag}
+            variant="secondary"
+            className="rounded-md px-1.5 py-0.5 text-[10px]"
+          >
             {tag}
           </Badge>
         ))}
@@ -63,19 +90,43 @@ export function KanbanCard({ item, now, onOpen, onApprove, onReject, onRequeue }
             {t("kanban.dueAt")} {dueDate.toLocaleDateString()}
           </span>
         )}
-        {item.attempts > 0 && <span>{t("kanban.attempts", { count: item.attempts })}</span>}
+        {item.attempts > 0 && (
+          <span>{t("kanban.attempts", { count: item.attempts })}</span>
+        )}
       </div>
+
+      {item.status === "running" && (
+        <div className="flex items-center gap-1.5 border-t border-border/60 pt-2">
+          <Loader2 className="h-3 w-3 shrink-0 animate-spin text-primary" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 flex-1 gap-1 rounded-lg text-[10px]"
+            onClick={(e) => {
+              e.stopPropagation()
+              onViewProgress(item)
+            }}
+          >
+            {t("kanban.viewProgress")}
+          </Button>
+        </div>
+      )}
 
       {item.status === "review" && (
         <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2">
           {item.result && (
-            <p className="line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">{item.result}</p>
+            <p className="line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">
+              {item.result}
+            </p>
           )}
           <div className="flex gap-1.5">
             <Button
               size="sm"
               className="h-6 flex-1 gap-1 rounded-lg text-[10px]"
-              onClick={(e) => { e.stopPropagation(); onApprove(item.id) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onApprove(item.id)
+              }}
             >
               <Check className="h-3 w-3" /> {t("common.approve")}
             </Button>
@@ -83,7 +134,10 @@ export function KanbanCard({ item, now, onOpen, onApprove, onReject, onRequeue }
               variant="outline"
               size="sm"
               className="h-6 flex-1 gap-1 rounded-lg text-[10px]"
-              onClick={(e) => { e.stopPropagation(); onReject(item.id) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onReject(item.id)
+              }}
             >
               <X className="h-3 w-3" /> {t("common.reject")}
             </Button>
@@ -97,7 +151,10 @@ export function KanbanCard({ item, now, onOpen, onApprove, onReject, onRequeue }
             variant="outline"
             size="sm"
             className="h-6 w-full gap-1 rounded-lg text-[10px]"
-            onClick={(e) => { e.stopPropagation(); onRequeue(item.id) }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onRequeue(item.id)
+            }}
           >
             <RotateCcw className="h-3 w-3" /> {t("kanban.requeue")}
           </Button>

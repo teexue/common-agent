@@ -15,13 +15,32 @@ import (
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/tool"
 	"github.com/teexue/common-agent/tools/builtin"
 	"github.com/teexue/common-agent/tools/registry"
 )
 
+// echoTool is a test-local stub standing in for the removed builtin echo tool.
+type echoTool struct{}
+
+func (echoTool) Name() string        { return "echo" }
+func (echoTool) Description() string { return "test echo tool" }
+func (echoTool) InputSchema() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+func (echoTool) Execute(_ context.Context, input json.RawMessage) (tool.Result, error) {
+	var args struct {
+		Message string `json:"message"`
+	}
+	_ = json.Unmarshal(input, &args)
+	out, _ := json.Marshal(map[string]string{"message": args.Message})
+	return tool.Result{Output: out}, nil
+}
+
 func TestRunWithMockProvider(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg, t.TempDir())
+	reg.MustRegister(echoTool{})
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -77,6 +96,7 @@ func TestRunWithMockProvider(t *testing.T) {
 func TestRunUnknownTool(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg, t.TempDir())
+	reg.MustRegister(echoTool{})
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -123,6 +143,7 @@ func TestRunUnknownTool(t *testing.T) {
 func TestRunSerialMode(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg, t.TempDir())
+	reg.MustRegister(echoTool{})
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -172,6 +193,7 @@ func TestRunSerialMode(t *testing.T) {
 func TestRunMaxTurnsExceeded(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg, t.TempDir())
+	reg.MustRegister(echoTool{})
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -210,6 +232,7 @@ func TestRunMaxTurnsExceeded(t *testing.T) {
 func TestRunMaxTurnsUnlimitedContinues(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg, t.TempDir())
+	reg.MustRegister(echoTool{})
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -259,6 +282,7 @@ func TestRunMaxTurnsUnlimitedContinues(t *testing.T) {
 func TestRunContextCancellation(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg, t.TempDir())
+	reg.MustRegister(echoTool{})
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -331,6 +355,7 @@ func TestRunContextCancellation(t *testing.T) {
 func TestRunTextOnlyResponse(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg, t.TempDir())
+	reg.MustRegister(echoTool{})
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -372,6 +397,7 @@ func TestRunTextOnlyResponse(t *testing.T) {
 func TestRunReasoningDeltaEvents(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg, t.TempDir())
+	reg.MustRegister(echoTool{})
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -417,6 +443,7 @@ func TestRunReasoningDeltaEvents(t *testing.T) {
 func TestRunApproval_Approved(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg, t.TempDir())
+	reg.MustRegister(echoTool{})
 
 	sc := &agent.Agent{
 		Name:         "test",
@@ -488,6 +515,7 @@ func TestRunApproval_Approved(t *testing.T) {
 func TestRunApproval_Denied(t *testing.T) {
 	reg := registry.New()
 	builtin.RegisterAll(reg, t.TempDir())
+	reg.MustRegister(echoTool{})
 
 	sc := &agent.Agent{
 		Name:         "test",

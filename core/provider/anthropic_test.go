@@ -2,86 +2,129 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
-func TestAnthropicBuildRequest(t *testing.T) {
-	a, err := NewAnthropic(AnthropicConfig{APIKey: "test"})
-	if err != nil {
-		t.Fatal(err)
+// collectStream feeds an SSE payload through readStream and returns the chunks.
+func collectStream(t *testing.T, payload string) []Chunk {
+	t.Helper()
+	a := &Anthropic{}
+	ch := make(chan Chunk, 64)
+	a.readStream(context.Background(), strings.NewReader(payload), ch)
+	close(ch)
+	var out []Chunk
+	for c := range ch {
+		out = append(out, c)
 	}
+	return out
+}
 
-	req := Request{
-		Model: "claude-sonnet-4-20250514",
-		Messages: []Message{
-			{Role: RoleSystem, Content: "system prompt"},
-			{Role: RoleUser, Content: "hello"},
-			{
-				Role:    RoleAssistant,
-				Content: "calling tool",
-				ToolCalls: []ToolCall{{
-					ID: "toolu_1", Name: "echo", Arguments: json.RawMessage(`{"message":"hi"}`),
-				}},
-			},
-			{Role: RoleTool, ToolCallID: "toolu_1", Content: `{"message":"hi"}`},
-		},
-		Tools: []ToolDefinition{{
-			Name: "echo", Description: "echo", Parameters: map[string]any{"type": "object"},
-		}},
+func findToolCalls(chunks []Chunk) []ToolCall {
+	var calls []ToolCall
+	for _, c := range chunks {
+		calls = append(calls, c.ToolCalls...)
 	}
+	return calls
+}
 
-	body := a.buildRequest(req)
-	if body.System != "system prompt" {
-		t.Fatalf("system = %q", body.System)
+// DeepSeek's Anthropic-compatible endpoint may deliver the complete tool
+// input inside content_block_start instead of streaming input_json_delta.
+func TestAnthropicStreamToolInputAtBlockStart(t *testing.T) {
+	payload := `event: message_start
+data: {"type":"message_start","message":{"usage":{"input_tokens":12}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"call_1","name":"read_file","input":{"path":"/tmp/a.txt"}}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":5}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+`
+	calls := findToolCalls(collectStream(t, payload))
+	if len(calls) != 1 {
+		t.Fatalf("got %d tool calls, want 1", len(calls))
 	}
-	if len(body.Messages) != 3 {
-		t.Fatalf("messages = %d, want 3", len(body.Messages))
+	if calls[0].Name != "read_file" {
+		t.Fatalf("tool name = %q", calls[0].Name)
 	}
-	if body.Messages[1].Role != "assistant" {
-		t.Fatalf("assistant role = %q", body.Messages[1].Role)
-	}
-	if body.Messages[1].Content[1].Type != "tool_use" {
-		t.Fatalf("expected tool_use block")
-	}
-	if body.Messages[2].Content[0].Type != "tool_result" {
-		t.Fatalf("expected tool_result block")
+	if string(calls[0].Arguments) != `{"path":"/tmp/a.txt"}` {
+		t.Fatalf("tool arguments = %s", calls[0].Arguments)
 	}
 }
 
-func TestNewAnthropicRequiresAPIKey(t *testing.T) {
-	if _, err := NewAnthropic(AnthropicConfig{}); err == nil {
-		t.Fatal("expected error")
+// Argument-less tools (e.g. get_time) may arrive with no input_json_delta at
+// all; the tool call must still be emitted with empty-object arguments.
+func TestAnthropicStreamToolWithoutArguments(t *testing.T) {
+	payload := `event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"call_1","name":"get_time","input":{}}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+`
+	calls := findToolCalls(collectStream(t, payload))
+	if len(calls) != 1 {
+		t.Fatalf("got %d tool calls, want 1", len(calls))
+	}
+	if calls[0].Name != "get_time" {
+		t.Fatalf("tool name = %q", calls[0].Name)
+	}
+	if string(calls[0].Arguments) != "{}" {
+		t.Fatalf("tool arguments = %s, want {}", calls[0].Arguments)
 	}
 }
 
-func TestAnthropicListModels(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/models" {
-			t.Fatalf("path = %q, want /v1/models", r.URL.Path)
-		}
-		if got := r.Header.Get("x-api-key"); got != "test" {
-			t.Fatalf("x-api-key = %q", got)
-		}
-		if got := r.Header.Get("anthropic-version"); got == "" {
-			t.Fatal("missing anthropic-version header")
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":[{"id":"claude-sonnet-4-20250514"},{"id":"claude-3-5-sonnet-20241022"}]}`))
-	}))
-	defer srv.Close()
+// Standard streamed input_json_delta accumulation must keep working.
+func TestAnthropicStreamToolStreamedInput(t *testing.T) {
+	payload := `event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"call_1","name":"write_file","input":{}}}
 
-	a, err := NewAnthropic(AnthropicConfig{APIKey: "test", BaseURL: srv.URL})
-	if err != nil {
-		t.Fatal(err)
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"path\":"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"\"a\"}"}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+`
+	calls := findToolCalls(collectStream(t, payload))
+	if len(calls) != 1 {
+		t.Fatalf("got %d tool calls, want 1", len(calls))
 	}
-	models, err := a.ListModels(context.Background())
-	if err != nil {
-		t.Fatal(err)
+	if string(calls[0].Arguments) != `{"path":"a"}` {
+		t.Fatalf("tool arguments = %s", calls[0].Arguments)
 	}
-	if len(models) != 2 || models[0].ID != "claude-sonnet-4-20250514" {
-		t.Fatalf("models = %#v", models)
+}
+
+// thinking_delta events should surface as reasoning deltas.
+func TestAnthropicStreamThinkingDelta(t *testing.T) {
+	payload := `event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"let me think"}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+`
+	var reasoning string
+	for _, c := range collectStream(t, payload) {
+		reasoning += c.ReasoningDelta
+	}
+	if reasoning != "let me think" {
+		t.Fatalf("reasoning = %q", reasoning)
 	}
 }

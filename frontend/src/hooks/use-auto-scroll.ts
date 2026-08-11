@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react"
 
-export function useAutoScroll<T>(dependency: T) {
+export function useAutoScroll<T>(dependency: T, behavior: ScrollBehavior = "smooth") {
   const containerRef = useRef<HTMLDivElement>(null)
   const shouldAutoScroll = useRef(true)
 
@@ -16,10 +16,10 @@ export function useAutoScroll<T>(dependency: T) {
     if (shouldAutoScroll.current && containerRef.current) {
       containerRef.current.scrollTo({
         top: containerRef.current.scrollHeight,
-        behavior: "smooth",
+        behavior,
       })
     }
-  }, [dependency])
+  }, [dependency, behavior])
 
   return { containerRef, handleScroll }
 }

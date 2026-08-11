@@ -2,10 +2,12 @@ import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
   CheckCircle,
+  Loader2,
   Plug,
   Plus,
   Search,
   ShieldQuestion,
+  Sparkles,
   Trash2,
   XCircle,
 } from "lucide-react"
@@ -22,9 +24,31 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { emptyMcpServer, type AgentFormData, type McpServerFormItem } from "@/lib/agent-yaml"
+import { optimizePrompt } from "@/lib/api"
 import { toolDisplayDescription, toolDisplayName } from "@/lib/tool-i18n"
 import type { ProviderInfo, ToolInfo } from "@/types/agent"
 import type { TFunction } from "i18next"
+
+const MAX_TOKEN_OPTIONS = [
+  { value: 8192, label: "8K" },
+  { value: 16384, label: "16K" },
+  { value: 32768, label: "32K" },
+  { value: 65536, label: "64K" },
+  { value: 131072, label: "128K" },
+]
+
+const CONTEXT_WINDOW_OPTIONS = [
+  { value: 131072, label: "128K" },
+  { value: 262144, label: "256K" },
+  { value: 393216, label: "384K" },
+  { value: 1048576, label: "1M" },
+]
+
+function formatTokens(v: number): string {
+  if (v >= 1048576 && v % 1048576 === 0) return `${v / 1048576}M`
+  if (v >= 1024 && v % 1024 === 0) return `${v / 1024}K`
+  return String(v)
+}
 
 function Field({
   label, hint, children,
@@ -94,6 +118,29 @@ export function BasicTab({
 }) {
   const { t } = useTranslation()
   const currentProvider = providers.find((p) => p.name === form.provider)
+  const [optimizing, setOptimizing] = useState(false)
+  const [optimizeError, setOptimizeError] = useState<string | null>(null)
+
+  // Manual, editor-triggered system prompt optimization: one LLM call using
+  // the provider/model chosen in the form; the result stays editable here and
+  // is only applied when the user saves the agent.
+  const handleOptimizeSystemPrompt = async () => {
+    if (!form.systemPrompt.trim() || optimizing) return
+    setOptimizing(true)
+    setOptimizeError(null)
+    try {
+      const result = await optimizePrompt(form.systemPrompt, {
+        kind: "system",
+        provider: form.provider,
+        model: form.model,
+      })
+      setForm((f) => ({ ...f, systemPrompt: result.optimized_prompt }))
+    } catch (err: unknown) {
+      setOptimizeError(err instanceof Error ? err.message : t("agent.errOptimizeSystemPrompt"))
+    } finally {
+      setOptimizing(false)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -144,12 +191,30 @@ export function BasicTab({
       </SectionCard>
 
       <SectionCard title={t("agent.systemPrompt")} description={t("agent.systemPromptDesc")}>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] leading-relaxed text-muted-foreground">
+            {t("agent.optimizeSystemPromptHint")}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 shrink-0 gap-1.5 rounded-lg px-2.5 text-xs"
+            onClick={handleOptimizeSystemPrompt}
+            disabled={optimizing || !form.systemPrompt.trim() || !form.provider || !form.model.trim()}
+          >
+            {optimizing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            {optimizing ? t("agent.optimizing") : t("agent.optimizeSystemPrompt")}
+          </Button>
+        </div>
         <Textarea
           value={form.systemPrompt}
           onChange={(e) => setForm((f) => ({ ...f, systemPrompt: e.target.value }))}
           placeholder="You are a helpful assistant."
           className="min-h-40 rounded-xl font-mono text-sm leading-relaxed resize-y"
         />
+        {optimizeError && (
+          <p className="text-[11px] leading-relaxed text-destructive">{optimizeError}</p>
+        )}
       </SectionCard>
     </div>
   )
@@ -312,13 +377,40 @@ export function RuntimeTab({
             />
           </Field>
           <Field label={t("agent.maxTokens")} hint={t("agent.maxTokensHint")}>
-            <Input
-              type="number"
-              value={form.maxTokens}
-              onChange={(e) => setForm((f) => ({ ...f, maxTokens: Number(e.target.value) }))}
-              className="h-9 rounded-xl font-mono text-sm"
-              min={256}
-            />
+            <Select
+              value={{ value: form.maxTokens, label: form.maxTokens > 0 ? formatTokens(form.maxTokens) : t("agent.maxTokensAuto") }}
+              onValueChange={(v) => {
+                if (v && typeof v === "object" && "value" in v) {
+                  setForm((f) => ({ ...f, maxTokens: (v as { value: number }).value }))
+                }
+              }}
+            >
+              <SelectTrigger className="h-9 w-full rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value={{ value: 0, label: t("agent.maxTokensAuto") }}>{t("agent.maxTokensAuto")}</SelectItem>
+                {MAX_TOKEN_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label={t("agent.contextWindow")} hint={t("agent.contextWindowHint")}>
+            <Select
+              value={{ value: form.contextWindow, label: form.contextWindow > 0 ? formatTokens(form.contextWindow) : t("agent.contextWindowUnset") }}
+              onValueChange={(v) => {
+                if (v && typeof v === "object" && "value" in v) {
+                  setForm((f) => ({ ...f, contextWindow: (v as { value: number }).value }))
+                }
+              }}
+            >
+              <SelectTrigger className="h-9 w-full rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value={{ value: 0, label: t("agent.contextWindowUnset") }}>{t("agent.contextWindowUnset")}</SelectItem>
+                {CONTEXT_WINDOW_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field label={t("agent.execMode")} hint={t("agent.execModeHint")}>
             <Select
@@ -389,24 +481,6 @@ export function RuntimeTab({
       </SectionCard>
 
       <SectionCard title={t("agent.sectionOptimize")} description={t("agent.sectionOptimizeDesc")}>
-        <label className="flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
-            checked={form.optimizeSystemPrompt}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, optimizeSystemPrompt: e.target.checked }))
-            }
-            className="mt-0.5 h-3.5 w-3.5 rounded border-border accent-primary"
-          />
-          <span>
-            <span className="block text-xs font-medium text-foreground">
-              {t("agent.optimizeSystemPrompt")}
-            </span>
-            <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
-              {t("agent.optimizeSystemPromptHint")}
-            </span>
-          </span>
-        </label>
         <label className="flex cursor-pointer items-start gap-3">
           <input
             type="checkbox"

@@ -8,6 +8,7 @@ import {
   Layers,
   LogOut,
   Plus,
+  ScrollText,
   Settings,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -24,6 +25,7 @@ interface SidebarProps {
   onOpenSettings: () => void
   onOpenManage?: () => void
   onOpenKanban?: () => void
+  onOpenRequestLogs?: () => void
   onOpenApiDocs?: () => void
   onNewSession?: () => void
   sessions?: SessionMeta[]
@@ -35,8 +37,8 @@ interface SidebarProps {
 }
 
 function CollapsedSidebar({
-  onToggle, onOpenSettings, onOpenManage, onOpenKanban, onOpenApiDocs, onNewSession,
-}: Pick<SidebarProps, "onToggle" | "onOpenSettings" | "onOpenManage" | "onOpenKanban" | "onOpenApiDocs" | "onNewSession">) {
+  onToggle, onOpenSettings, onOpenManage, onOpenKanban, onOpenRequestLogs, onOpenApiDocs, onNewSession,
+}: Pick<SidebarProps, "onToggle" | "onOpenSettings" | "onOpenManage" | "onOpenKanban" | "onOpenRequestLogs" | "onOpenApiDocs" | "onNewSession">) {
   const { t } = useTranslation()
   return (
     <div className="flex h-full w-12 flex-col items-center gap-1 border-r border-border bg-sidebar py-3">
@@ -72,6 +74,14 @@ function CollapsedSidebar({
           <TooltipContent side="right">{t("layout.kanban")}</TooltipContent>
         </Tooltip>
       )}
+      {onOpenRequestLogs && (
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={onOpenRequestLogs} className="rounded-lg" />}>
+            <ScrollText className="h-3.5 w-3.5" />
+          </TooltipTrigger>
+          <TooltipContent side="right">{t("layout.requestLogs")}</TooltipContent>
+        </Tooltip>
+      )}
       {onOpenApiDocs && (
         <Tooltip>
           <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={onOpenApiDocs} className="rounded-lg" />}>
@@ -91,14 +101,14 @@ function CollapsedSidebar({
 }
 
 export function Sidebar({
-  collapsed, onToggle, onOpenSettings, onOpenManage, onOpenKanban, onOpenApiDocs, onNewSession,
+  collapsed, onToggle, onOpenSettings, onOpenManage, onOpenKanban, onOpenRequestLogs, onOpenApiDocs, onNewSession,
   sessions = [], agents = [], activeSessionId, onResumeSession, onDeleteSession, onReplaySession,
 }: SidebarProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   if (collapsed) {
-    return <CollapsedSidebar {...{ onToggle, onOpenSettings, onOpenManage, onOpenKanban, onOpenApiDocs, onNewSession }} />
+    return <CollapsedSidebar {...{ onToggle, onOpenSettings, onOpenManage, onOpenKanban, onOpenRequestLogs, onOpenApiDocs, onNewSession }} />
   }
 
   const agentLabels: Record<string, string> = {}
@@ -152,6 +162,11 @@ export function Sidebar({
         {onOpenKanban && (
           <Button variant="ghost" size="sm" className="w-full justify-start gap-2 rounded-xl text-xs text-muted-foreground" onClick={onOpenKanban}>
             <KanbanSquare className="h-3.5 w-3.5" /> {t("layout.kanban")}
+          </Button>
+        )}
+        {onOpenRequestLogs && (
+          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 rounded-xl text-xs text-muted-foreground" onClick={onOpenRequestLogs}>
+            <ScrollText className="h-3.5 w-3.5" /> {t("layout.requestLogs")}
           </Button>
         )}
         {onOpenApiDocs && (

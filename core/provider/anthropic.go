@@ -166,17 +166,25 @@ type anthropicStreamEvent struct {
 	Type         string `json:"type"`
 	Index        int    `json:"index"`
 	ContentBlock struct {
-		Type string `json:"type"`
-		ID   string `json:"id"`
-		Name string `json:"name"`
+		Type string          `json:"type"`
+		ID   string          `json:"id"`
+		Name string          `json:"name"`
+		// Some Anthropic-compatible vendors (e.g. DeepSeek) send the complete
+		// tool input here instead of streaming input_json_delta events.
+		Input json.RawMessage `json:"input,omitempty"`
 	} `json:"content_block"`
 	Delta struct {
 		Type         string `json:"type"`
 		Text         string `json:"text"`
+		Thinking     string `json:"thinking"`
 		PartialJSON  string `json:"partial_json"`
 		StopReason   string `json:"stop_reason"`
 	} `json:"delta"`
 	Usage *anthropicUsage `json:"usage,omitempty"`
+	// message_start nests usage under "message" per the Anthropic spec.
+	Message struct {
+		Usage *anthropicUsage `json:"usage,omitempty"`
+	} `json:"message,omitempty"`
 }
 
 type anthropicUsage struct {
@@ -212,10 +220,7 @@ func (a *Anthropic) buildRequest(req Request) anthropicRequest {
 			InputSchema: t.Parameters,
 		})
 	}
-	maxTokens := req.MaxTokens
-	if maxTokens <= 0 {
-		maxTokens = DefaultMaxTokens
-	}
+	maxTokens := EffectiveMaxOutput(req.Model, req.MaxTokens)
 	return anthropicRequest{
 		Model:     req.Model,
 		System:    system,
@@ -341,8 +346,13 @@ func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk
 			return
 		}
 		tc := toolAcc[lastToolIdx]
-		if tc == nil || len(tc.Arguments) == 0 {
+		// Emit the tool call even with empty arguments: compatible vendors may
+		// send no input_json_delta for argument-less tools (e.g. get_time).
+		if tc == nil || tc.Name == "" {
 			return
+		}
+		if len(tc.Arguments) == 0 {
+			tc.Arguments = json.RawMessage("{}")
 		}
 		select {
 		case <-ctx.Done():
@@ -395,14 +405,23 @@ type StreamEventContext struct {
 func (a *Anthropic) processStreamEvent(sec StreamEventContext, ev anthropicStreamEvent) (bool, *Chunk) {
 	switch ev.Type {
 	case "message_start":
-		if ev.Usage != nil {
-			sec.InputTokens = ev.Usage.InputTokens
+		usage := ev.Usage
+		if usage == nil {
+			usage = ev.Message.Usage
+		}
+		if usage != nil {
+			sec.InputTokens = usage.InputTokens
 		}
 	case "content_block_start":
 		sec.FlushLastTool()
 		*sec.LastToolIdx = -1
 		if ev.ContentBlock.Type == "tool_use" {
-			sec.ToolAcc[ev.Index] = &ToolCall{ID: ev.ContentBlock.ID, Name: ev.ContentBlock.Name}
+			tc := &ToolCall{ID: ev.ContentBlock.ID, Name: ev.ContentBlock.Name}
+			// Seed with a complete input when the vendor sends it up front.
+			if len(ev.ContentBlock.Input) > 0 && string(ev.ContentBlock.Input) != "{}" {
+				tc.Arguments = ev.ContentBlock.Input
+			}
+			sec.ToolAcc[ev.Index] = tc
 			*sec.LastToolIdx = ev.Index
 		}
 	case "content_block_delta":
@@ -435,6 +454,14 @@ func handleContentBlockDelta(sec StreamEventContext, ev anthropicStreamEvent) bo
 			case <-sec.Ctx.Done():
 				return true
 			case sec.Ch <- Chunk{TextDelta: ev.Delta.Text}:
+			}
+		}
+	case "thinking_delta":
+		if ev.Delta.Thinking != "" {
+			select {
+			case <-sec.Ctx.Done():
+				return true
+			case sec.Ch <- Chunk{ReasoningDelta: ev.Delta.Thinking}:
 			}
 		}
 	case "input_json_delta":

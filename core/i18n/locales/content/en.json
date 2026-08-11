@@ -191,6 +191,7 @@
   "api.error.provider_error": "provider error",
   "api.error.session_error": "session error",
   "api.error.replay_error": "replay error",
+  "api.error.audit_error": "audit query error",
   "api.error.agent_error": "agent error",
   "api.error.skill_error": "skill operation failed",
   "api.error.skill_not_found": "skill not found",

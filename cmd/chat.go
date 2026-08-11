@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 
 	"github.com/chzyer/readline"
@@ -35,7 +34,6 @@ type chatState struct {
 	sess     *session.Session
 	reg      *registry.Registry
 	store    session.Store
-	optCache sync.Map // memoizes system prompt optimization per content
 }
 
 func runChat(args []string, logger *slog.Logger) {
@@ -77,7 +75,6 @@ func runChat(args []string, logger *slog.Logger) {
 	if !*mock {
 		registerRuntimeTools(state.reg, paths, settings, creds, logger)
 	}
-	service.OptimizeSystemPrompt(context.Background(), &state.optCache, state.agent, state.provider, logger)
 
 	tui.PrintWelcome(state.agent.Name, state.agent.Provider, state.agent.Model)
 
@@ -247,7 +244,6 @@ func handleAgentCommand(parts []string, state *chatState) bool {
 	state.agent = loaded
 	state.provider = p
 	state.sess = session.New(loaded.Name)
-	service.OptimizeSystemPrompt(context.Background(), &state.optCache, loaded, p, nil)
 	fmt.Println(tui.Success(i18n.T("tui.chat.agent_switched", "agent", loaded.Name, "provider", loaded.Provider, "model", loaded.Model)))
 	return false
 }

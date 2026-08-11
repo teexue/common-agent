@@ -10,25 +10,13 @@ describe("formDataToYaml optimize block", () => {
     tools: ["echo"],
   }
 
-  it("omits the optimize block when both switches are off", () => {
+  it("omits the optimize block when the switch is off", () => {
     const yaml = formDataToYaml(base)
     expect(yaml).not.toContain("optimize:")
   })
 
-  it("emits only the enabled switches", () => {
-    const yaml = formDataToYaml({ ...base, optimizeSystemPrompt: true })
-    expect(yaml).toContain("optimize:\n  system_prompt: true")
-    expect(yaml).not.toContain("user_prompt")
-  })
-
-  it("emits both switches when enabled", () => {
-    const yaml = formDataToYaml({
-      ...base,
-      optimizeSystemPrompt: true,
-      optimizeUserPrompt: true,
-    })
-    expect(yaml).toContain(
-      "optimize:\n  system_prompt: true\n  user_prompt: true"
-    )
+  it("emits user_prompt when the switch is on", () => {
+    const yaml = formDataToYaml({ ...base, optimizeUserPrompt: true })
+    expect(yaml).toContain("optimize:\n  user_prompt: true")
   })
 })

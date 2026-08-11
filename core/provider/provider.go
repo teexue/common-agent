@@ -135,9 +135,17 @@ type Provider interface {
 }
 
 // DefaultMaxTokens is the fallback when agent configuration omits max_tokens.
-const DefaultMaxTokens = 4096
+const DefaultMaxTokens = 8192
 
-// DefaultHTTPClient returns an *http.Client with a sensible timeout.
+// DefaultHTTPClient returns an *http.Client suitable for streaming LLM
+// calls: no total timeout (long generations legitimately run for minutes),
+// but a response-header timeout so dead connections fail fast. Callers
+// bound run duration via context cancellation instead.
 func DefaultHTTPClient() *http.Client {
-	return &http.Client{Timeout: 120 * time.Second}
+	return &http.Client{
+		Transport: &http.Transport{
+			ResponseHeaderTimeout: 60 * time.Second,
+			IdleConnTimeout:       90 * time.Second,
+		},
+	}
 }

@@ -66,6 +66,10 @@ type Config struct {
 	// Images are attached to the user prompt as multimodal content parts.
 	Images []provider.ContentPart
 
+	// Source attributes the run for request auditing (e.g. "http", "kanban",
+	// "cli"). Optional; empty means unattributed.
+	Source string
+
 	// Telemetry for OpenTelemetry tracing and metrics. Optional.
 	Telemetry *telemetry.Telemetry
 

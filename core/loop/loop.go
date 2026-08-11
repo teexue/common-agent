@@ -88,6 +88,12 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 	if cfg.WorkDir != "" {
 		ctx = WithWorkDir(ctx, cfg.WorkDir)
 	}
+	// Attribute LLM requests to this run for request auditing.
+	ctx = provider.WithRunMeta(ctx, provider.RunMeta{
+		Agent:     cfg.Agent.Name,
+		SessionID: cfg.Session.ID,
+		Source:    cfg.Source,
+	})
 	if cfg.Agent.Knowledge != nil {
 		ctx = knowledge.WithScope(ctx, knowledge.Scope{
 			Bases: cfg.Agent.Knowledge.Bases,
@@ -353,7 +359,11 @@ func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, tu
 		maxMessages = comp.MaxMessages
 		strategy = compaction.Strategy(comp.Strategy)
 	}
-	tokenLimit := compaction.ResolveTokenLimit(window, cfg.Agent.MaxTokens, ratio)
+	// Fall back to the model's official context window when unset, and
+	// reserve its max output so the next completion always fits.
+	window = provider.EffectiveContextWindow(cfg.Agent.Model, window)
+	reserve := provider.EffectiveMaxOutput(cfg.Agent.Model, cfg.Agent.MaxTokens)
+	tokenLimit := compaction.ResolveTokenLimit(window, reserve, ratio)
 	if tokenLimit <= 0 && maxMessages <= 0 {
 		return // no context window and no legacy message trigger
 	}

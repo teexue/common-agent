@@ -115,6 +115,28 @@ func (s *Server) handleSessionsDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"deleted": id})
 }
 
+// handleAuditRequests returns recent LLM request audit records, newest
+// first. Optional filters: session_id, source, limit.
+func (s *Server) handleAuditRequests(c *gin.Context) {
+	limit := 0
+	if v := c.Query("limit"); v != "" {
+		fmt.Sscanf(v, "%d", &limit)
+	}
+	records, err := s.requestLogger.Query(audit.RequestFilter{
+		SessionID: c.Query("session_id"),
+		Source:    c.Query("source"),
+		Limit:     limit,
+	})
+	if err != nil {
+		respondErrorDetails(c, http.StatusInternalServerError, "audit_error", "api.error.audit_error", err.Error())
+		return
+	}
+	if records == nil {
+		records = []audit.RequestRecord{}
+	}
+	c.JSON(http.StatusOK, records)
+}
+
 func (s *Server) handleSessionReplay(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {

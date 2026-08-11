@@ -17,8 +17,8 @@ export interface AgentFormData {
   mcpServers: McpServerFormItem[]
   knowledgeBases: string[]
   knowledgeTopK: number
-  optimizeSystemPrompt: boolean
   optimizeUserPrompt: boolean
+  contextWindow: number // 0 = 不设置（用运行时/提供商默认）
 }
 
 /** MCP server as edited in the form (args/env as editable strings). */
@@ -39,7 +39,7 @@ export const EMPTY_FORM: AgentFormData = {
   systemPrompt: "You are a helpful assistant.",
   tools: [],
   maxTurns: 0,
-  maxTokens: 4096,
+  maxTokens: 8192,
   execMode: "parallel",
   maxParallel: 4,
   autoApprove: [],
@@ -47,8 +47,8 @@ export const EMPTY_FORM: AgentFormData = {
   mcpServers: [],
   knowledgeBases: [],
   knowledgeTopK: 5,
-  optimizeSystemPrompt: false,
   optimizeUserPrompt: false,
+  contextWindow: 0,
 }
 
 export function emptyMcpServer(): McpServerFormItem {
@@ -214,14 +214,14 @@ export function formDataToYaml(form: AgentFormData): string {
     }
   }
 
-  if (form.optimizeSystemPrompt || form.optimizeUserPrompt) {
+  if (form.contextWindow > 0) {
+    lines.push(`compaction:`)
+    lines.push(`  context_window: ${form.contextWindow}`)
+  }
+
+  if (form.optimizeUserPrompt) {
     lines.push(`optimize:`)
-    if (form.optimizeSystemPrompt) {
-      lines.push(`  system_prompt: true`)
-    }
-    if (form.optimizeUserPrompt) {
-      lines.push(`  user_prompt: true`)
-    }
+    lines.push(`  user_prompt: true`)
   }
 
   return lines.join("\n") + "\n"

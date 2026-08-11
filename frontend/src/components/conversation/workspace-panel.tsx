@@ -71,7 +71,7 @@ export function WorkspacePanel({ messages, isStreaming, error, onSendMessage, on
   const handleOptimize = useCallback(async (text: string) => {
     setOptimizing(true)
     try {
-      const result = await optimizePrompt(text, agentName)
+      const result = await optimizePrompt(text, { agent: agentName })
       return result.optimized_prompt
     } finally {
       setOptimizing(false)

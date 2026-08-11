@@ -60,8 +60,8 @@ version: 1
 	if a.Compaction != nil {
 		t.Fatal("expected Compaction to remain nil when unset")
 	}
-	if a.MaxTokens != 4096 {
-		t.Fatalf("MaxTokens = %d, want 4096", a.MaxTokens)
+	if a.MaxTokens != 0 {
+		t.Fatalf("MaxTokens = %d, want 0 (auto from model spec)", a.MaxTokens)
 	}
 	if a.ToolExecMode() != "parallel" {
 		t.Fatalf("ToolExecMode = %q, want parallel", a.ToolExecMode())

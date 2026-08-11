@@ -40,7 +40,7 @@ This is a Go agent runtime (`common-agent`).
 | Core | `core/session/` | Thread-safe conversation session with `AddMessages`/`GetMessages`/`Clear` API |
 | Core | `core/config/` | User config in `~/.common-agent/` (settings, providers, `CredentialStore`, wizard) |
 | Extension | `tools/registry/` | Tool registry (register by name, resolve definitions for LLM) |
-| Built-in | `tools/builtin/` | Built-in tools: `echo`, `get_time`, `read_file`, `write_file`, etc. |
+| Built-in | `tools/builtin/` | Built-in tools: `get_time`, `read_file`, `write_file`, etc. |
 
 ## Key patterns
 
@@ -106,7 +106,7 @@ model: claude-sonnet-4-20250514
 system_prompt: |
   You are a helpful assistant.
 tools:
-  - echo
+  - read_file
   - get_time
 max_turns: 10
 max_tokens: 4096

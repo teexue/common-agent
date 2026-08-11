@@ -61,10 +61,18 @@ export interface AgentDetail {
   mcp_servers?: McpServerConfig[]
   knowledge?: KnowledgeConfig
   optimize?: OptimizeConfig
+  compaction?: CompactionConfig
+}
+
+export interface CompactionConfig {
+  strategy?: string
+  context_window?: number
+  trigger_ratio?: number
+  keep_recent?: number
+  max_messages?: number
 }
 
 export interface OptimizeConfig {
-  system_prompt?: boolean
   user_prompt?: boolean
 }
 
@@ -322,4 +330,19 @@ export interface ReplayEvent {
   agent: string
   turn: number
   event: AgentEvent
+}
+
+/** One audited LLM request/response pair. */
+export interface RequestLogRecord {
+  ts: string
+  session_id?: string
+  agent?: string
+  source?: string
+  model?: string
+  duration_ms: number
+  request?: unknown
+  response?: unknown
+  error?: string
+  input_tokens?: number
+  output_tokens?: number
 }

@@ -2,10 +2,7 @@ import { useCallback, useEffect, useRef, useReducer } from "react"
 import { apiHeaders } from "@/lib/api"
 import { chatReducer } from "./use-chat-state"
 import type { ChatAction } from "./use-chat-state"
-import {
-  fromBackendMessages,
-  parseSSELine,
-} from "./use-chat-messages"
+import { fromBackendMessages, parseSSELine } from "./use-chat-messages"
 import type { BackendMsg } from "./use-chat-messages"
 import type { AgentEvent, ToolCallEntry } from "@/types/agent"
 
@@ -54,58 +51,92 @@ function makeToolCall(event: AgentEvent, prefix: string): ToolCallEntry {
 }
 
 function isDeniedOutput(output: unknown): boolean {
-  if (!output || typeof output !== "object" || !("error" in output)) return false
+  if (!output || typeof output !== "object" || !("error" in output))
+    return false
   const err = (output as Record<string, unknown>).error
-  return err === "permission denied" || err === "tool requires approval" || err === "tool approval denied"
+  return (
+    err === "permission denied" ||
+    err === "tool requires approval" ||
+    err === "tool approval denied"
+  )
 }
 
 /** Dispatches a single SSE event. Returns true if the stream should terminate. */
-function dispatchSSEEvent(
+export function dispatchSSEEvent(
   event: AgentEvent,
   entryId: string,
   dispatch: (action: ChatAction) => void
 ): boolean {
   switch (event.type) {
     case "text_delta":
-      if (event.content) dispatch({ type: "APPEND_TEXT", entryId, content: event.content })
+      if (event.content)
+        dispatch({ type: "APPEND_TEXT", entryId, content: event.content })
       return false
     case "reasoning_delta":
-      if (event.content) dispatch({ type: "APPEND_REASONING", entryId, content: event.content })
+      if (event.content)
+        dispatch({ type: "APPEND_REASONING", entryId, content: event.content })
       return false
     case "tool_start":
-      dispatch({ type: "TOOL_START", entryId, toolCall: makeToolCall(event, "tc") })
+      dispatch({
+        type: "TOOL_START",
+        entryId,
+        toolCall: makeToolCall(event, "tc"),
+      })
       return false
     case "tool_result":
       dispatch({
         type: isDeniedOutput(event.output) ? "TOOL_DENIED" : "TOOL_RESULT",
-        entryId, toolName: event.tool ?? "unknown", toolCallId: event.tool_call_id, output: event.output,
+        entryId,
+        toolName: event.tool ?? "unknown",
+        toolCallId: event.tool_call_id,
+        output: event.output,
       })
       return false
     case "tool_approval_required":
       dispatch({
-        type: "TOOL_APPROVAL_REQUIRED", entryId, toolName: event.tool ?? "unknown",
-        toolCallId: event.tool_call_id, approvalId: event.approval_id,
+        type: "TOOL_APPROVAL_REQUIRED",
+        entryId,
+        toolName: event.tool ?? "unknown",
+        toolCallId: event.tool_call_id,
+        approvalId: event.approval_id,
       })
       return false
     case "compaction":
-      if (event.content) dispatch({ type: "COMPACTION", summary: event.content })
+      if (event.content)
+        dispatch({ type: "COMPACTION", summary: event.content })
       return false
     case "sub_agent_start":
-      dispatch({ type: "SUB_AGENT_START", entryId, toolCall: makeToolCall(event, "sa") })
+      dispatch({
+        type: "SUB_AGENT_START",
+        entryId,
+        toolCall: makeToolCall(event, "sa"),
+      })
       return false
     case "sub_agent_end":
-      dispatch({ type: "SUB_AGENT_END", entryId, toolName: event.tool ?? "sub-agent", toolCallId: event.tool_call_id })
+      dispatch({
+        type: "SUB_AGENT_END",
+        entryId,
+        toolName: event.tool ?? "sub-agent",
+        toolCallId: event.tool_call_id,
+      })
       return false
     case "error":
-      dispatch({ type: "STREAM_ERROR", message: event.message ?? "Unknown error" })
+      dispatch({
+        type: "STREAM_ERROR",
+        message: event.message ?? "Unknown error",
+      })
       return true
     case "done":
       if (event.session_id) {
         dispatch({ type: "SET_SESSION_ID", sessionId: event.session_id })
       }
       dispatch({
-        type: "STREAM_DONE", entryId, status: event.status ?? "completed",
-        turns: event.turns ?? 0, inputTokens: event.input_tokens, outputTokens: event.output_tokens,
+        type: "STREAM_DONE",
+        entryId,
+        status: event.status ?? "completed",
+        turns: event.turns ?? 0,
+        inputTokens: event.input_tokens,
+        outputTokens: event.output_tokens,
       })
       return true
     default:
@@ -121,7 +152,7 @@ async function sendRunRequest(
   signal: AbortSignal,
   entryId: string,
   dispatch: (action: ChatAction) => void,
-  images?: { dataUrl: string; name: string }[],
+  images?: { dataUrl: string; name: string }[]
 ) {
   // Only the latest user message is sent; the backend assembles the full
   // context (system prompt + history) from the stored session, which keeps
@@ -130,7 +161,10 @@ async function sendRunRequest(
   if (sessionId) body.session_id = sessionId
   if (workDir) body.workdir = workDir
   if (images && images.length > 0) {
-    body.images = images.map((img) => ({ data_url: img.dataUrl, name: img.name }))
+    body.images = images.map((img) => ({
+      data_url: img.dataUrl,
+      name: img.name,
+    }))
   }
 
   const res = await fetch("/v1/agents/run", {
@@ -167,7 +201,12 @@ export function useChat() {
   }, [state.sessionId])
 
   const sendMessage = useCallback(
-    async (text: string, agent: string, workDir?: string, images?: { dataUrl: string; name: string }[]) => {
+    async (
+      text: string,
+      agent: string,
+      workDir?: string,
+      images?: { dataUrl: string; name: string }[]
+    ) => {
       abortRef.current?.abort()
       const controller = new AbortController()
       abortRef.current = controller
@@ -178,10 +217,22 @@ export function useChat() {
       dispatch({ type: "START_ASSISTANT", entryId })
 
       try {
-        await sendRunRequest(agent, text, sessionIdRef.current, workDir, controller.signal, entryId, dispatch, images)
+        await sendRunRequest(
+          agent,
+          text,
+          sessionIdRef.current,
+          workDir,
+          controller.signal,
+          entryId,
+          dispatch,
+          images
+        )
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === "AbortError") return
-        dispatch({ type: "STREAM_ERROR", message: err instanceof Error ? err.message : "Unknown error" })
+        dispatch({
+          type: "STREAM_ERROR",
+          message: err instanceof Error ? err.message : "Unknown error",
+        })
       }
     },
     []
@@ -190,7 +241,12 @@ export function useChat() {
   const abort = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = null
-    dispatch({ type: "STREAM_DONE", entryId: "", status: "cancelled", turns: 0 })
+    dispatch({
+      type: "STREAM_DONE",
+      entryId: "",
+      status: "cancelled",
+      turns: 0,
+    })
   }, [])
 
   const clear = useCallback(() => {

@@ -3,13 +3,16 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/teexue/common-agent/core/audit"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/kanban"
 	"github.com/teexue/common-agent/core/loop"
+	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/store"
 )
 
@@ -202,10 +205,22 @@ func (s *Service) KanbanRunner() kanban.Runner {
 			prompt += "\n\n[上次审核反馈] " + item.Feedback
 		}
 		result, err := s.PrepareRun(ctx, RunRequest{
-			Agent:   item.Agent,
-			Prompt:  prompt,
-			WorkDir: item.WorkDir,
+			Agent:     item.Agent,
+			Prompt:    prompt,
+			WorkDir:   item.WorkDir,
+			SessionID: item.SessionID, // retries continue the same session
+			Source:    "kanban",
 		}, nil)
+		if err != nil && item.SessionID != "" && errors.Is(err, session.ErrNotFound) {
+			// The stored session is gone (e.g. deleted manually) — start a
+			// fresh one instead of failing the task.
+			result, err = s.PrepareRun(ctx, RunRequest{
+				Agent:   item.Agent,
+				Prompt:  prompt,
+				WorkDir: item.WorkDir,
+				Source:  "kanban",
+			}, nil)
+		}
 		if err != nil {
 			return "", "", err
 		}
@@ -213,13 +228,46 @@ func (s *Service) KanbanRunner() kanban.Runner {
 			result.Cleanup(s.Registry)
 		}()
 
+		// Kanban tasks run unattended: lift the agent's turn cap so long
+		// tasks are not killed mid-work. (MaxTurns 0 = run until the model
+		// stops calling tools.)
+		result.Config.Agent.MaxTurns = 0
+
+		// Persist the session id up front so the UI can follow the run live.
+		item.SessionID = result.Session.ID
+		if s.StateDB != nil {
+			item.UpdatedAt = time.Now().UTC()
+			_ = s.StateDB.SaveKanban(item)
+		}
+		// Save the session right away (the loop only persists it at run end)
+		// so the replay endpoint's ownership check passes mid-run. Attribute
+		// it to the kanban item's owner rather than the default local user,
+		// and mark it so it stays out of the conversation session list.
+		if item.UserID != "" {
+			result.Session.UserID = item.UserID
+		}
+		result.Session.SetMetadata(session.MetadataKeySource, session.SourceKanban)
+		if s.Store != nil {
+			_ = s.Store.Save(result.Session)
+		}
+
 		events, err := loop.Run(ctx, result.Config)
 		if err != nil {
 			return "", result.Session.ID, err
 		}
 		var sb strings.Builder
 		var runErr error
+		turn := 0
 		for ev := range events {
+			if s.EventLogger != nil {
+				if ev.Type == event.TypeDone || ev.Type == event.TypeError {
+					turn++
+				}
+				_ = s.EventLogger.Log(audit.EventRecord{
+					Timestamp: time.Now(), SessionID: result.Session.ID,
+					Agent: item.Agent, Turn: turn, Event: ev,
+				})
+			}
 			switch ev.Type {
 			case event.TypeTextDelta:
 				sb.WriteString(ev.Content)

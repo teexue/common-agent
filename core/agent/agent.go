@@ -46,9 +46,11 @@ type KnowledgeConfig struct {
 
 // OptimizeConfig enables in-pipeline prompt optimization for an agent.
 // Optimization runs at assembly time (before loop.Run) via an extra LLM call.
+// System prompt optimization is intentionally not here: it is a manual,
+// editor-triggered action (POST /v1/agents/optimize kind=system) whose result
+// the user reviews and saves into the agent YAML.
 type OptimizeConfig struct {
-	SystemPrompt bool `yaml:"system_prompt,omitempty" json:"system_prompt,omitempty"` // optimize system prompt once per content (cached)
-	UserPrompt   bool `yaml:"user_prompt,omitempty" json:"user_prompt,omitempty"`     // optimize each user prompt before the run
+	UserPrompt bool `yaml:"user_prompt,omitempty" json:"user_prompt,omitempty"` // optimize each user prompt before the run
 }
 
 // Agent configures agent behavior for a production use case.
@@ -77,8 +79,6 @@ type Agent struct {
 }
 
 const (
-	// MaxTurns 0 means unlimited (run until the model returns without tool calls).
-	defaultMaxTokens    = 4096
 	defaultMaxParallel  = 4
 	defaultToolExecMode = "parallel"
 )
@@ -195,9 +195,8 @@ func (a *Agent) validate() error {
 		return fmt.Errorf("model is required")
 	}
 	// MaxTurns 0 = unlimited (loop until the model stops calling tools).
-	if a.MaxTokens <= 0 {
-		a.MaxTokens = defaultMaxTokens
-	}
+	// MaxTokens 0 = auto: the provider layer applies the model's official
+	// max output spec, falling back to a conservative default.
 	if len(a.Tools) == 0 {
 		return fmt.Errorf("tools must not be empty")
 	}

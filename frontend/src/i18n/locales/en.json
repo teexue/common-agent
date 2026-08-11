@@ -102,7 +102,8 @@
     "agentLockedHint": "This session has messages. Create a new session to switch Agent",
     "manage": "Manage",
     "apiDocs": "API Docs",
-    "kanban": "Kanban"
+    "kanban": "Kanban",
+    "requestLogs": "Request logs"
   },
   "apiDocs": {
     "title": "API Integration",
@@ -228,6 +229,16 @@
     "knowledgeDeleteDocConfirm": "Delete this document?",
     "toolsCount": "{{count}} tools"
   },
+  "audit": {
+    "title": "Request logs",
+    "request": "Request",
+    "response": "Response",
+    "error": "Error",
+    "empty": "No request records yet",
+    "sourceAll": "All sources",
+    "filterSession": "Filter by session ID, press Enter",
+    "applyFilter": "Apply"
+  },
   "kanban": {
     "title": "Kanban",
     "newTask": "New task",
@@ -253,6 +264,8 @@
     "colDone": "Done",
     "colFailed": "Failed",
     "requeue": "Requeue",
+    "viewProgress": "Live progress",
+    "waitingStart": "Task is starting, live progress will appear shortly…",
     "feedbackLabel": "Feedback",
     "feedbackPlaceholder": "Describe what to fix; it will be injected on rerun",
     "rejectSubmit": "Reject with feedback",
@@ -411,7 +424,8 @@
     "noToolsSelected": "No tools selected",
     "addTool": "Add tool...",
     "maxTurns": "Max turns",
-    "maxTokens": "Max tokens",
+    "maxTokens": "Max output tokens",
+    "contextWindow": "Context window",
     "execMode": "Execution mode",
     "maxParallel": "Max parallel",
     "name": "Name",
@@ -450,7 +464,9 @@
     "sectionOptimize": "Prompt optimization",
     "sectionOptimizeDesc": "Optimize prompts with an LLM before runs; falls back to the original on failure.",
     "optimizeSystemPrompt": "Optimize system prompt",
-    "optimizeSystemPromptHint": "Restructures system_prompt into a tagged XML form at assembly time, cached per content",
+    "optimizeSystemPromptHint": "Restructures the system prompt into a tagged XML form using the selected model; review the result and save to apply",
+    "optimizing": "Optimizing...",
+    "errOptimizeSystemPrompt": "Failed to optimize system prompt",
     "optimizeUserPrompt": "Optimize user input",
     "optimizeUserPromptHint": "Optimizes each user prompt before the run; adds one LLM call per turn",
     "knowledgeEmpty": "No knowledge bases yet — create one under Manage → Knowledge",
@@ -482,7 +498,10 @@
     "selectedCount": "{{count}} selected",
     "noToolsMatch": "No matching tools",
     "maxTurnsHint": "0 = unlimited until the model stops calling tools. Positive values are a safety cap. Long runs rely on context compaction.",
-    "maxTokensHint": "Maximum tokens for a single model reply.",
+    "maxTokensHint": "Maximum output tokens for a single model reply (output cap, not the context window). \"Auto\" uses the model's official spec.",
+    "maxTokensAuto": "Auto (model official spec)",
+    "contextWindowHint": "Model context window size, used to trigger compaction. Leave unset to use the runtime/provider default.",
+    "contextWindowUnset": "Unset",
     "execModeHint": "Parallel runs tools concurrently; serial runs them in order.",
     "maxParallelHint": "Max concurrent tools when execution mode is parallel.",
     "permPolicyTitle": "Permission policy",
@@ -509,7 +528,6 @@
     "paramSchema": "Parameter schema",
     "id": "ID",
     "names": {
-      "echo": "Echo",
       "get_time": "Get time",
       "read_file": "Read file",
       "write_file": "Write file",
@@ -524,7 +542,6 @@
       "knowledge_list": "List knowledge bases"
     },
     "descriptions": {
-      "echo": "Echo back the provided message.",
       "get_time": "Return the current UTC time in RFC3339 format.",
       "read_file": "Read the contents of a file as text.",
       "write_file": "Write content to a file, creating parent directories if needed.",
@@ -597,6 +614,7 @@
     "updateSessionFailed": "Failed to update session: {{status}}",
     "replayNotFound": "Session replay not found",
     "fetchReplayFailed": "Failed to fetch session replay: {{status}}",
+    "fetchRequestLogsFailed": "Failed to fetch request logs: {{status}}",
     "fetchAgentsFailed": "Failed to fetch agents: {{status}}",
     "agentNotFound": "Agent not found",
     "fetchAgentFailed": "Failed to fetch agent: {{status}}",

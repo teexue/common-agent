@@ -7,28 +7,36 @@ import (
 	"github.com/teexue/common-agent/core/store"
 )
 
-// ListSessions returns metadata for sessions owned by userID.
+// ListSessions returns metadata for sessions owned by userID. Sessions
+// created by kanban task runs are excluded — they belong to the board.
 func (s *Service) ListSessions(userID string) ([]session.SessionMeta, error) {
 	if s.Store == nil {
 		return nil, fmt.Errorf("session persistence not configured")
 	}
+	var metas []session.SessionMeta
 	if gs, ok := s.Store.(*store.SessionStore); ok {
-		return gs.ListByUser(userID)
-	}
-	metas, err := s.Store.List()
-	if err != nil {
-		return nil, err
-	}
-	if userID == "" {
-		return metas, nil
+		var err error
+		metas, err = gs.ListByUser(userID)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var err error
+		metas, err = s.Store.List()
+		if err != nil {
+			return nil, err
+		}
 	}
 	out := make([]session.SessionMeta, 0, len(metas))
 	for _, m := range metas {
+		if m.Metadata[session.MetadataKeySource] == session.SourceKanban {
+			continue // kanban task sessions live on the board, not in the conversation list
+		}
 		uid := m.UserID
 		if uid == "" {
 			uid = store.DefaultUserID
 		}
-		if uid == userID {
+		if userID == "" || uid == userID {
 			out = append(out, m)
 		}
 	}

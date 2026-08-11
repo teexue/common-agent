@@ -70,5 +70,15 @@
   "log.mcp.sse.connect_failed": "MCP SSE 连接失败",
   "log.mcp.sse.read_error": "MCP SSE 读取错误",
   "log.workflow.executing_node": "正在执行工作流节点",
-  "log.workflow.node_failed": "工作流节点失败"
+  "log.workflow.node_failed": "工作流节点失败",
+  "log.kanban.process_failed": "看板任务处理失败",
+  "log.kanban.item_processed": "看板任务处理完成",
+  "log.agent.created": "创建 Agent",
+  "log.embedding.init_failed": "初始化嵌入模型失败",
+  "log.embedding.legacy_provider_ignored": "忽略旧版嵌入提供商配置",
+  "log.knowledge.open": "打开知识库",
+  "log.mcp.load_global": "加载全局 MCP 配置",
+  "log.mcp.register_tool": "注册 MCP 工具",
+  "log.optimize.user_prompt_failed": "用户提示词优化失败",
+  "log.runtime.state_db": "打开状态数据库"
 }

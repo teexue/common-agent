@@ -23,9 +23,11 @@ interface SessionReplayProps {
   sessionId: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** When true, refetches events periodically to follow an ongoing run. */
+  live?: boolean
 }
 
-export function SessionReplay({ sessionId, open, onOpenChange }: SessionReplayProps) {
+export function SessionReplay({ sessionId, open, onOpenChange, live }: SessionReplayProps) {
   const { t } = useTranslation()
   const [events, setEvents] = useState<ReplayEvent[]>([])
   const [loading, setLoading] = useState(false)
@@ -44,14 +46,21 @@ export function SessionReplay({ sessionId, open, onOpenChange }: SessionReplayPr
     if (!open || !sessionId) {
       setEvents([]); setError(null); return
     }
-    setLoading(true); setError(null)
+    let cancelled = false
     const from = fromTurn ? parseInt(fromTurn, 10) : undefined
     const to = toTurn ? parseInt(toTurn, 10) : undefined
-    fetchSessionReplay(sessionId, from, to)
-      .then(setEvents)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [open, sessionId, fromTurn, toTurn])
+    const load = (initial: boolean) => {
+      if (initial) setLoading(true)
+      fetchSessionReplay(sessionId, from, to)
+        .then((evs) => { if (!cancelled) { setEvents(evs); setError(null) } })
+        .catch((err) => { if (!cancelled && initial) setError(err.message) })
+        .finally(() => { if (!cancelled && initial) setLoading(false) })
+    }
+    load(true)
+    if (!live) return () => { cancelled = true }
+    const timer = setInterval(() => load(false), 2500)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [open, sessionId, fromTurn, toTurn, live])
 
   useEffect(() => {
     if (!open) return

@@ -55,6 +55,7 @@ func (s *Server) handleRun(c *gin.Context) {
 		Messages:  req.Messages,
 		WorkDir:   req.WorkDir,
 		Images:    images,
+		Source:    "http",
 	}, s.approver)
 	if err != nil {
 		code := "run_error"

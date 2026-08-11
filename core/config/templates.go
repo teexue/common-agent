@@ -34,16 +34,14 @@ system_prompt: |
   You are a helpful assistant. Answer questions clearly and concisely.
   Use tools when they can help accomplish the task.
 tools:
-  - echo
   - get_time
 max_turns: 0
-max_tokens: 4096
+max_tokens: 8192
 tool_execution:
   mode: parallel
   max_parallel: 4
 permissions:
   auto_approve:
-    - echo
     - get_time
   always_deny: []
 `,

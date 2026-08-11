@@ -18,6 +18,7 @@ import type {
   KnowledgeDocument,
   KnowledgeHit,
   KnowledgeMeta,
+  RequestLogRecord,
 } from "@/types/agent"
 
 const ACCESS_TOKEN_STORAGE = "serverAccessToken"
@@ -325,6 +326,21 @@ export async function updateSessionWorkdir(
   await ensureOK(res, "api.updateSessionFailed")
   const data = (await res.json()) as { metadata?: Record<string, string> }
   return data.metadata ?? {}
+}
+
+/** Fetches recent LLM request audit records, newest first. */
+export async function fetchRequestLogs(params: {
+  sessionId?: string
+  source?: string
+  limit?: number
+}): Promise<RequestLogRecord[]> {
+  const qs = new URLSearchParams()
+  if (params.sessionId) qs.set("session_id", params.sessionId)
+  if (params.source) qs.set("source", params.source)
+  if (params.limit) qs.set("limit", String(params.limit))
+  const res = await fetch(`/v1/audit/requests?${qs.toString()}`, { headers: langHeaders() })
+  await ensureOK(res, "api.fetchRequestLogsFailed")
+  return (await res.json()) ?? []
 }
 
 /** Fetches replay events for a session, optionally filtered by turn range. */
@@ -694,15 +710,23 @@ export async function fetchTools(): Promise<
 
 // ─── Optimize API ────────────────────────────────────────────────
 
+/** Options selecting which model performs the optimization. */
+export interface OptimizeOptions {
+  agent?: string
+  kind?: "user" | "system"
+  provider?: string
+  model?: string
+}
+
 /** Sends a prompt to the LLM for intent recognition and optimization. */
 export async function optimizePrompt(
   prompt: string,
-  agent?: string
+  opts: OptimizeOptions = {}
 ): Promise<{ optimized_prompt: string }> {
   const res = await fetch("/v1/agents/optimize", {
     method: "POST",
     headers: langHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ prompt, agent }),
+    body: JSON.stringify({ prompt, ...opts }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)

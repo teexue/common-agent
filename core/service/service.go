@@ -5,9 +5,9 @@ package service
 
 import (
 	"log/slog"
-	"sync"
 
 	"github.com/teexue/common-agent/core/agent"
+	"github.com/teexue/common-agent/core/audit"
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/embedding"
 	"github.com/teexue/common-agent/core/knowledge"
@@ -27,16 +27,16 @@ type Service struct {
 	Store       session.Store
 	StateDB     *store.DB
 	Creds       *config.CredentialStore
+	// EventLogger, when set, records run events for session replay. Optional.
+	EventLogger *audit.EventLogger
+	// RequestLogger, when set, audits every LLM request/response. Optional.
+	RequestLogger *audit.RequestLogger
 
 	Knowledge        *knowledge.Manager
 	Ingester         *knowledge.Ingester
 	Retriever        *knowledge.Retriever
 	Embedder         embedding.Embedder
 	KnowledgeRuntime *knowledge.Runtime
-
-	// optimizeCache memoizes system prompt optimization results keyed by
-	// content hash, so the same raw prompt is only optimized once per process.
-	optimizeCache sync.Map
 }
 
 // New creates a Service instance.

@@ -38,6 +38,7 @@ type Server struct {
 	svc         *service.Service   // shared business logic
 	approver    *HTTPApprover      // handles tool approval flow
 	eventLogger *audit.EventLogger // optional event logging; nil disables replay
+	requestLogger *audit.RequestLogger // optional LLM request audit; nil disables request logs
 	catalog     *provider.Catalog          // optional provider catalog; nil disables provider listing
 	creds       *config.CredentialStore    // optional credentials for provider upsert/reload
 	auditStore  *audit.AuditStore          // optional audit store; nil disables audit export
@@ -117,9 +118,17 @@ func (s *Server) SetStore(store session.Store) {
 	s.svc.Store = store
 }
 
-// SetEventLogger sets the event logger for session replay.
+// SetEventLogger sets the event logger for session replay. Background runs
+// (e.g. the kanban worker) log through the service as well.
 func (s *Server) SetEventLogger(el *audit.EventLogger) {
 	s.eventLogger = el
+	s.svc.EventLogger = el
+}
+
+// SetRequestLogger sets the LLM request audit logger on the service.
+func (s *Server) SetRequestLogger(rl *audit.RequestLogger) {
+	s.requestLogger = rl
+	s.svc.RequestLogger = rl
 }
 
 // SetShutdownCtx sets a context that is cancelled on server shutdown.
@@ -400,6 +409,10 @@ func (s *Server) Handler() *gin.Engine {
 
 	if s.auditStore != nil {
 		v1.GET("/audit/export", s.handleAuditExport)
+	}
+
+	if s.requestLogger != nil {
+		v1.GET("/audit/requests", s.handleAuditRequests)
 	}
 
 	// Static frontend serving (only when embedded).

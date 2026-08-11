@@ -18,6 +18,7 @@ interface AppLayoutProps {
   onOpenSettings: () => void
   onOpenManage?: () => void
   onOpenKanban?: () => void
+  onOpenRequestLogs?: () => void
   onOpenApiDocs?: () => void
   onNewSession?: () => void
   sessions?: SessionMeta[]

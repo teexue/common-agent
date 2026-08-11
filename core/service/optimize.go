@@ -2,12 +2,9 @@ package service
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"strings"
-	"sync"
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/provider"
@@ -52,15 +49,21 @@ const systemPromptOptimizer = `你是一个专业的提示词工程专家，擅�
 不要包裹 <system> 标签，不要附加 <user_input> 块，不要包含任何解释或前缀。
 </output_format>`
 
+// OptimizeOptions selects which model performs the optimization.
+type OptimizeOptions struct {
+	Agent    string // agent name; empty = first available agent
+	Provider string // optional explicit provider, overrides the agent's
+	Model    string // optional explicit model, overrides the agent's
+}
+
 // OptimizePrompt calls the LLM to optimize a user's prompt for intent clarity.
-// It uses the specified agent's provider and model, or the first available agent
-// when agentName is empty.
-func (s *Service) OptimizePrompt(ctx context.Context, prompt string, agentName string) (string, error) {
+// It uses the agent/provider/model selected by opts.
+func (s *Service) OptimizePrompt(ctx context.Context, prompt string, opts OptimizeOptions) (string, error) {
 	if prompt == "" {
 		return "", &ArgError{Field: "prompt", Message: "prompt is required"}
 	}
 
-	a, err := s.resolveAgentForOptimize(agentName)
+	a, err := s.resolveAgentForOptimize(opts)
 	if err != nil {
 		return "", err
 	}
@@ -77,43 +80,34 @@ func (s *Service) OptimizePrompt(ctx context.Context, prompt string, agentName s
 	return optimized, nil
 }
 
-// OptimizeSystemPrompt rewrites a.SystemPrompt in place into a tagged,
-// structured form when the agent enables optimize.system_prompt.
-// Results are memoized in cache (keyed by model + raw content hash) so the
-// same raw prompt is optimized at most once; cache may be nil to disable
-// memoization. Failures are non-fatal: the original prompt is kept.
-// Mock providers are skipped: optimizer calls would consume their scripted
-// responses and break the actual run.
-func OptimizeSystemPrompt(ctx context.Context, cache *sync.Map, a *agent.Agent, p provider.Provider, log *slog.Logger) {
-	if a.Optimize == nil || !a.Optimize.SystemPrompt || a.SystemPrompt == "" || isMockProvider(p) {
-		return
-	}
-	log = defaultLogger(log)
-
-	raw := a.SystemPrompt
-	key := optimizeCacheKey(a.Model, raw)
-	if cache != nil {
-		if cached, ok := cache.Load(key); ok {
-			a.SystemPrompt = cached.(string)
-			return
-		}
+// OptimizeSystemPromptOnce rewrites a system prompt into a tagged, structured
+// form via a single optimizer LLM call. This is a manual, editor-triggered
+// action — the result is returned for the user to review and save, never
+// applied implicitly at run time.
+func (s *Service) OptimizeSystemPromptOnce(ctx context.Context, systemPrompt string, opts OptimizeOptions) (string, error) {
+	if strings.TrimSpace(systemPrompt) == "" {
+		return "", &ArgError{Field: "prompt", Message: "prompt is required"}
 	}
 
-	optimized, err := streamOptimized(ctx, p, a.Model, systemPromptOptimizer, raw)
+	a, err := s.resolveAgentForOptimize(opts)
 	if err != nil {
-		log.Warn("log.optimize.system_prompt_failed", "agent", a.Name, "error", err)
-		return
+		return "", err
+	}
+
+	p, err := s.NewProvider(a)
+	if err != nil {
+		return "", &ServerError{Message: fmt.Sprintf("create provider: %v", err)}
+	}
+
+	optimized, err := streamOptimized(ctx, p, a.Model, systemPromptOptimizer, systemPrompt)
+	if err != nil {
+		return "", &ServerError{Message: fmt.Sprintf("stream: %v", err)}
 	}
 	// Sanity check: the optimizer must honor the tagged output format.
 	if !strings.Contains(optimized, "<role>") {
-		log.Warn("log.optimize.system_prompt_invalid", "agent", a.Name)
-		return
+		return "", &ServerError{Message: "optimizer returned an invalid format"}
 	}
-
-	a.SystemPrompt = optimized
-	if cache != nil {
-		cache.Store(key, optimized)
-	}
+	return optimized, nil
 }
 
 // OptimizeUserPrompt returns the optimized user prompt when the agent enables
@@ -167,12 +161,6 @@ func streamOptimized(ctx context.Context, p provider.Provider, model, metaPrompt
 	return optimized, nil
 }
 
-// optimizeCacheKey builds a cache key from the model and raw prompt content.
-func optimizeCacheKey(model, raw string) string {
-	sum := sha256.Sum256([]byte(model + "\x00" + raw))
-	return hex.EncodeToString(sum[:])
-}
-
 // isMockProvider reports whether p is the scripted test double.
 func isMockProvider(p provider.Provider) bool {
 	_, ok := p.(*provider.MockProvider)
@@ -186,13 +174,21 @@ func defaultLogger(log *slog.Logger) *slog.Logger {
 	return log
 }
 
-// resolveAgentForOptimize loads the named agent, or the first available agent
-// when agentName is empty.
-func (s *Service) resolveAgentForOptimize(agentName string) (*agent.Agent, error) {
-	if agentName != "" {
-		a, err := agent.LoadByName(s.AgentsDir, NormalizeAgentName(agentName))
+// resolveAgentForOptimize builds the agent whose provider/model runs the
+// optimization. An explicit provider (from the editor form) wins; otherwise
+// the named agent is loaded, or the first available agent when no name given.
+func (s *Service) resolveAgentForOptimize(opts OptimizeOptions) (*agent.Agent, error) {
+	if opts.Provider != "" {
+		return &agent.Agent{Name: "optimizer", Provider: opts.Provider, Model: opts.Model}, nil
+	}
+
+	if opts.Agent != "" {
+		a, err := agent.LoadByName(s.AgentsDir, NormalizeAgentName(opts.Agent))
 		if err != nil {
 			return nil, fmt.Errorf("load agent: %w", err)
+		}
+		if opts.Model != "" {
+			a.Model = opts.Model
 		}
 		return a, nil
 	}
@@ -204,5 +200,12 @@ func (s *Service) resolveAgentForOptimize(agentName string) (*agent.Agent, error
 	if len(names) == 0 {
 		return nil, &ArgError{Field: "agent", Message: "no agents configured"}
 	}
-	return agent.LoadByName(s.AgentsDir, names[0])
+	a, err := agent.LoadByName(s.AgentsDir, names[0])
+	if err != nil {
+		return nil, fmt.Errorf("load agent: %w", err)
+	}
+	if opts.Model != "" {
+		a.Model = opts.Model
+	}
+	return a, nil
 }

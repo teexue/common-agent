@@ -170,6 +170,8 @@ func runServe(args []string, logger *slog.Logger) {
 
 	// Event logger for session replay.
 	eventLogger := audit.NewEventLogger(filepath.Join(paths.home, "events"))
+	// Request audit logger for LLM request/response troubleshooting.
+	requestLogger := audit.NewRequestLogger(filepath.Join(paths.home, "audit", "requests"))
 
 	// HTTP server.
 	srv := httpapi.NewServer(httpapi.ServerConfig{
@@ -191,6 +193,7 @@ func runServe(args []string, logger *slog.Logger) {
 		srv.Service().Retriever = kbRT.CurrentRetriever()
 	}
 	srv.SetEventLogger(eventLogger)
+	srv.SetRequestLogger(requestLogger)
 	if catalog != nil {
 		srv.SetCatalog(catalog)
 	}
@@ -353,8 +356,7 @@ func runCLI(args []string, logger *slog.Logger) {
 		os.Exit(1)
 	}
 
-	// In-pipeline prompt optimization (agent-driven, non-fatal).
-	service.OptimizeSystemPrompt(context.Background(), nil, a, p, logger)
+	// In-pipeline user prompt optimization (agent-driven, non-fatal).
 	optimizedPrompt := service.OptimizeUserPrompt(context.Background(), a, p, *prompt, logger)
 
 	reg := newRegistry("") // uses current working directory

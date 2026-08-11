@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { KanbanCard } from "./kanban-card"
 import { KanbanCreateDialog } from "./kanban-create-dialog"
 import { KanbanDetailDialog } from "./kanban-detail-dialog"
+import { SessionConversationDialog } from "@/components/sessions/session-conversation"
 import {
   approveKanbanItem,
   deleteKanbanItem,
@@ -32,6 +33,7 @@ export function KanbanPage() {
   const [loading, setLoading] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [progressItemId, setProgressItemId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -46,44 +48,83 @@ export function KanbanPage() {
   }, [])
 
   useEffect(() => {
-    const kickoff = window.setTimeout(() => { void refresh() }, 0)
-    const timer = window.setInterval(() => { void refresh() }, 5_000)
+    const kickoff = window.setTimeout(() => {
+      void refresh()
+    }, 0)
+    const timer = window.setInterval(() => {
+      void refresh()
+    }, 5_000)
     return () => {
       window.clearTimeout(kickoff)
       window.clearInterval(timer)
     }
   }, [refresh])
 
-  const runAction = useCallback(async (fn: () => Promise<unknown>) => {
-    try {
-      await fn()
-      await refresh()
-    } catch (err) {
-      console.error("Kanban action failed:", err)
-    }
-  }, [refresh])
+  const runAction = useCallback(
+    async (fn: () => Promise<unknown>) => {
+      try {
+        await fn()
+        await refresh()
+      } catch (err) {
+        console.error("Kanban action failed:", err)
+      }
+    },
+    [refresh]
+  )
 
-  const handleApprove = useCallback((id: string) => void runAction(() => approveKanbanItem(id)), [runAction])
-  const handleRequeue = useCallback((id: string) => void runAction(() => requeueKanbanItem(id)), [runAction])
-  const handleReject = useCallback((id: string, feedback: string) => void runAction(() => rejectKanbanItem(id, feedback)), [runAction])
-  const handleDelete = useCallback((id: string) => {
-    const target = items.find((i) => i.id === id)
-    if (!window.confirm(t("kanban.deleteConfirm", { title: target?.title ?? id }))) return
-    setSelectedId(null)
-    void runAction(() => deleteKanbanItem(id))
-  }, [items, runAction, t])
+  const handleApprove = useCallback(
+    (id: string) => void runAction(() => approveKanbanItem(id)),
+    [runAction]
+  )
+  const handleRequeue = useCallback(
+    (id: string) => void runAction(() => requeueKanbanItem(id)),
+    [runAction]
+  )
+  const handleReject = useCallback(
+    (id: string, feedback: string) =>
+      void runAction(() => rejectKanbanItem(id, feedback)),
+    [runAction]
+  )
+  const handleDelete = useCallback(
+    (id: string) => {
+      const target = items.find((i) => i.id === id)
+      if (
+        !window.confirm(
+          t("kanban.deleteConfirm", { title: target?.title ?? id })
+        )
+      )
+        return
+      setSelectedId(null)
+      void runAction(() => deleteKanbanItem(id))
+    },
+    [items, runAction, t]
+  )
 
-  const selectedItem = selectedId ? items.find((i) => i.id === selectedId) ?? null : null
+  const selectedItem = selectedId
+    ? (items.find((i) => i.id === selectedId) ?? null)
+    : null
+  // Derived from the polled list so session_id flows in as soon as the
+  // worker publishes it, even if the dialog was opened earlier.
+  const progressItem = progressItemId
+    ? (items.find((i) => i.id === progressItemId) ?? null)
+    : null
 
   return (
     <div className="flex h-full flex-col bg-background">
       <header className="flex items-center gap-3 border-b border-border px-6 py-4">
         <div className="flex items-center gap-2">
           <KanbanSquare className="h-4 w-4 text-primary" />
-          <h1 className="font-heading text-base tracking-tight text-foreground">{t("kanban.title")}</h1>
+          <h1 className="font-heading text-base tracking-tight text-foreground">
+            {t("kanban.title")}
+          </h1>
         </div>
         <div className="flex-1" />
-        <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-xl text-xs" onClick={() => setCreateOpen(true)}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 rounded-xl text-xs"
+          onClick={() => setCreateOpen(true)}
+        >
           <Plus className="h-3.5 w-3.5" /> {t("kanban.newTask")}
         </Button>
       </header>
@@ -93,10 +134,20 @@ export function KanbanPage() {
           {COLUMNS.map((col) => {
             const columnItems = items.filter((i) => i.status === col.status)
             return (
-              <section key={col.status} className="flex w-64 shrink-0 flex-col gap-2">
+              <section
+                key={col.status}
+                className="flex w-64 shrink-0 flex-col gap-2"
+              >
                 <div className="flex items-center gap-2 px-1">
-                  <span className="text-xs font-medium text-foreground">{t(col.labelKey)}</span>
-                  <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px]">{columnItems.length}</Badge>
+                  <span className="text-xs font-medium text-foreground">
+                    {t(col.labelKey)}
+                  </span>
+                  <Badge
+                    variant="secondary"
+                    className="rounded-md px-1.5 py-0 text-[10px]"
+                  >
+                    {columnItems.length}
+                  </Badge>
                 </div>
                 <ScrollArea className="min-h-0 flex-1">
                   <div className="flex flex-col gap-2 pr-1">
@@ -116,6 +167,7 @@ export function KanbanPage() {
                           onApprove={handleApprove}
                           onReject={(id) => setSelectedId(id)}
                           onRequeue={handleRequeue}
+                          onViewProgress={(it) => setProgressItemId(it.id)}
                         />
                       ))
                     )}
@@ -127,11 +179,27 @@ export function KanbanPage() {
         </div>
       </main>
 
-      <KanbanCreateDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={() => void refresh()} />
+      <KanbanCreateDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => void refresh()}
+      />
+      <SessionConversationDialog
+        open={progressItemId !== null}
+        onOpenChange={(o) => {
+          if (!o) setProgressItemId(null)
+        }}
+        sessionId={progressItem?.session_id ?? null}
+        title={progressItem?.title}
+        prompt={progressItem?.prompt}
+        live
+      />
       <KanbanDetailDialog
         item={selectedItem}
         open={selectedItem !== null}
-        onOpenChange={(o) => { if (!o) setSelectedId(null) }}
+        onOpenChange={(o) => {
+          if (!o) setSelectedId(null)
+        }}
         onApprove={handleApprove}
         onReject={handleReject}
         onRequeue={handleRequeue}

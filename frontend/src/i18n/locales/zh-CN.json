@@ -102,7 +102,8 @@
     "agentLockedHint": "当前会话已有内容，请新建会话后再切换 Agent",
     "manage": "管理",
     "apiDocs": "API 文档",
-    "kanban": "看板"
+    "kanban": "看板",
+    "requestLogs": "请求日志"
   },
   "apiDocs": {
     "title": "API 对接文档",
@@ -228,7 +229,18 @@
     "knowledgeDeleteDocConfirm": "确定删除该文档？",
     "toolsCount": "{{count}} 个工具"
   },
+  "audit": {
+    "title": "请求日志",
+    "request": "请求",
+    "response": "响应",
+    "error": "错误",
+    "empty": "暂无请求记录",
+    "sourceAll": "全部来源",
+    "filterSession": "按会话 ID 过滤，回车确认",
+    "applyFilter": "筛选"
+  },
   "kanban": {
+
     "title": "看板",
     "newTask": "新建任务",
     "createTitle": "新建看板任务",
@@ -253,6 +265,8 @@
     "colDone": "已完成",
     "colFailed": "失败",
     "requeue": "重新排队",
+    "viewProgress": "实时进度",
+    "waitingStart": "任务启动中，即将显示实时进度…",
     "feedbackLabel": "反馈",
     "feedbackPlaceholder": "说明需要修改的内容，重跑时会注入给 Agent",
     "rejectSubmit": "拒绝并退回",
@@ -411,7 +425,8 @@
     "noToolsSelected": "未选择工具",
     "addTool": "添加工具...",
     "maxTurns": "最大轮次",
-    "maxTokens": "最大 Tokens",
+    "maxTokens": "最大输出 Tokens",
+    "contextWindow": "上下文窗口",
     "execMode": "执行模式",
     "maxParallel": "最大并行数",
     "name": "名称",
@@ -450,7 +465,9 @@
     "sectionOptimize": "提示词优化",
     "sectionOptimizeDesc": "运行前用 LLM 优化提示词，失败时自动回退原文，不影响运行。",
     "optimizeSystemPrompt": "优化系统提示词",
-    "optimizeSystemPromptHint": "装配时将 system_prompt 重构为 XML 标签结构化版本，按内容缓存只优化一次",
+    "optimizeSystemPromptHint": "用当前选择的模型将系统提示词重构为结构化 XML 形式，结果可继续编辑，保存后生效",
+    "optimizing": "优化中...",
+    "errOptimizeSystemPrompt": "系统提示词优化失败",
     "optimizeUserPrompt": "优化用户输入",
     "optimizeUserPromptHint": "每次运行前优化用户输入，每轮会增加一次 LLM 调用",
     "knowledgeEmpty": "暂无知识库，请先在 Manage → 知识库 中创建",
@@ -482,7 +499,10 @@
     "selectedCount": "已选 {{count}}",
     "noToolsMatch": "没有匹配的工具",
     "maxTurnsHint": "0 表示不限制，由模型不再调用工具时自然结束；正数为安全上限。长对话靠上下文压缩控制窗口。",
-    "maxTokensHint": "模型单次回复的最大 Token 数。",
+    "maxTokensHint": "模型单次回复的最大输出 Token 数（输出上限，非上下文窗口）。选「自动」按模型官方规格取值。",
+    "maxTokensAuto": "自动（按模型官方规格）",
+    "contextWindowHint": "模型的上下文窗口大小，用于触发上下文压缩；不设置则使用运行时/提供商默认。",
+    "contextWindowUnset": "不设置",
     "execModeHint": "并行可同时执行多个工具；串行按顺序执行。",
     "maxParallelHint": "并行模式下同时执行的工具上限。",
     "permPolicyTitle": "权限策略",
@@ -509,7 +529,6 @@
     "paramSchema": "参数 Schema",
     "id": "标识",
     "names": {
-      "echo": "回显",
       "get_time": "获取时间",
       "read_file": "读取文件",
       "write_file": "写入文件",
@@ -524,7 +543,6 @@
       "knowledge_list": "知识库列表"
     },
     "descriptions": {
-      "echo": "回显传入的消息。",
       "get_time": "返回当前 UTC 时间（RFC3339）。",
       "read_file": "读取文件内容并以文本返回。",
       "write_file": "将内容写入文件，必要时创建父目录。",
@@ -597,6 +615,7 @@
     "updateSessionFailed": "更新会话失败: {{status}}",
     "replayNotFound": "会话回放不存在",
     "fetchReplayFailed": "获取会话回放失败: {{status}}",
+    "fetchRequestLogsFailed": "获取请求日志失败: {{status}}",
     "fetchAgentsFailed": "获取 Agent 列表失败: {{status}}",
     "agentNotFound": "Agent 不存在",
     "fetchAgentFailed": "获取 Agent 失败: {{status}}",

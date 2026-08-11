@@ -37,7 +37,20 @@ func (m *memStore) Load(id string) (*session.Session, error) {
 	return sess, nil
 }
 
-func (m *memStore) List() ([]session.SessionMeta, error) { return nil, nil }
+func (m *memStore) List() ([]session.SessionMeta, error) {
+	metas := make([]session.SessionMeta, 0, len(m.sessions))
+	for _, sess := range m.sessions {
+		metas = append(metas, session.SessionMeta{
+			ID:        sess.ID,
+			UserID:    sess.UserID,
+			Agent:     sess.Agent,
+			Metadata:  sess.GetMetadata(),
+			CreatedAt: sess.CreatedAt,
+			UpdatedAt: sess.UpdatedAt,
+		})
+	}
+	return metas, nil
+}
 
 func (m *memStore) Delete(id string) error {
 	delete(m.sessions, id)
@@ -51,7 +64,7 @@ name: wd-demo
 provider: mock
 model: mock-1
 system_prompt: you are a helper
-tools: [echo]
+tools: [get_time]
 `
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "agt_wd.yaml"), []byte(yaml), 0o644))
 }

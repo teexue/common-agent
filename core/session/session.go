@@ -16,6 +16,14 @@ import (
 // global/default working directory.
 const MetadataKeyWorkdir = "workdir"
 
+// MetadataKeySource is the session metadata key recording what created the
+// session (e.g. "kanban"). Kanban-created sessions are hidden from the
+// conversation session list.
+const MetadataKeySource = "source"
+
+// SourceKanban marks sessions created by kanban task runs.
+const SourceKanban = "kanban"
+
 // Session holds in-memory conversation state for one agent run.
 // It is safe for concurrent use by a single producer (the loop) and
 // multiple readers.
