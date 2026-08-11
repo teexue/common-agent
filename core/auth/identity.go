@@ -11,7 +11,9 @@ const PasswordKeyID = "pwd"
 // Identity is the authenticated principal for a request.
 type Identity struct {
 	UserID string
-	KeyID  string // API key id, or PasswordKeyID for password login
+	KeyID  string   // API key id, or PasswordKeyID for password login
+	Role   string   // RBAC role ("admin"/"member"); empty for API key identities
+	Scopes []string // API key scopes; empty for password sessions (full access)
 }
 
 type ctxKey struct{}

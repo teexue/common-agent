@@ -25,14 +25,19 @@ function loadHistory(): string[] {
   try {
     const raw = localStorage.getItem(HISTORY_KEY)
     const parsed: unknown = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : []
+    return Array.isArray(parsed)
+      ? parsed.filter((x): x is string => typeof x === "string")
+      : []
   } catch {
     return []
   }
 }
 
 function pushHistory(dir: string): string[] {
-  const next = [dir, ...loadHistory().filter((d) => d !== dir)].slice(0, HISTORY_MAX)
+  const next = [dir, ...loadHistory().filter((d) => d !== dir)].slice(
+    0,
+    HISTORY_MAX
+  )
   localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
   return next
 }
@@ -46,7 +51,12 @@ function basename(path: string): string {
  * left. Remembers previously chosen directories; the directory browser only
  * opens when adding a new one. Sessions without their own directory fall back
  * to the global setting. */
-export function SessionWorkdir({ workDir, sessionScoped, onPick, onClear }: SessionWorkdirProps) {
+export function SessionWorkdir({
+  workDir,
+  sessionScoped,
+  onPick,
+  onClear,
+}: SessionWorkdirProps) {
   const { t } = useTranslation()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [history, setHistory] = useState<string[]>(loadHistory)
@@ -72,11 +82,17 @@ export function SessionWorkdir({ workDir, sessionScoped, onPick, onClear }: Sess
           }
         >
           <FolderOpen className="h-3.5 w-3.5" />
-          <span className="max-w-28 truncate font-mono text-[11px]">{label}</span>
+          <span className="max-w-28 truncate font-mono text-[11px]">
+            {label}
+          </span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64 rounded-xl">
           {history.map((dir) => (
-            <DropdownMenuItem key={dir} onClick={() => handlePick(dir)} className="gap-2 text-xs">
+            <DropdownMenuItem
+              key={dir}
+              onClick={() => handlePick(dir)}
+              className="gap-2 text-xs"
+            >
               {dir === workDir ? (
                 <Check className="h-3.5 w-3.5 shrink-0" />
               ) : (
@@ -86,20 +102,30 @@ export function SessionWorkdir({ workDir, sessionScoped, onPick, onClear }: Sess
             </DropdownMenuItem>
           ))}
           {history.length > 0 && <DropdownMenuSeparator />}
-          <DropdownMenuItem onClick={() => setPickerOpen(true)} className="gap-2 text-xs">
-            <FolderPlus className="h-3.5 w-3.5" /> {t("conversation.workdirAdd")}
+          <DropdownMenuItem
+            onClick={() => setPickerOpen(true)}
+            className="gap-2 text-xs"
+          >
+            <FolderPlus className="h-3.5 w-3.5" />{" "}
+            {t("conversation.workdirAdd")}
           </DropdownMenuItem>
           {sessionScoped && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={onClear} className="gap-2 text-xs">
-                <X className="h-3.5 w-3.5" /> {t("conversation.workdirUseGlobal")}
+                <X className="h-3.5 w-3.5" />{" "}
+                {t("conversation.workdirUseGlobal")}
               </DropdownMenuItem>
             </>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-      <DirPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} initialPath={workDir} onSelect={handlePick} />
+      <DirPickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        initialPath={workDir}
+        onSelect={handlePick}
+      />
     </>
   )
 }

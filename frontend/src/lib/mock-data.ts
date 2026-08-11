@@ -25,7 +25,8 @@ export const MOCK_AGENTS: AgentInfo[] = [
     model: "gpt-4o",
     tools: ["echo", "get_time"],
     maxTurns: 20,
-    systemPrompt: "You are a code review assistant. Analyze code for bugs, style issues, and improvements.",
+    systemPrompt:
+      "You are a code review assistant. Analyze code for bugs, style issues, and improvements.",
   },
   {
     id: "agt_data",
@@ -34,7 +35,8 @@ export const MOCK_AGENTS: AgentInfo[] = [
     model: "claude-sonnet-4-20250514",
     tools: ["echo", "get_time"],
     maxTurns: 15,
-    systemPrompt: "You are a data analysis assistant. Help users analyze and visualize data.",
+    systemPrompt:
+      "You are a data analysis assistant. Help users analyze and visualize data.",
   },
 ]
 
@@ -133,7 +135,7 @@ export function createMockConversation(): ConversationEntry[] {
       id: nextId(),
       role: "assistant",
       content:
-        '这是一个 TypeScript 实现的快速排序：\n\n```typescript\nfunction quickSort<T>(arr: T[], compare: (a: T, b: T) => number): T[] {\n  if (arr.length <= 1) return arr\n\n  const result = [...arr]\n  _quickSort(result, 0, result.length - 1, compare)\n  return result\n}\n\nfunction _quickSort<T>(\n  arr: T[],\n  low: number,\n  high: number,\n  compare: (a: T, b: T) => number\n): void {\n  if (low < high) {\n    const pivotIndex = partition(arr, low, high, compare)\n    _quickSort(arr, low, pivotIndex - 1, compare)\n    _quickSort(arr, pivotIndex + 1, high, compare)\n  }\n}\n\nfunction partition<T>(\n  arr: T[],\n  low: number,\n  high: number,\n  compare: (a: T, b: T) => number\n): number {\n  const pivot = arr[high]\n  let i = low - 1\n\n  for (let j = low; j < high; j++) {\n    if (compare(arr[j], pivot) <= 0) {\n      i++\n      ;[arr[i], arr[j]] = [arr[j], arr[i]]\n    }\n  }\n\n  ;[arr[i + 1], arr[high]] = [arr[high], arr[i + 1]]\n  return i + 1\n}\n\n// 使用示例\nconst numbers = [38, 27, 43, 3, 9, 82, 10]\nconst sorted = quickSort(numbers, (a, b) => a - b)\nconsole.log(sorted) // [3, 9, 10, 27, 38, 43, 82]\n```\n\n**特点：**\n- 泛型支持，可用于任意类型\n- 自定义比较函数\n- 原地排序，不额外分配数组空间\n- 平均时间复杂度 O(n log n)',
+        "这是一个 TypeScript 实现的快速排序：\n\n```typescript\nfunction quickSort<T>(arr: T[], compare: (a: T, b: T) => number): T[] {\n  if (arr.length <= 1) return arr\n\n  const result = [...arr]\n  _quickSort(result, 0, result.length - 1, compare)\n  return result\n}\n\nfunction _quickSort<T>(\n  arr: T[],\n  low: number,\n  high: number,\n  compare: (a: T, b: T) => number\n): void {\n  if (low < high) {\n    const pivotIndex = partition(arr, low, high, compare)\n    _quickSort(arr, low, pivotIndex - 1, compare)\n    _quickSort(arr, pivotIndex + 1, high, compare)\n  }\n}\n\nfunction partition<T>(\n  arr: T[],\n  low: number,\n  high: number,\n  compare: (a: T, b: T) => number\n): number {\n  const pivot = arr[high]\n  let i = low - 1\n\n  for (let j = low; j < high; j++) {\n    if (compare(arr[j], pivot) <= 0) {\n      i++\n      ;[arr[i], arr[j]] = [arr[j], arr[i]]\n    }\n  }\n\n  ;[arr[i + 1], arr[high]] = [arr[high], arr[i + 1]]\n  return i + 1\n}\n\n// 使用示例\nconst numbers = [38, 27, 43, 3, 9, 82, 10]\nconst sorted = quickSort(numbers, (a, b) => a - b)\nconsole.log(sorted) // [3, 9, 10, 27, 38, 43, 82]\n```\n\n**特点：**\n- 泛型支持，可用于任意类型\n- 自定义比较函数\n- 原地排序，不额外分配数组空间\n- 平均时间复杂度 O(n log n)",
       timestamp: now - 25000,
     },
   ]
@@ -141,7 +143,14 @@ export function createMockConversation(): ConversationEntry[] {
 
 // ─── Mock Event Stream Generator ──────────────────────────────────
 
-const MOCK_RESPONSES: Record<string, { reasoning: string; text: string; tools?: Array<{ name: string; input: unknown; output: unknown }> }> = {
+const MOCK_RESPONSES: Record<
+  string,
+  {
+    reasoning: string
+    text: string
+    tools?: Array<{ name: string; input: unknown; output: unknown }>
+  }
+> = {
   default: {
     reasoning: "用户发送了一条消息，我需要理解并回复。",
     text: "收到你的消息了！有什么我可以帮你的吗？",

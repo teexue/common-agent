@@ -17,6 +17,7 @@ const (
 	metaMigratedCreds     = "migrated_credentials"
 	metaMigratedMCP       = "migrated_mcp"
 	metaMigratedSessions  = "migrated_sessions"
+	metaAllowRegistration = "allow_registration"
 )
 
 // GetMeta returns a meta value or empty string.
@@ -59,4 +60,20 @@ func (db *DB) EnsureJWTSecret() ([]byte, error) {
 		return nil, err
 	}
 	return raw, nil
+}
+
+// GetAllowRegistration reports whether open self-registration is allowed
+// (default false when the flag was never set).
+func (db *DB) GetAllowRegistration() bool {
+	v, err := db.GetMeta(metaAllowRegistration)
+	return err == nil && v == "1"
+}
+
+// SetAllowRegistration enables or disables open self-registration.
+func (db *DB) SetAllowRegistration(allow bool) error {
+	v := "0"
+	if allow {
+		v = "1"
+	}
+	return db.SetMeta(metaAllowRegistration, v)
 }

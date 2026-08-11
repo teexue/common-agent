@@ -8,7 +8,9 @@ export function EmptyInspector() {
       <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-muted text-muted-foreground">
         <MousePointerClick className="h-5 w-5 opacity-60" />
       </div>
-      <p className="font-heading text-sm text-foreground">{t("inspector.emptyTitle")}</p>
+      <p className="font-heading text-sm text-foreground">
+        {t("inspector.emptyTitle")}
+      </p>
       <p className="mt-1.5 max-w-[14rem] text-xs leading-relaxed text-muted-foreground">
         {t("inspector.emptyDesc")}
       </p>

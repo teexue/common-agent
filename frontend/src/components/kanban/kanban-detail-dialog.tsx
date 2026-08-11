@@ -183,7 +183,7 @@ export function KanbanDetailDialog({
                 <div className="flex gap-2">
                   <Button
                     size="sm"
-                    className="h-8 flex-1 gap-1.5 rounded-xl text-xs"
+                    className="h-8 flex-1 gap-1.5 text-xs"
                     onClick={() => onApprove(item.id)}
                   >
                     <Check className="h-3.5 w-3.5" /> {t("common.approve")}
@@ -191,7 +191,7 @@ export function KanbanDetailDialog({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 flex-1 gap-1.5 rounded-xl text-xs"
+                    className="h-8 flex-1 gap-1.5 text-xs"
                     disabled={!feedback.trim()}
                     onClick={handleReject}
                   >
@@ -206,7 +206,7 @@ export function KanbanDetailDialog({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 w-full gap-1.5 rounded-xl text-xs"
+                  className="h-8 w-full gap-1.5 text-xs"
                   onClick={() => onRequeue(item.id)}
                 >
                   <RotateCcw className="h-3.5 w-3.5" /> {t("kanban.requeue")}
@@ -220,7 +220,7 @@ export function KanbanDetailDialog({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 flex-1 gap-1.5 rounded-xl text-xs"
+                    className="h-8 flex-1 gap-1.5 text-xs"
                     onClick={() => setReplayOpen(true)}
                   >
                     <History className="h-3.5 w-3.5" /> {t("kanban.viewReplay")}
@@ -228,7 +228,7 @@ export function KanbanDetailDialog({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 flex-1 gap-1.5 rounded-xl text-xs"
+                    className="h-8 flex-1 gap-1.5 text-xs"
                     onClick={() => setLogsOpen(true)}
                   >
                     <ScrollText className="h-3.5 w-3.5" /> {t("audit.title")}
@@ -238,7 +238,7 @@ export function KanbanDetailDialog({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 gap-1.5 rounded-xl text-xs text-destructive hover:text-destructive"
+                className="h-8 gap-1.5 text-xs text-destructive hover:text-destructive"
                 onClick={() => onDelete(item.id)}
               >
                 <Trash2 className="h-3.5 w-3.5" /> {t("common.delete")}

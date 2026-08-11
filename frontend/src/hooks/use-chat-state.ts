@@ -1,138 +1,30 @@
-import type { ConversationEntry, ToolCallEntry } from "@/types/agent"
+import type { ChatAction, ChatState } from "./chat-state-types"
+import {
+  createAssistantEntry,
+  createCompactionEntry,
+  createUserEntry,
+  updateMessage,
+  updateToolCall,
+} from "./chat-state-helpers"
 
-// ─── State ────────────────────────────────────────────────────────
-
-export interface ChatState {
-  messages: ConversationEntry[]
-  isStreaming: boolean
-  error: string | null
-  sessionId: string | null
-}
-
-export type ChatAction =
-  | { type: "ADD_USER_MESSAGE"; text: string }
-  | { type: "START_ASSISTANT"; entryId: string }
-  | { type: "APPEND_TEXT"; entryId: string; content: string }
-  | { type: "APPEND_REASONING"; entryId: string; content: string }
-  | { type: "TOOL_START"; entryId: string; toolCall: ToolCallEntry }
-  | {
-      type: "TOOL_RESULT"
-      entryId: string
-      toolName: string
-      toolCallId?: string
-      output: unknown
-    }
-  | {
-      type: "TOOL_DENIED"
-      entryId: string
-      toolName: string
-      toolCallId?: string
-      output: unknown
-    }
-  | {
-      type: "TOOL_APPROVAL_REQUIRED"
-      entryId: string
-      toolName: string
-      toolCallId?: string
-      approvalId?: string
-    }
-  | { type: "COMPACTION"; summary: string }
-  | { type: "SUB_AGENT_START"; entryId: string; toolCall: ToolCallEntry }
-  | {
-      type: "SUB_AGENT_END"
-      entryId: string
-      toolName: string
-      toolCallId?: string
-    }
-  | {
-      type: "STREAM_DONE"
-      entryId: string
-      status: string
-      turns: number
-      inputTokens?: number
-      outputTokens?: number
-    }
-  | { type: "STREAM_ERROR"; message: string }
-  | { type: "CLEAR" }
-  | { type: "SET_SESSION_ID"; sessionId: string | null }
-  | { type: "LOAD_SESSION"; sessionId: string; messages: ConversationEntry[] }
-
-// ─── Helpers ──────────────────────────────────────────────────────
-
-function matchesToolCall(
-  tc: ToolCallEntry,
-  toolName: string,
-  toolCallId?: string
-): boolean {
-  if (toolCallId && tc.toolCallId) {
-    return tc.toolCallId === toolCallId
-  }
-  return tc.name === toolName
-}
-
-/** Update a message entry by id with a transform function. */
-function updateMessage(
-  messages: ConversationEntry[],
-  entryId: string,
-  fn: (m: ConversationEntry) => ConversationEntry
-): ConversationEntry[] {
-  return messages.map((m) => (m.id === entryId ? fn(m) : m))
-}
-
-/** Update a tool call within a message by matching name/id.
- *  First tries the entry with matching entryId, then falls back to searching all messages. */
-function updateToolCall(
-  messages: ConversationEntry[],
-  entryId: string,
-  toolName: string,
-  toolCallId: string | undefined,
-  fn: (tc: ToolCallEntry) => ToolCallEntry
-): ConversationEntry[] {
-  // Try the specified entry first
-  const target = messages.find((m) => m.id === entryId)
-  if (target?.toolCalls?.some((tc) => matchesToolCall(tc, toolName, toolCallId))) {
-    return updateMessage(messages, entryId, (m) => ({
-      ...m,
-      toolCalls: m.toolCalls?.map((tc) =>
-        matchesToolCall(tc, toolName, toolCallId) ? fn(tc) : tc
-      ),
-    }))
-  }
-  // Fallback: search all messages
-  return messages.map((m) => ({
-    ...m,
-    toolCalls: m.toolCalls?.map((tc) =>
-      matchesToolCall(tc, toolName, toolCallId) ? fn(tc) : tc
-    ),
-  }))
-}
-
-function createUserEntry(text: string): ConversationEntry {
-  return { id: `user-${Date.now()}`, role: "user", content: text, timestamp: Date.now() }
-}
-
-function createAssistantEntry(entryId: string): ConversationEntry {
-  return {
-    id: entryId, role: "assistant", content: "", reasoningContent: "",
-    toolCalls: [], timestamp: Date.now(), isStreaming: true,
-  }
-}
-
-function createCompactionEntry(summary: string): ConversationEntry {
-  return {
-    id: `compaction-${Date.now()}`, role: "system", content: "",
-    compactionSummary: summary, timestamp: Date.now(),
-  }
-}
+export type { ChatAction, ChatState } from "./chat-state-types"
 
 // ─── Reducer ──────────────────────────────────────────────────────
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case "ADD_USER_MESSAGE":
-      return { ...state, messages: [...state.messages, createUserEntry(action.text)], error: null }
+      return {
+        ...state,
+        messages: [...state.messages, createUserEntry(action.text)],
+        error: null,
+      }
     case "START_ASSISTANT":
-      return { ...state, messages: [...state.messages, createAssistantEntry(action.entryId)], isStreaming: true }
+      return {
+        ...state,
+        messages: [...state.messages, createAssistantEntry(action.entryId)],
+        isStreaming: true,
+      }
     case "APPEND_TEXT":
     case "APPEND_REASONING":
       return reduceContentUpdate(state, action)
@@ -142,7 +34,10 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "TOOL_APPROVAL_REQUIRED":
       return reduceToolAction(state, action)
     case "COMPACTION":
-      return { ...state, messages: [...state.messages, createCompactionEntry(action.summary)] }
+      return {
+        ...state,
+        messages: [...state.messages, createCompactionEntry(action.summary)],
+      }
     case "SUB_AGENT_START":
     case "SUB_AGENT_END":
       return reduceSubAgentAction(state, action)
@@ -166,18 +61,32 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
  *  3. Otherwise → append to the original entryId */
 function reduceContentUpdate(
   state: ChatState,
-  action: { type: "APPEND_TEXT" | "APPEND_REASONING"; entryId: string; content: string }
+  action: {
+    type: "APPEND_TEXT" | "APPEND_REASONING"
+    entryId: string
+    content: string
+  }
 ): ChatState {
   const lastEntry = state.messages[state.messages.length - 1]
 
   // Case 1: last entry is a streaming text entry → append to it
-  if (lastEntry?.role === "assistant" && lastEntry.isStreaming && (!lastEntry.toolCalls || lastEntry.toolCalls.length === 0)) {
+  if (
+    lastEntry?.role === "assistant" &&
+    lastEntry.isStreaming &&
+    (!lastEntry.toolCalls || lastEntry.toolCalls.length === 0)
+  ) {
     return {
       ...state,
       messages: updateMessage(state.messages, lastEntry.id, (m) => ({
         ...m,
-        content: action.type === "APPEND_TEXT" ? m.content + action.content : m.content,
-        reasoningContent: action.type === "APPEND_REASONING" ? (m.reasoningContent ?? "") + action.content : m.reasoningContent,
+        content:
+          action.type === "APPEND_TEXT"
+            ? m.content + action.content
+            : m.content,
+        reasoningContent:
+          action.type === "APPEND_REASONING"
+            ? (m.reasoningContent ?? "") + action.content
+            : m.reasoningContent,
       })),
     }
   }
@@ -186,14 +95,18 @@ function reduceContentUpdate(
   if (lastEntry?.toolCalls && lastEntry.toolCalls.length > 0) {
     return {
       ...state,
-      messages: [...state.messages, {
-        id: `text-${Date.now()}`,
-        role: "assistant" as const,
-        content: action.type === "APPEND_TEXT" ? action.content : "",
-        reasoningContent: action.type === "APPEND_REASONING" ? action.content : "",
-        timestamp: Date.now(),
-        isStreaming: true,
-      }],
+      messages: [
+        ...state.messages,
+        {
+          id: `text-${Date.now()}`,
+          role: "assistant" as const,
+          content: action.type === "APPEND_TEXT" ? action.content : "",
+          reasoningContent:
+            action.type === "APPEND_REASONING" ? action.content : "",
+          timestamp: Date.now(),
+          isStreaming: true,
+        },
+      ],
     }
   }
 
@@ -202,8 +115,12 @@ function reduceContentUpdate(
     ...state,
     messages: updateMessage(state.messages, action.entryId, (m) => ({
       ...m,
-      content: action.type === "APPEND_TEXT" ? m.content + action.content : m.content,
-      reasoningContent: action.type === "APPEND_REASONING" ? (m.reasoningContent ?? "") + action.content : m.reasoningContent,
+      content:
+        action.type === "APPEND_TEXT" ? m.content + action.content : m.content,
+      reasoningContent:
+        action.type === "APPEND_REASONING"
+          ? (m.reasoningContent ?? "") + action.content
+          : m.reasoningContent,
     })),
   }
 }
@@ -217,7 +134,9 @@ function reduceToolAction(
     case "TOOL_START": {
       // Close streaming on the current text entry
       const closed = state.messages.map((m) =>
-        m.id === action.entryId && m.isStreaming ? { ...m, isStreaming: false } : m
+        m.id === action.entryId && m.isStreaming
+          ? { ...m, isStreaming: false }
+          : m
       )
       const lastEntry = closed[closed.length - 1]
       // If last entry already has tool calls, append to it (aggregate)
@@ -233,13 +152,16 @@ function reduceToolAction(
       // Otherwise create new entry for tool call(s)
       return {
         ...state,
-        messages: [...closed, {
-          id: `tc-${Date.now()}`,
-          role: "assistant" as const,
-          content: "",
-          toolCalls: [action.toolCall],
-          timestamp: Date.now(),
-        }],
+        messages: [
+          ...closed,
+          {
+            id: `tc-${Date.now()}`,
+            role: "assistant" as const,
+            content: "",
+            toolCalls: [action.toolCall],
+            timestamp: Date.now(),
+          },
+        ],
       }
     }
     case "TOOL_RESULT":
@@ -250,7 +172,12 @@ function reduceToolAction(
           action.entryId,
           action.toolName,
           action.toolCallId,
-          (tc) => ({ ...tc, output: action.output, status: "completed" as const, endTime: Date.now() })
+          (tc) => ({
+            ...tc,
+            output: action.output,
+            status: "completed" as const,
+            endTime: Date.now(),
+          })
         ),
       }
     case "TOOL_DENIED":
@@ -261,7 +188,12 @@ function reduceToolAction(
           action.entryId,
           action.toolName,
           action.toolCallId,
-          (tc) => ({ ...tc, output: action.output, status: "denied" as const, endTime: Date.now() })
+          (tc) => ({
+            ...tc,
+            output: action.output,
+            status: "denied" as const,
+            endTime: Date.now(),
+          })
         ),
       }
     case "TOOL_APPROVAL_REQUIRED":
@@ -272,7 +204,11 @@ function reduceToolAction(
           action.entryId,
           action.toolName,
           action.toolCallId,
-          (tc) => ({ ...tc, status: "pending_approval" as const, approvalId: action.approvalId })
+          (tc) => ({
+            ...tc,
+            status: "pending_approval" as const,
+            approvalId: action.approvalId,
+          })
         ),
       }
     default:
@@ -309,7 +245,9 @@ function reduceSubAgentAction(
 /** Handles STREAM_DONE, STREAM_ERROR, CLEAR, SET_SESSION_ID, LOAD_SESSION. */
 function reduceSessionAction(
   state: ChatState,
-  action: ChatAction & { type: `STREAM_${string}` | "CLEAR" | "SET_SESSION_ID" | "LOAD_SESSION" }
+  action: ChatAction & {
+    type: `STREAM_${string}` | "CLEAR" | "SET_SESSION_ID" | "LOAD_SESSION"
+  }
 ): ChatState {
   switch (action.type) {
     case "STREAM_DONE":
@@ -322,9 +260,13 @@ function reduceSessionAction(
           return {
             ...m,
             isStreaming: false,
-            usage: isTarget && (action.inputTokens || action.outputTokens)
-              ? { inputTokens: action.inputTokens ?? 0, outputTokens: action.outputTokens ?? 0 }
-              : m.usage,
+            usage:
+              isTarget && (action.inputTokens || action.outputTokens)
+                ? {
+                    inputTokens: action.inputTokens ?? 0,
+                    outputTokens: action.outputTokens ?? 0,
+                  }
+                : m.usage,
           }
         }),
       }

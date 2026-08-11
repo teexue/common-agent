@@ -29,7 +29,9 @@ import type { AgentInfo, SkillInfo } from "@/types/agent"
 /** Agent Skills standard: lowercase letters/digits/hyphens, ≤64 chars,
  *  no leading/trailing/consecutive hyphens. */
 function isValidSkillName(name: string): boolean {
-  return /^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$/.test(name) && !name.includes("--")
+  return (
+    /^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$/.test(name) && !name.includes("--")
+  )
 }
 
 /** Scope selector (global / per-agent) shared by the skill dialogs. */
@@ -54,19 +56,30 @@ export function ScopeFields({
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <div className="space-y-1.5">
-        <Label className="text-xs text-muted-foreground">{t("manage.skillsFieldScope")}</Label>
+        <Label className="text-xs text-muted-foreground">
+          {t("manage.skillsFieldScope")}
+        </Label>
         <Select
-          value={{ value: scope, label: scopeOptions.find((o) => o.value === scope)?.label ?? scope }}
+          value={{
+            value: scope,
+            label: scopeOptions.find((o) => o.value === scope)?.label ?? scope,
+          }}
           onValueChange={(v) => {
             if (v && typeof v === "object" && "value" in v) {
-              onScopeChange((v as { value: string }).value as "global" | "agent")
+              onScopeChange(
+                (v as { value: string }).value as "global" | "agent"
+              )
             }
           }}
         >
-          <SelectTrigger className="h-9 w-full rounded-lg text-sm"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-9 w-full rounded-lg text-sm">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent className="rounded-xl">
             {scopeOptions.map((o) => (
-              <SelectItem key={o.value} value={o}>{o.label}</SelectItem>
+              <SelectItem key={o.value} value={o}>
+                {o.label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -75,17 +88,31 @@ export function ScopeFields({
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Agent</Label>
           <Select
-            value={agent ? { value: agent, label: agents.find((a) => (a.id || a.name) === agent)?.name ?? agent } : null}
+            value={
+              agent
+                ? {
+                    value: agent,
+                    label:
+                      agents.find((a) => (a.id || a.name) === agent)?.name ??
+                      agent,
+                  }
+                : null
+            }
             onValueChange={(v) => {
               if (v && typeof v === "object" && "value" in v) {
                 onAgentChange((v as { value: string }).value)
               }
             }}
           >
-            <SelectTrigger className="h-9 w-full rounded-lg text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-9 w-full rounded-lg text-sm">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent className="rounded-xl">
               {agents.map((a) => (
-                <SelectItem key={a.id || a.name} value={{ value: a.id || a.name, label: a.name }}>
+                <SelectItem
+                  key={a.id || a.name}
+                  value={{ value: a.id || a.name, label: a.name }}
+                >
                   {a.name}
                 </SelectItem>
               ))}
@@ -107,7 +134,11 @@ interface SkillFormState {
   agent: string
 }
 
-function initialFormState(mode: "create" | "edit", skill: SkillInfo | null, agents: AgentInfo[]): SkillFormState {
+function initialFormState(
+  mode: "create" | "edit",
+  skill: SkillInfo | null,
+  agents: AgentInfo[]
+): SkillFormState {
   if (mode === "edit" && skill) {
     return {
       name: skill.name,
@@ -144,13 +175,17 @@ function SkillForm({
   onSaved: () => void
 }) {
   const { t } = useTranslation()
-  const [form, setForm] = useState<SkillFormState>(() => initialFormState(mode, skill, agents))
+  const [form, setForm] = useState<SkillFormState>(() =>
+    initialFormState(mode, skill, agents)
+  )
   const [detailLoading, setDetailLoading] = useState(mode === "edit" && !!skill)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
-  const set = <K extends keyof SkillFormState>(key: K, value: SkillFormState[K]) =>
-    setForm((f) => ({ ...f, [key]: value }))
+  const set = <K extends keyof SkillFormState>(
+    key: K,
+    value: SkillFormState[K]
+  ) => setForm((f) => ({ ...f, [key]: value }))
 
   useEffect(() => {
     if (mode !== "edit" || !skill) return
@@ -167,7 +202,8 @@ function SkillForm({
         }))
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : String(err))
       })
       .finally(() => {
         if (!cancelled) setDetailLoading(false)
@@ -214,10 +250,15 @@ function SkillForm({
     )
   }
   return (
-    <form onSubmit={handleSubmit} className="max-h-[70vh] space-y-3 overflow-y-auto pr-1">
+    <form
+      onSubmit={handleSubmit}
+      className="max-h-[70vh] space-y-3 overflow-y-auto pr-1"
+    >
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">{t("manage.skillsFieldName")}</Label>
+          <Label className="text-xs text-muted-foreground">
+            {t("manage.skillsFieldName")}
+          </Label>
           <Input
             value={form.name}
             onChange={(e) => set("name", e.target.value)}
@@ -228,7 +269,9 @@ function SkillForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">{t("manage.skillsFieldLicense")}</Label>
+          <Label className="text-xs text-muted-foreground">
+            {t("manage.skillsFieldLicense")}
+          </Label>
           <Input
             value={form.license}
             onChange={(e) => set("license", e.target.value)}
@@ -238,7 +281,9 @@ function SkillForm({
         </div>
       </div>
       <div className="space-y-1.5">
-        <Label className="text-xs text-muted-foreground">{t("manage.skillsFieldDesc")}</Label>
+        <Label className="text-xs text-muted-foreground">
+          {t("manage.skillsFieldDesc")}
+        </Label>
         <Input
           value={form.description}
           onChange={(e) => set("description", e.target.value)}
@@ -254,7 +299,9 @@ function SkillForm({
         onAgentChange={(a) => set("agent", a)}
       />
       <div className="space-y-1.5">
-        <Label className="text-xs text-muted-foreground">{t("manage.skillsFieldAllowedTools")}</Label>
+        <Label className="text-xs text-muted-foreground">
+          {t("manage.skillsFieldAllowedTools")}
+        </Label>
         <Input
           value={form.allowedTools}
           onChange={(e) => set("allowedTools", e.target.value)}
@@ -263,7 +310,9 @@ function SkillForm({
         />
       </div>
       <div className="space-y-1.5">
-        <Label className="text-xs text-muted-foreground">{t("manage.skillsFieldBody")}</Label>
+        <Label className="text-xs text-muted-foreground">
+          {t("manage.skillsFieldBody")}
+        </Label>
         <Textarea
           value={form.body}
           onChange={(e) => set("body", e.target.value)}
@@ -274,13 +323,19 @@ function SkillForm({
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" className="h-8 rounded-xl text-xs" onClick={onCancel}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 text-xs"
+          onClick={onCancel}
+        >
           {t("common.cancel")}
         </Button>
         <Button
           type="submit"
           size="sm"
-          className="h-8 gap-1.5 rounded-xl text-xs"
+          className="h-8 gap-1.5 text-xs"
           disabled={saving || (form.scope === "agent" && !form.agent)}
         >
           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -313,7 +368,9 @@ export function SkillFormDialog({
       <DialogContent className="max-w-2xl rounded-2xl border-border bg-card">
         <DialogHeader>
           <DialogTitle>
-            {mode === "edit" ? t("manage.skillsEditTitle") : t("manage.skillsCreateTitle")}
+            {mode === "edit"
+              ? t("manage.skillsEditTitle")
+              : t("manage.skillsCreateTitle")}
           </DialogTitle>
         </DialogHeader>
         {open && (

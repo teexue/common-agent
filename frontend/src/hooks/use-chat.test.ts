@@ -49,7 +49,8 @@ describe("parseSSELine", () => {
   })
 
   it("parses tool_start event", () => {
-    const line = 'data: {"type":"tool_start","tool":"echo","input":{"message":"hi"}}'
+    const line =
+      'data: {"type":"tool_start","tool":"echo","input":{"message":"hi"}}'
     const event = parseSSELine(line)
     expect(event).toEqual({
       type: "tool_start",
@@ -120,7 +121,10 @@ function toBackendMessages(entries: ConversationEntry[]): BackendMessage[] {
               role: "tool",
               tool_call_id: tc.id,
               name: tc.name,
-              content: typeof tc.output === "string" ? tc.output : JSON.stringify(tc.output),
+              content:
+                typeof tc.output === "string"
+                  ? tc.output
+                  : JSON.stringify(tc.output),
             })
           }
         }
@@ -176,7 +180,9 @@ describe("toBackendMessages", () => {
     expect(result[0]).toEqual({
       role: "assistant",
       content: "",
-      tool_calls: [{ id: "tc-1", name: "echo", arguments: { message: "test" } }],
+      tool_calls: [
+        { id: "tc-1", name: "echo", arguments: { message: "test" } },
+      ],
     })
     expect(result[1]).toEqual({
       role: "tool",

@@ -3,10 +3,9 @@ import type { StreamStatus } from "@/types/agent"
 import { cn } from "@/lib/utils"
 import type { TFunction } from "i18next"
 
-function getStatusConfig(t: TFunction): Record<
-  StreamStatus,
-  { dot: string; label: string; className?: string }
-> {
+function getStatusConfig(
+  t: TFunction
+): Record<StreamStatus, { dot: string; label: string; className?: string }> {
   return {
     idle: {
       dot: "bg-muted-foreground/30",
@@ -34,11 +33,7 @@ export function StatusIndicator({ status }: { status: StreamStatus }) {
   return (
     <div className="flex items-center gap-1.5">
       <div
-        className={cn(
-          "h-1.5 w-1.5 rounded-full",
-          config.dot,
-          config.className
-        )}
+        className={cn("h-1.5 w-1.5 rounded-full", config.dot, config.className)}
       />
       <span className="text-[10px] font-medium text-muted-foreground">
         {config.label}

@@ -10,13 +10,16 @@ interface ConversationPanelProps {
   currentEventIndex: number
 }
 
-export function ConversationPanel({ entries, currentEventIndex }: ConversationPanelProps) {
+export function ConversationPanel({
+  entries,
+  currentEventIndex,
+}: ConversationPanelProps) {
   const { t } = useTranslation()
   const { containerRef, handleScroll } = useAutoScroll(currentEventIndex)
 
   const visibleEntries = useMemo(
     () => buildVisibleEntries(entries, currentEventIndex),
-    [entries, currentEventIndex],
+    [entries, currentEventIndex]
   )
 
   if (visibleEntries.length === 0) {
@@ -28,7 +31,11 @@ export function ConversationPanel({ entries, currentEventIndex }: ConversationPa
   }
 
   return (
-    <div ref={containerRef} onScroll={handleScroll} className="h-full overflow-auto">
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="h-full overflow-auto"
+    >
       <div className="flex flex-col gap-5 p-5">
         {visibleEntries.map((entry) => (
           <ActivityEntry

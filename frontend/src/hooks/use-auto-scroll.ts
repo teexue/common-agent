@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef } from "react"
 
-export function useAutoScroll<T>(dependency: T, behavior: ScrollBehavior = "smooth") {
+export function useAutoScroll<T>(
+  dependency: T,
+  behavior: ScrollBehavior = "smooth"
+) {
   const containerRef = useRef<HTMLDivElement>(null)
   const shouldAutoScroll = useRef(true)
 

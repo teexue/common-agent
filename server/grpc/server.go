@@ -130,6 +130,7 @@ func (s *GRPCServer) SetAPIKeys(keys []string) {
 
 // checkAuth validates the API key from gRPC metadata.
 // Returns nil if auth is disabled or the key is valid.
+// 遗留：gRPC 鉴权未接入 RBAC（无 role/scope 检查），仅做 API key 校验。
 func (s *GRPCServer) checkAuth(ctx context.Context) error {
 	s.apiKeysMu.RLock()
 	enabled := len(s.apiKeys) > 0

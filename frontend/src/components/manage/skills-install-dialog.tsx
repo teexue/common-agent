@@ -26,7 +26,9 @@ function SkillInstallForm({
   const { t } = useTranslation()
   const [url, setUrl] = useState("")
   const [scope, setScope] = useState<"global" | "agent">("global")
-  const [agent, setAgent] = useState(() => agents[0]?.id || agents[0]?.name || "")
+  const [agent, setAgent] = useState(
+    () => agents[0]?.id || agents[0]?.name || ""
+  )
   const [overwrite, setOverwrite] = useState(false)
   const [installing, setInstalling] = useState(false)
   const [error, setError] = useState("")
@@ -61,7 +63,9 @@ function SkillInstallForm({
           className="h-9 rounded-lg font-mono text-sm"
           placeholder={t("manage.skillsInstallUrl")}
         />
-        <p className="text-[11px] text-muted-foreground">{t("manage.skillsInstallHint")}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {t("manage.skillsInstallHint")}
+        </p>
       </div>
       <ScopeFields
         scope={scope}
@@ -77,17 +81,25 @@ function SkillInstallForm({
           onChange={(e) => setOverwrite(e.target.checked)}
           className="h-3.5 w-3.5 rounded border-border accent-primary"
         />
-        <span className="text-xs text-foreground">{t("manage.skillsOverwrite")}</span>
+        <span className="text-xs text-foreground">
+          {t("manage.skillsOverwrite")}
+        </span>
       </label>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" className="h-8 rounded-xl text-xs" onClick={onCancel}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 text-xs"
+          onClick={onCancel}
+        >
           {t("common.cancel")}
         </Button>
         <Button
           type="submit"
           size="sm"
-          className="h-8 gap-1.5 rounded-xl text-xs"
+          className="h-8 gap-1.5 text-xs"
           disabled={installing || !url.trim() || (scope === "agent" && !agent)}
         >
           {installing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

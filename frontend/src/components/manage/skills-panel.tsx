@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { SkillFormDialog } from "@/components/manage/skills-dialogs"
 import { SkillInstallDialog } from "@/components/manage/skills-install-dialog"
+import { EmptyState } from "@/components/shared/empty-state"
 import { deleteSkill } from "@/lib/api"
 import type { AgentInfo, SkillInfo } from "@/types/agent"
 
@@ -27,7 +28,10 @@ function SkillCard({
   const { t } = useTranslation()
   const scopeBadge =
     skill.scope === "global"
-      ? { label: t("manage.skillsScopeGlobal"), cls: "bg-primary/10 text-primary" }
+      ? {
+          label: t("manage.skillsScopeGlobal"),
+          cls: "bg-primary/10 text-primary",
+        }
       : { label: skill.agent ?? "", cls: "bg-warning/10 text-warning" }
   return (
     <div className="group flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-3">
@@ -38,11 +42,16 @@ function SkillCard({
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-medium text-foreground">{skill.name}</p>
           {skill.version && (
-            <Badge variant="outline" className="rounded-md px-1.5 py-0 text-xs font-mono">
+            <Badge
+              variant="outline"
+              className="rounded-md px-1.5 py-0 font-mono text-xs"
+            >
               v{skill.version}
             </Badge>
           )}
-          <span className={`rounded-md px-1.5 py-0.5 text-xs ${scopeBadge.cls}`}>
+          <span
+            className={`rounded-md px-1.5 py-0.5 text-xs ${scopeBadge.cls}`}
+          >
             {scopeBadge.label}
           </span>
         </div>
@@ -96,16 +105,13 @@ function groupSkills(skills: SkillInfo[], globalLabel: string) {
   return groups
 }
 
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="flex items-center justify-center rounded-xl border border-dashed border-border py-10">
-      <p className="text-xs text-muted-foreground">{text}</p>
-    </div>
-  )
-}
-
 /** Skills management panel: scope-grouped list with create/edit/delete/install. */
-export function SkillsPanel({ skills, loading, agents, onRefresh }: SkillsPanelProps) {
+export function SkillsPanel({
+  skills,
+  loading,
+  agents,
+  onRefresh,
+}: SkillsPanelProps) {
   const { t } = useTranslation()
   const [formOpen, setFormOpen] = useState(false)
   const [formMode, setFormMode] = useState<"create" | "edit">("create")
@@ -128,7 +134,8 @@ export function SkillsPanel({ skills, loading, agents, onRefresh }: SkillsPanelP
   }
 
   const handleDelete = async (skill: SkillInfo) => {
-    if (!window.confirm(t("manage.skillsDeleteConfirm", { name: skill.name }))) return
+    if (!window.confirm(t("manage.skillsDeleteConfirm", { name: skill.name })))
+      return
     setError("")
     try {
       await deleteSkill(skill.name, skill.scope, skill.agent)
@@ -141,12 +148,14 @@ export function SkillsPanel({ skills, loading, agents, onRefresh }: SkillsPanelP
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-[11px] text-muted-foreground">{t("manage.skillsHint")}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {t("manage.skillsHint")}
+        </p>
         <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
-            className="h-8 gap-1.5 rounded-xl text-xs"
+            className="h-8 gap-1.5 text-xs"
             onClick={handleCreate}
           >
             <Plus className="h-3.5 w-3.5" /> {t("manage.skillsCreate")}
@@ -154,7 +163,7 @@ export function SkillsPanel({ skills, loading, agents, onRefresh }: SkillsPanelP
           <Button
             variant="outline"
             size="sm"
-            className="h-8 gap-1.5 rounded-xl text-xs"
+            className="h-8 gap-1.5 text-xs"
             onClick={() => setInstallOpen(true)}
           >
             <Download className="h-3.5 w-3.5" /> {t("manage.skillsInstall")}
@@ -163,13 +172,15 @@ export function SkillsPanel({ skills, loading, agents, onRefresh }: SkillsPanelP
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
       {loading ? (
-        <EmptyState text={t("manage.loading")} />
+        <EmptyState title={t("manage.loading")} />
       ) : skills.length === 0 ? (
-        <EmptyState text={t("manage.skillsEmpty")} />
+        <EmptyState title={t("manage.skillsEmpty")} />
       ) : (
         groups.map((g) => (
           <div key={g.key} className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">{g.label}</p>
+            <p className="text-xs font-medium text-muted-foreground">
+              {g.label}
+            </p>
             <div className="space-y-2">
               {g.items.map((sk) => (
                 <SkillCard

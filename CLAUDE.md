@@ -88,7 +88,7 @@ This is a Go agent runtime (`common-agent`).
 - 函数组件 + hooks，禁止 class 组件
 - 禁止 `any` 类型
 - Tailwind utility-first，用 `cn()` 合并类名
-- 组件文件 PascalCase，工具函数 camelCase
+- 组件文件 kebab-case，工具函数 camelCase
 
 ### Git 规范
 

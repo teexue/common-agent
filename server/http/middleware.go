@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/teexue/common-agent/core/auth"
+	"github.com/teexue/common-agent/core/store"
 )
 
 const ginIdentityKey = "identity"
@@ -21,7 +22,7 @@ func (s *Server) authMiddleware() gin.HandlerFunc {
 			return
 		}
 		if !enabled {
-			id := auth.Identity{UserID: auth.DefaultUserID}
+			id := auth.Identity{UserID: auth.DefaultUserID, Role: store.RoleAdmin}
 			c.Set(ginIdentityKey, id)
 			c.Request = c.Request.WithContext(auth.WithIdentity(c.Request.Context(), id))
 			c.Next()
@@ -74,6 +75,31 @@ func identityFromGin(c *gin.Context) auth.Identity {
 		}
 	}
 	return auth.Identity{UserID: auth.DefaultUserID}
+}
+
+// requireAdmin allows only identities with the admin role (403 otherwise).
+func requireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if identityFromGin(c).Role != store.RoleAdmin {
+			respondError(c, http.StatusForbidden, "forbidden", "api.error.forbidden")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// requireScope allows identities carrying the given scope. Password sessions
+// always pass; only API key identities are constrained (see auth.HasScope).
+func requireScope(scope string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !auth.HasScope(identityFromGin(c), scope) {
+			respondError(c, http.StatusForbidden, "forbidden", "api.error.forbidden")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
 // backgroundUploadMaxBytes is the body size limit for POST /v1/background

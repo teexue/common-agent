@@ -85,10 +85,13 @@ export function usePlayback(totalCount: number): UsePlaybackReturn {
     setCurrentIndex((prev) => Math.max(prev - 1, 0))
   }, [])
 
-  const seekTo = useCallback((index: number) => {
-    setIsPlaying(false)
-    setCurrentIndex(Math.max(0, Math.min(index, totalCount - 1)))
-  }, [totalCount])
+  const seekTo = useCallback(
+    (index: number) => {
+      setIsPlaying(false)
+      setCurrentIndex(Math.max(0, Math.min(index, totalCount - 1)))
+    },
+    [totalCount]
+  )
 
   const reset = useCallback(() => {
     setIsPlaying(false)

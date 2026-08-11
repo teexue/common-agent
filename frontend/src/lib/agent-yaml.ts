@@ -113,7 +113,11 @@ function yamlIndent(s: string, indent: string): string {
 function yamlScalar(v: string): string {
   // Quote if empty or contains characters that would confuse YAML scalars.
   if (v === "") return '""'
-  if (/["'`#:<>[\]{}(),&*?|=!%\n]/.test(v) || v.startsWith(" ") || v.endsWith(" ")) {
+  if (
+    /["'`#:<>[\]{}(),&*?|=!%\n]/.test(v) ||
+    v.startsWith(" ") ||
+    v.endsWith(" ")
+  ) {
     return JSON.stringify(v)
   }
   return v
@@ -158,7 +162,7 @@ export function formDataToYaml(form: AgentFormData): string {
     `name: ${form.name}`,
     `version: 1`,
     `provider: ${form.provider}`,
-    `model: ${form.model}`,
+    `model: ${form.model}`
   )
 
   if (form.systemPrompt) {

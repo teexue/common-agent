@@ -1,14 +1,35 @@
 import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, Bot, Loader2, Plug, Save, Settings2, Shield, Wrench } from "lucide-react"
+import {
+  Bot,
+  Loader2,
+  Plug,
+  Save,
+  Settings2,
+  Shield,
+  Wrench,
+} from "lucide-react"
+import { PageHeader } from "@/components/shared/page-header"
+import { PageMain, PageShell } from "@/components/shared/page-shell"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { fetchAgentDetail, fetchKnowledgeBases, fetchProviders, fetchTools, createAgent, updateAgent, validateAgent } from "@/lib/api"
+import {
+  fetchAgentDetail,
+  fetchKnowledgeBases,
+  fetchProviders,
+  fetchTools,
+  createAgent,
+  updateAgent,
+  validateAgent,
+} from "@/lib/api"
 import { EMPTY_FORM, formDataToYaml, mcpConfigToForm } from "@/lib/agent-yaml"
 import type { AgentFormData } from "@/lib/agent-yaml"
 import type { ProviderInfo, ToolInfo } from "@/types/agent"
-import { BasicTab, McpTab, RuntimeTab, ToolsTab } from "./agent-editor-tabs"
+import { BasicTab } from "./tabs/basic-tab"
+import { McpTab } from "./tabs/mcp-tab"
+import { RuntimeTab } from "./tabs/runtime-tab"
+import { ToolsTab } from "./tabs/tools-tab"
 
 interface AgentEditorPageProps {
   agentId?: string | null
@@ -16,12 +37,18 @@ interface AgentEditorPageProps {
   onSaved?: (id: string) => void
 }
 
-export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditorPageProps) {
+export function AgentEditorPage({
+  agentId = null,
+  onBack,
+  onSaved,
+}: AgentEditorPageProps) {
   const { t } = useTranslation()
   const [form, setForm] = useState<AgentFormData>(EMPTY_FORM)
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [tools, setTools] = useState<ToolInfo[]>([])
-  const [knowledgeBases, setKnowledgeBases] = useState<Array<{ id: string; name: string }>>([])
+  const [knowledgeBases, setKnowledgeBases] = useState<
+    Array<{ id: string; name: string }>
+  >([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -29,10 +56,16 @@ export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditor
   const isCreate = !agentId
 
   useEffect(() => {
-    fetchProviders().then(setProviders).catch(() => setProviders([]))
-    fetchTools().then(setTools).catch(() => setTools([]))
+    fetchProviders()
+      .then(setProviders)
+      .catch(() => setProviders([]))
+    fetchTools()
+      .then(setTools)
+      .catch(() => setTools([]))
     fetchKnowledgeBases()
-      .then((bases) => setKnowledgeBases(bases.map((b) => ({ id: b.id, name: b.name }))))
+      .then((bases) =>
+        setKnowledgeBases(bases.map((b) => ({ id: b.id, name: b.name })))
+      )
       .catch(() => setKnowledgeBases([]))
   }, [])
 
@@ -44,39 +77,58 @@ export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditor
     }
     setLoading(true)
     fetchAgentDetail(agentId!)
-      .then((d) => setForm({
-        id: d.id,
-        name: d.name,
-        provider: d.provider,
-        model: d.model,
-        systemPrompt: d.system_prompt || "",
-        tools: d.tools || [],
-        maxTurns: d.max_turns ?? 0,
-        maxTokens: d.max_tokens ?? 0,
-        execMode: (d.tool_execution?.Mode as "parallel" | "serial") || "parallel",
-        maxParallel: d.tool_execution?.MaxParallel || 4,
-        autoApprove: d.permissions?.auto_approve || [],
-        alwaysDeny: d.permissions?.always_deny || [],
-        mcpServers: (d.mcp_servers ?? []).map(mcpConfigToForm),
-        knowledgeBases: d.knowledge?.bases ?? [],
-        knowledgeTopK: d.knowledge?.top_k || 5,
-        optimizeUserPrompt: d.optimize?.user_prompt ?? false,
-        contextWindow: d.compaction?.context_window ?? 0,
-      }))
+      .then((d) =>
+        setForm({
+          id: d.id,
+          name: d.name,
+          provider: d.provider,
+          model: d.model,
+          systemPrompt: d.system_prompt || "",
+          tools: d.tools || [],
+          maxTurns: d.max_turns ?? 0,
+          maxTokens: d.max_tokens ?? 0,
+          execMode:
+            (d.tool_execution?.Mode as "parallel" | "serial") || "parallel",
+          maxParallel: d.tool_execution?.MaxParallel || 4,
+          autoApprove: d.permissions?.auto_approve || [],
+          alwaysDeny: d.permissions?.always_deny || [],
+          mcpServers: (d.mcp_servers ?? []).map(mcpConfigToForm),
+          knowledgeBases: d.knowledge?.bases ?? [],
+          knowledgeTopK: d.knowledge?.top_k || 5,
+          optimizeUserPrompt: d.optimize?.user_prompt ?? false,
+          contextWindow: d.compaction?.context_window ?? 0,
+        })
+      )
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
   }, [agentId, isCreate])
 
   const handleSave = useCallback(async () => {
     setError(null)
-    if (!form.name.trim()) { setError(t("agent.errNameRequired")); setTab("basic"); return }
-    if (!form.provider) { setError(t("agent.errProviderRequired")); setTab("basic"); return }
-    if (!form.model.trim()) { setError(t("agent.errModelRequired")); setTab("basic"); return }
+    if (!form.name.trim()) {
+      setError(t("agent.errNameRequired"))
+      setTab("basic")
+      return
+    }
+    if (!form.provider) {
+      setError(t("agent.errProviderRequired"))
+      setTab("basic")
+      return
+    }
+    if (!form.model.trim()) {
+      setError(t("agent.errModelRequired"))
+      setTab("basic")
+      return
+    }
     setSaving(true)
     try {
       const yaml = formDataToYaml(form)
       const v = await validateAgent(yaml)
-      if (!v.valid) { setError(t("agent.errValidate", { message: v.message })); setSaving(false); return }
+      if (!v.valid) {
+        setError(t("agent.errValidate", { message: v.message }))
+        setSaving(false)
+        return
+      }
       if (isCreate) {
         const created = await createAgent(yaml)
         onSaved?.(created.id)
@@ -99,71 +151,109 @@ export function AgentEditorPage({ agentId = null, onBack, onSaved }: AgentEditor
   ] as const
 
   return (
-    <div className="flex h-full flex-col bg-background">
-      <header className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <Button variant="ghost" size="icon-xs" className="h-7 w-7 rounded-lg text-muted-foreground" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div className="min-w-0">
-            <h1 className="font-heading text-base tracking-tight text-foreground">
-              {isCreate ? t("agent.createTitle") : t("agent.editTitle", { name: form.name || agentId })}
-            </h1>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">{t("agent.editorSubtitle")}</p>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs" onClick={onBack}>{t("common.cancel")}</Button>
-          <Button size="sm" className="h-8 gap-1.5 rounded-xl text-xs" onClick={handleSave} disabled={saving || loading}>
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            {t("common.save")}
-          </Button>
-        </div>
-      </header>
-
-      <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-3xl px-6 py-6">
-          {loading ? (
-            <div className="flex items-center justify-center py-20"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-          ) : (
-            <Tabs value={tab} onValueChange={setTab}>
-              <TabsList className="mb-6 w-full rounded-xl bg-muted p-0.5">
-                {tabs.map((item) => (
-                  <TabsTrigger key={item.value} value={item.value} className="flex-1 gap-1.5 rounded-lg text-xs">
-                    <item.icon className="h-3 w-3" /> {item.label}
-                    {item.value === "tools" && form.tools.length > 0 && (
-                      <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px]">{form.tools.length}</Badge>
-                    )}
-                    {item.value === "mcp" && form.mcpServers.length > 0 && (
-                      <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px]">{form.mcpServers.length}</Badge>
-                    )}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
-              {error && (
-                <div className="mb-4 flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-3.5 py-2.5 text-xs text-destructive">
-                  <Shield className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>{error}</span>
-                </div>
+    <PageShell>
+      <PageHeader
+        icon={Bot}
+        title={
+          isCreate
+            ? t("agent.createTitle")
+            : t("agent.editTitle", { name: form.name || agentId })
+        }
+        description={t("agent.editorSubtitle")}
+        onBack={onBack}
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={onBack}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={handleSave}
+              disabled={saving || loading}
+            >
+              {saving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Save className="h-3.5 w-3.5" />
               )}
+              {t("common.save")}
+            </Button>
+          </>
+        }
+      />
 
-              <TabsContent value="basic" className="mt-0">
-                <BasicTab form={form} setForm={setForm} providers={providers} isCreate={isCreate} />
-              </TabsContent>
-              <TabsContent value="tools" className="mt-0">
-                <ToolsTab form={form} setForm={setForm} tools={tools} />
-              </TabsContent>
-              <TabsContent value="mcp" className="mt-0">
-                <McpTab form={form} setForm={setForm} />
-              </TabsContent>
-              <TabsContent value="runtime" className="mt-0">
-                <RuntimeTab form={form} setForm={setForm} knowledgeBases={knowledgeBases} />
-              </TabsContent>
-            </Tabs>
-          )}
-        </div>
-      </main>
-    </div>
+      <PageMain contentClassName="mx-auto max-w-3xl">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="mb-6 w-full rounded-xl bg-muted p-0.5">
+              {tabs.map((item) => (
+                <TabsTrigger
+                  key={item.value}
+                  value={item.value}
+                  className="flex-1 gap-1.5 rounded-lg text-xs"
+                >
+                  <item.icon className="h-3 w-3" /> {item.label}
+                  {item.value === "tools" && form.tools.length > 0 && (
+                    <Badge
+                      variant="secondary"
+                      className="rounded-md px-1.5 py-0 text-[10px]"
+                    >
+                      {form.tools.length}
+                    </Badge>
+                  )}
+                  {item.value === "mcp" && form.mcpServers.length > 0 && (
+                    <Badge
+                      variant="secondary"
+                      className="rounded-md px-1.5 py-0 text-[10px]"
+                    >
+                      {form.mcpServers.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            {error && (
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-3.5 py-2.5 text-xs text-destructive">
+                <Shield className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <TabsContent value="basic" className="mt-0">
+              <BasicTab
+                form={form}
+                setForm={setForm}
+                providers={providers}
+                isCreate={isCreate}
+              />
+            </TabsContent>
+            <TabsContent value="tools" className="mt-0">
+              <ToolsTab form={form} setForm={setForm} tools={tools} />
+            </TabsContent>
+            <TabsContent value="mcp" className="mt-0">
+              <McpTab form={form} setForm={setForm} />
+            </TabsContent>
+            <TabsContent value="runtime" className="mt-0">
+              <RuntimeTab
+                form={form}
+                setForm={setForm}
+                knowledgeBases={knowledgeBases}
+              />
+            </TabsContent>
+          </Tabs>
+        )}
+      </PageMain>
+    </PageShell>
   )
 }

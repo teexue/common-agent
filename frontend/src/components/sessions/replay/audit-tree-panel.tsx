@@ -9,7 +9,11 @@ interface AuditTreePanelProps {
   onSeek: (index: number) => void
 }
 
-export function AuditTreePanel({ turnNodes, currentIndex, onSeek }: AuditTreePanelProps) {
+export function AuditTreePanel({
+  turnNodes,
+  currentIndex,
+  onSeek,
+}: AuditTreePanelProps) {
   const { t } = useTranslation()
   if (turnNodes.length === 0) {
     return (

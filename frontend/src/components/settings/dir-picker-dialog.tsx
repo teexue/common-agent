@@ -21,7 +21,12 @@ interface DirPickerDialogProps {
   onSelect: (path: string) => void
 }
 
-export function DirPickerDialog({ open, onOpenChange, initialPath, onSelect }: DirPickerDialogProps) {
+export function DirPickerDialog({
+  open,
+  onOpenChange,
+  initialPath,
+  onSelect,
+}: DirPickerDialogProps) {
   const { t } = useTranslation()
   const [current, setCurrent] = useState("")
   const [pathInput, setPathInput] = useState("")
@@ -55,7 +60,7 @@ export function DirPickerDialog({ open, onOpenChange, initialPath, onSelect }: D
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg gap-4 rounded-2xl p-5">
+      <DialogContent className="gap-4 rounded-2xl p-5 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("settings.browseDirTitle")}</DialogTitle>
           <DialogDescription>{t("settings.browseDirDesc")}</DialogDescription>
@@ -74,7 +79,7 @@ export function DirPickerDialog({ open, onOpenChange, initialPath, onSelect }: D
           <Button
             variant="outline"
             size="sm"
-            className="h-9 shrink-0 rounded-lg text-xs"
+            className="h-9 shrink-0 text-xs"
             onClick={() => void load(pathInput.trim())}
             disabled={loading}
           >
@@ -115,7 +120,9 @@ export function DirPickerDialog({ open, onOpenChange, initialPath, onSelect }: D
               </div>
             ) : !data || data.entries.length === 0 ? (
               <div className="flex h-64 items-center justify-center">
-                <p className="text-xs text-muted-foreground">{t("settings.emptyDir")}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.emptyDir")}
+                </p>
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -131,7 +138,9 @@ export function DirPickerDialog({ open, onOpenChange, initialPath, onSelect }: D
                     }}
                   >
                     <Folder className="h-3.5 w-3.5 shrink-0 text-primary/70" />
-                    <span className="truncate font-mono text-foreground">{entry.name}</span>
+                    <span className="truncate font-mono text-foreground">
+                      {entry.name}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -141,14 +150,26 @@ export function DirPickerDialog({ open, onOpenChange, initialPath, onSelect }: D
 
         <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
           <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate font-mono text-[11px] text-muted-foreground">{current || "—"}</span>
+          <span className="truncate font-mono text-[11px] text-muted-foreground">
+            {current || "—"}
+          </span>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => onOpenChange(false)}
+          >
             {t("settings.cancel")}
           </Button>
-          <Button size="sm" className="h-8 rounded-lg text-xs" onClick={handleConfirm} disabled={!current}>
+          <Button
+            size="sm"
+            className="h-8 text-xs"
+            onClick={handleConfirm}
+            disabled={!current}
+          >
             {t("settings.selectDir")}
           </Button>
         </DialogFooter>

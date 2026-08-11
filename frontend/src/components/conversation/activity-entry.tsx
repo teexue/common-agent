@@ -26,39 +26,63 @@ function UserMessage({ entry }: { entry: ConversationEntry }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-foreground">{t("common.you")}</span>
-          <span className="text-[11px] text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
+          <span className="text-xs font-medium text-foreground">
+            {t("common.you")}
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            {formatTimestamp(entry.timestamp)}
+          </span>
         </div>
-        <p className="mt-1 whitespace-pre-wrap rounded-xl bg-muted/50 px-3.5 py-2.5 text-sm leading-relaxed text-foreground">{entry.content}</p>
+        <p className="mt-1 rounded-xl bg-muted/50 px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+          {entry.content}
+        </p>
       </div>
     </div>
   )
 }
 
-function AssistantHeader({ entry, isActive }: { entry: ConversationEntry; isActive?: boolean }) {
+function AssistantHeader({
+  entry,
+  isActive,
+}: {
+  entry: ConversationEntry
+  isActive?: boolean
+}) {
   const { t } = useTranslation()
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs font-medium text-foreground">Agent</span>
-      <span className="text-[11px] text-muted-foreground">{formatTimestamp(entry.timestamp)}</span>
+      <span className="text-[11px] text-muted-foreground">
+        {formatTimestamp(entry.timestamp)}
+      </span>
       {isActive && (
         <span className="flex items-center gap-1 text-[11px] text-primary">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /> {t("status.generating")}
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />{" "}
+          {t("status.generating")}
         </span>
       )}
       {entry.usage && !isActive && (
         <span className="text-[11px] text-muted-foreground/70">
-          {entry.usage.inputTokens.toLocaleString()} in / {entry.usage.outputTokens.toLocaleString()} out
+          {entry.usage.inputTokens.toLocaleString()} in /{" "}
+          {entry.usage.outputTokens.toLocaleString()} out
         </span>
       )}
     </div>
   )
 }
 
-export function ActivityEntry({ entry, selectedToolCallId, onSelectToolCall, onApproveTool, onDenyTool, isActive }: ActivityEntryProps) {
+export function ActivityEntry({
+  entry,
+  selectedToolCallId,
+  onSelectToolCall,
+  onApproveTool,
+  onDenyTool,
+  isActive,
+}: ActivityEntryProps) {
   const [thinkingExpanded, setThinkingExpanded] = useState(false)
 
-  if (entry.compactionSummary) return <CompactionBanner summary={entry.compactionSummary} />
+  if (entry.compactionSummary)
+    return <CompactionBanner summary={entry.compactionSummary} />
   if (entry.role === "user") return <UserMessage entry={entry} />
 
   const hasThinking = !!entry.reasoningContent
@@ -75,7 +99,12 @@ export function ActivityEntry({ entry, selectedToolCallId, onSelectToolCall, onA
 
         {hasThinking && (
           <div className="mt-2">
-            <ThinkingBlock content={entry.reasoningContent!} isStreaming={!!isActive} isExpanded={thinkingExpanded} onToggle={() => setThinkingExpanded((v) => !v)} />
+            <ThinkingBlock
+              content={entry.reasoningContent!}
+              isStreaming={!!isActive}
+              isExpanded={thinkingExpanded}
+              onToggle={() => setThinkingExpanded((v) => !v)}
+            />
           </div>
         )}
 
@@ -92,8 +121,16 @@ export function ActivityEntry({ entry, selectedToolCallId, onSelectToolCall, onA
         )}
 
         {hasContent && (
-          <div className={cn("mt-2.5 rounded-xl border border-border bg-card p-3.5 text-sm leading-relaxed", isActive && "border-primary/20")}>
-            <MarkdownRenderer content={entry.content} isStreaming={!!isActive && !hasToolCalls} />
+          <div
+            className={cn(
+              "mt-2.5 rounded-xl border border-border bg-card p-3.5 text-sm leading-relaxed",
+              isActive && "border-primary/20"
+            )}
+          >
+            <MarkdownRenderer
+              content={entry.content}
+              isStreaming={!!isActive && !hasToolCalls}
+            />
           </div>
         )}
       </div>
@@ -106,14 +143,25 @@ function CompactionBanner({ summary }: { summary: string }) {
   const [expanded, setExpanded] = useState(false)
   return (
     <div className="mx-1 rounded-xl border border-warning/30 bg-warning/10">
-      <button onClick={() => setExpanded((v) => !v)} className="flex w-full items-center gap-2 px-3 py-2 text-left">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+      >
         <Minimize2 className="h-3.5 w-3.5 shrink-0 text-warning" />
-        <span className="flex-1 text-xs font-medium text-warning">{t("conversation.compaction")}</span>
-        {expanded ? <ChevronDown className="h-3 w-3 text-warning/70" /> : <ChevronRight className="h-3 w-3 text-warning/70" />}
+        <span className="flex-1 text-xs font-medium text-warning">
+          {t("conversation.compaction")}
+        </span>
+        {expanded ? (
+          <ChevronDown className="h-3 w-3 text-warning/70" />
+        ) : (
+          <ChevronRight className="h-3 w-3 text-warning/70" />
+        )}
       </button>
       {expanded && (
         <div className="border-t border-warning/20 px-3 py-2">
-          <p className="whitespace-pre-wrap text-xs leading-relaxed text-warning/80">{summary}</p>
+          <p className="text-xs leading-relaxed whitespace-pre-wrap text-warning/80">
+            {summary}
+          </p>
         </div>
       )}
     </div>

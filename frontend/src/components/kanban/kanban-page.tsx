@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { KanbanSquare, Plus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { EmptyState } from "@/components/shared/empty-state"
+import { PageHeader } from "@/components/shared/page-header"
+import { PageMain, PageShell } from "@/components/shared/page-shell"
 import { KanbanCard } from "./kanban-card"
 import { KanbanCreateDialog } from "./kanban-create-dialog"
 import { KanbanDetailDialog } from "./kanban-detail-dialog"
@@ -28,6 +32,7 @@ const COLUMNS: { status: KanbanStatus; labelKey: string }[] = [
 /** Five-column kanban board with polling refresh. */
 export function KanbanPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [items, setItems] = useState<KanbanItem[]>([])
   const [now, setNow] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -110,74 +115,68 @@ export function KanbanPage() {
     : null
 
   return (
-    <div className="flex h-full flex-col bg-background">
-      <header className="flex items-center gap-3 border-b border-border px-6 py-4">
-        <div className="flex items-center gap-2">
-          <KanbanSquare className="h-4 w-4 text-primary" />
-          <h1 className="font-heading text-base tracking-tight text-foreground">
-            {t("kanban.title")}
-          </h1>
-        </div>
-        <div className="flex-1" />
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 gap-1.5 rounded-xl text-xs"
-          onClick={() => setCreateOpen(true)}
-        >
-          <Plus className="h-3.5 w-3.5" /> {t("kanban.newTask")}
-        </Button>
-      </header>
+    <PageShell>
+      <PageHeader
+        icon={KanbanSquare}
+        title={t("kanban.title")}
+        onBack={() => navigate(-1)}
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus className="h-3.5 w-3.5" /> {t("kanban.newTask")}
+          </Button>
+        }
+      />
 
-      <main className="flex-1 overflow-x-auto">
-        <div className="flex h-full min-w-max gap-3 px-6 py-6">
-          {COLUMNS.map((col) => {
-            const columnItems = items.filter((i) => i.status === col.status)
-            return (
-              <section
-                key={col.status}
-                className="flex w-64 shrink-0 flex-col gap-2"
-              >
-                <div className="flex items-center gap-2 px-1">
-                  <span className="text-xs font-medium text-foreground">
-                    {t(col.labelKey)}
-                  </span>
-                  <Badge
-                    variant="secondary"
-                    className="rounded-md px-1.5 py-0 text-[10px]"
-                  >
-                    {columnItems.length}
-                  </Badge>
+      <PageMain contentClassName="flex h-full min-w-max gap-3">
+        {COLUMNS.map((col) => {
+          const columnItems = items.filter((i) => i.status === col.status)
+          return (
+            <section
+              key={col.status}
+              className="flex w-64 shrink-0 flex-col gap-2"
+            >
+              <div className="flex items-center gap-2 px-1">
+                <span className="text-xs font-medium text-foreground">
+                  {t(col.labelKey)}
+                </span>
+                <Badge
+                  variant="secondary"
+                  className="rounded-md px-1.5 py-0 text-[10px]"
+                >
+                  {columnItems.length}
+                </Badge>
+              </div>
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="flex flex-col gap-2 pr-1">
+                  {columnItems.length === 0 ? (
+                    <EmptyState
+                      title={loading ? t("common.loading") : t("kanban.empty")}
+                    />
+                  ) : (
+                    columnItems.map((item) => (
+                      <KanbanCard
+                        key={item.id}
+                        item={item}
+                        now={now}
+                        onOpen={(it) => setSelectedId(it.id)}
+                        onApprove={handleApprove}
+                        onReject={(id) => setSelectedId(id)}
+                        onRequeue={handleRequeue}
+                        onViewProgress={(it) => setProgressItemId(it.id)}
+                      />
+                    ))
+                  )}
                 </div>
-                <ScrollArea className="min-h-0 flex-1">
-                  <div className="flex flex-col gap-2 pr-1">
-                    {columnItems.length === 0 ? (
-                      <div className="flex items-center justify-center rounded-xl border border-dashed border-border py-8">
-                        <p className="text-[10px] text-muted-foreground">
-                          {loading ? t("common.loading") : t("kanban.empty")}
-                        </p>
-                      </div>
-                    ) : (
-                      columnItems.map((item) => (
-                        <KanbanCard
-                          key={item.id}
-                          item={item}
-                          now={now}
-                          onOpen={(it) => setSelectedId(it.id)}
-                          onApprove={handleApprove}
-                          onReject={(id) => setSelectedId(id)}
-                          onRequeue={handleRequeue}
-                          onViewProgress={(it) => setProgressItemId(it.id)}
-                        />
-                      ))
-                    )}
-                  </div>
-                </ScrollArea>
-              </section>
-            )
-          })}
-        </div>
-      </main>
+              </ScrollArea>
+            </section>
+          )
+        })}
+      </PageMain>
 
       <KanbanCreateDialog
         open={createOpen}
@@ -205,6 +204,6 @@ export function KanbanPage() {
         onRequeue={handleRequeue}
         onDelete={handleDelete}
       />
-    </div>
+    </PageShell>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Loader2, Play } from "lucide-react"
+import { EmptyState } from "@/components/shared/empty-state"
 import {
   Dialog,
   DialogContent,
@@ -27,7 +28,12 @@ interface SessionReplayProps {
   live?: boolean
 }
 
-export function SessionReplay({ sessionId, open, onOpenChange, live }: SessionReplayProps) {
+export function SessionReplay({
+  sessionId,
+  open,
+  onOpenChange,
+  live,
+}: SessionReplayProps) {
   const { t } = useTranslation()
   const [events, setEvents] = useState<ReplayEvent[]>([])
   const [loading, setLoading] = useState(false)
@@ -44,7 +50,9 @@ export function SessionReplay({ sessionId, open, onOpenChange, live }: SessionRe
 
   useEffect(() => {
     if (!open || !sessionId) {
-      setEvents([]); setError(null); return
+      setEvents([])
+      setError(null)
+      return
     }
     let cancelled = false
     const from = fromTurn ? parseInt(fromTurn, 10) : undefined
@@ -52,14 +60,29 @@ export function SessionReplay({ sessionId, open, onOpenChange, live }: SessionRe
     const load = (initial: boolean) => {
       if (initial) setLoading(true)
       fetchSessionReplay(sessionId, from, to)
-        .then((evs) => { if (!cancelled) { setEvents(evs); setError(null) } })
-        .catch((err) => { if (!cancelled && initial) setError(err.message) })
-        .finally(() => { if (!cancelled && initial) setLoading(false) })
+        .then((evs) => {
+          if (!cancelled) {
+            setEvents(evs)
+            setError(null)
+          }
+        })
+        .catch((err) => {
+          if (!cancelled && initial) setError(err.message)
+        })
+        .finally(() => {
+          if (!cancelled && initial) setLoading(false)
+        })
     }
     load(true)
-    if (!live) return () => { cancelled = true }
+    if (!live)
+      return () => {
+        cancelled = true
+      }
     const timer = setInterval(() => load(false), 2500)
-    return () => { cancelled = true; clearInterval(timer) }
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
   }, [open, sessionId, fromTurn, toTurn, live])
 
   useEffect(() => {
@@ -68,11 +91,17 @@ export function SessionReplay({ sessionId, open, onOpenChange, live }: SessionRe
       if (e.target instanceof HTMLInputElement) return
       switch (e.key) {
         case " ":
-          e.preventDefault(); playback.toggle(); break
+          e.preventDefault()
+          playback.toggle()
+          break
         case "ArrowRight":
-          e.preventDefault(); playback.stepForward(); break
+          e.preventDefault()
+          playback.stepForward()
+          break
         case "ArrowLeft":
-          e.preventDefault(); playback.stepBackward(); break
+          e.preventDefault()
+          playback.stepBackward()
+          break
       }
     }
     window.addEventListener("keydown", handler)
@@ -88,7 +117,7 @@ export function SessionReplay({ sessionId, open, onOpenChange, live }: SessionRe
       <DialogContent className="!max-w-5xl border-border bg-card sm:!max-w-5xl">
         <div className="flex max-h-[80vh] flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 font-heading text-sm tracking-tight">
+            <DialogTitle className="flex items-center gap-2 font-heading">
               <Play className="h-4 w-4 text-primary" />
               {t("replay.title")}
             </DialogTitle>
@@ -117,9 +146,7 @@ export function SessionReplay({ sessionId, open, onOpenChange, live }: SessionRe
           )}
 
           {!loading && !error && events.length === 0 && (
-            <div className="flex items-center justify-center py-12 text-xs text-muted-foreground">
-              {t("replay.noEvents")}
-            </div>
+            <EmptyState title={t("replay.noEvents")} />
           )}
 
           {!loading && events.length > 0 && (
@@ -160,7 +187,13 @@ export function SessionReplay({ sessionId, open, onOpenChange, live }: SessionRe
   )
 }
 
-function TurnFilter({ fromTurn, toTurn, onFromChange, onToChange, count }: {
+function TurnFilter({
+  fromTurn,
+  toTurn,
+  onFromChange,
+  onToChange,
+  count,
+}: {
   fromTurn: string
   toTurn: string
   onFromChange: (v: string) => void
@@ -171,7 +204,7 @@ function TurnFilter({ fromTurn, toTurn, onFromChange, onToChange, count }: {
   return (
     <div className="flex items-end gap-3">
       <div className="flex flex-col gap-1">
-        <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <Label className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
           {t("replay.fromTurn")}
         </Label>
         <Input
@@ -183,7 +216,7 @@ function TurnFilter({ fromTurn, toTurn, onFromChange, onToChange, count }: {
         />
       </div>
       <div className="flex flex-col gap-1">
-        <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <Label className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
           {t("replay.toTurn")}
         </Label>
         <Input
@@ -194,7 +227,9 @@ function TurnFilter({ fromTurn, toTurn, onFromChange, onToChange, count }: {
           className="h-8 w-24 rounded-lg font-mono text-xs"
         />
       </div>
-      <span className="pb-1.5 text-[10px] text-muted-foreground">{t("replay.eventCount", { count })}</span>
+      <span className="pb-1.5 text-[10px] text-muted-foreground">
+        {t("replay.eventCount", { count })}
+      </span>
     </div>
   )
 }

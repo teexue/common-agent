@@ -8,22 +8,46 @@ function dateLocale(): string {
 
 // ─── Markdown Export ──────────────────────────────────────────────
 
-function formatToolCall(tc: ConversationEntry["toolCalls"] extends (infer T)[] | undefined ? T : never): string[] {
+function formatToolCall(
+  tc: ConversationEntry["toolCalls"] extends (infer T)[] | undefined ? T : never
+): string[] {
   const lines: string[] = []
-  const status = tc.status === "completed" ? "✅" : tc.status === "error" ? "❌" : "⏳"
-  lines.push(`### ${status} ${i18n.t("export.tool")}: ${toolDisplayName(tc.name)} (\`${tc.name}\`)`, "")
+  const status =
+    tc.status === "completed" ? "✅" : tc.status === "error" ? "❌" : "⏳"
+  lines.push(
+    `### ${status} ${i18n.t("export.tool")}: ${toolDisplayName(tc.name)} (\`${tc.name}\`)`,
+    ""
+  )
   if (tc.input) {
-    lines.push(`**${i18n.t("export.input")}:**`, "```json", JSON.stringify(tc.input, null, 2), "```", "")
+    lines.push(
+      `**${i18n.t("export.input")}:**`,
+      "```json",
+      JSON.stringify(tc.input, null, 2),
+      "```",
+      ""
+    )
   }
   if (tc.output !== undefined) {
-    lines.push(`**${i18n.t("export.output")}:**`, "```json", typeof tc.output === "string" ? tc.output : JSON.stringify(tc.output, null, 2), "```", "")
+    lines.push(
+      `**${i18n.t("export.output")}:**`,
+      "```json",
+      typeof tc.output === "string"
+        ? tc.output
+        : JSON.stringify(tc.output, null, 2),
+      "```",
+      ""
+    )
   }
   return lines
 }
 
 function formatEntry(entry: ConversationEntry): string[] {
   if (entry.compactionSummary) {
-    return ["---", `> ⚡ ${i18n.t("export.compaction")}: ${entry.compactionSummary}`, ""]
+    return [
+      "---",
+      `> ⚡ ${i18n.t("export.compaction")}: ${entry.compactionSummary}`,
+      "",
+    ]
   }
 
   const time = new Date(entry.timestamp).toLocaleTimeString(dateLocale(), {
@@ -34,13 +58,26 @@ function formatEntry(entry: ConversationEntry): string[] {
   const lines: string[] = []
 
   if (entry.role === "user") {
-    lines.push(`## 👤 ${i18n.t("export.you")} _(${time})_`, "", entry.content, "")
+    lines.push(
+      `## 👤 ${i18n.t("export.you")} _(${time})_`,
+      "",
+      entry.content,
+      ""
+    )
   }
 
   if (entry.role === "assistant") {
     lines.push(`## 🤖 Agent _(${time})_`, "")
     if (entry.reasoningContent) {
-      lines.push("<details>", `<summary>💭 ${i18n.t("export.reasoning")}</summary>`, "", entry.reasoningContent, "", "</details>", "")
+      lines.push(
+        "<details>",
+        `<summary>💭 ${i18n.t("export.reasoning")}</summary>`,
+        "",
+        entry.reasoningContent,
+        "",
+        "</details>",
+        ""
+      )
     }
     if (entry.toolCalls?.length) {
       for (const tc of entry.toolCalls) lines.push(...formatToolCall(tc))
@@ -52,7 +89,7 @@ function formatEntry(entry: ConversationEntry): string[] {
           input: entry.usage.inputTokens.toLocaleString(dateLocale()),
           output: entry.usage.outputTokens.toLocaleString(dateLocale()),
         })}_`,
-        "",
+        ""
       )
     }
   }
@@ -60,7 +97,10 @@ function formatEntry(entry: ConversationEntry): string[] {
   return lines
 }
 
-export function exportToMarkdown(entries: ConversationEntry[], agentName: string): string {
+export function exportToMarkdown(
+  entries: ConversationEntry[],
+  agentName: string
+): string {
   const lines: string[] = [
     `# ${i18n.t("export.title", { agent: agentName })}`,
     "",
@@ -73,7 +113,10 @@ export function exportToMarkdown(entries: ConversationEntry[], agentName: string
 
 // ─── JSON Export ──────────────────────────────────────────────────
 
-export function exportToJson(entries: ConversationEntry[], agentName: string): string {
+export function exportToJson(
+  entries: ConversationEntry[],
+  agentName: string
+): string {
   const data = {
     agent: agentName,
     exportedAt: new Date().toISOString(),
@@ -98,7 +141,11 @@ export function exportToJson(entries: ConversationEntry[], agentName: string): s
 
 // ─── Download helper ──────────────────────────────────────────────
 
-export function downloadFile(content: string, filename: string, mimeType: string) {
+export function downloadFile(
+  content: string,
+  filename: string,
+  mimeType: string
+) {
   const blob = new Blob([content], { type: mimeType })
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")

@@ -29,7 +29,9 @@ export function DiffView({ lines }: { lines: DiffLine[] }) {
             >
               {l.type === "add" ? "+" : l.type === "del" ? "-" : ""}
             </span>
-            <span className="min-w-0 pr-3 break-all whitespace-pre-wrap">{l.text || " "}</span>
+            <span className="min-w-0 pr-3 break-all whitespace-pre-wrap">
+              {l.text || " "}
+            </span>
           </div>
         ))}
       </div>

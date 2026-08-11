@@ -196,6 +196,7 @@ func (db *DB) migrateAPIKeysFile() error {
 		row := APIKey{
 			ID: id, UserID: DefaultUserID, Name: k.Name,
 			KeyHash: HashAPIKey(k.Key), Prefix: KeyPrefix(k.Key),
+			Scopes: "*", Enabled: true,
 			CreatedAt: created,
 		}
 		if row.Name == "" {

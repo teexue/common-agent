@@ -217,6 +217,9 @@ func (s *Server) authEnabled() (bool, error) {
 }
 
 // resolveIdentity validates a JWT or raw API key and returns the identity.
+// Password sessions get the user's current role from the store (role changes
+// take effect immediately; the JWT role claim is never trusted). API keys
+// get Role="" and their scopes from the key record.
 func (s *Server) resolveIdentity(token string) (auth.Identity, bool) {
 	if token == "" {
 		return auth.Identity{}, false
@@ -224,16 +227,56 @@ func (s *Server) resolveIdentity(token string) (auth.Identity, bool) {
 	if s.tokens != nil && auth.LooksLikeJWT(token) {
 		id, err := s.tokens.Parse(token)
 		if err == nil {
-			return id, true
+			return s.enrichIdentity(id)
 		}
 	}
 	if s.stateDB != nil {
-		entry, ok, err := s.stateDB.VerifyAPIKey(token)
-		if err == nil && ok {
-			return auth.Identity{UserID: entry.UserID, KeyID: entry.ID}, true
+		entry, err := s.stateDB.VerifyAPIKey(token)
+		if err == nil && entry != nil {
+			return apiKeyIdentity(entry), true
 		}
 	}
 	return s.resolveCLIKey(token)
+}
+
+// enrichIdentity fills role/scopes for a parsed JWT identity.
+func (s *Server) enrichIdentity(id auth.Identity) (auth.Identity, bool) {
+	if id.KeyID == auth.PasswordKeyID {
+		if s.stateDB != nil {
+			if role, err := s.stateDB.GetUserRole(id.UserID); err == nil {
+				id.Role = role
+			}
+		}
+		return id, true
+	}
+	// Key-backed JWT: load scopes from the key record so scoped keys stay
+	// constrained after exchanging via POST /v1/auth/token.
+	if s.stateDB != nil {
+		if key, err := s.stateDB.GetAPIKey(id.KeyID); err == nil {
+			return apiKeyIdentity(&key), true
+		}
+	}
+	return id, true
+}
+
+// apiKeyIdentity builds an identity from an API key record.
+func apiKeyIdentity(key *store.APIKey) auth.Identity {
+	return auth.Identity{
+		UserID: key.UserID,
+		KeyID:  key.ID,
+		Scopes: parseScopes(key.Scopes),
+	}
+}
+
+// parseScopes splits a comma-separated scope list.
+func parseScopes(raw string) []string {
+	var out []string
+	for _, s := range strings.Split(raw, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func (s *Server) resolveCLIKey(raw string) (auth.Identity, bool) {
@@ -244,7 +287,13 @@ func (s *Server) resolveCLIKey(raw string) (auth.Identity, bool) {
 	if !ok {
 		return auth.Identity{}, false
 	}
-	return auth.Identity{UserID: auth.DefaultUserID, KeyID: kid}, true
+	// Ephemeral CLI keys are operator credentials: full access.
+	return auth.Identity{
+		UserID: auth.DefaultUserID,
+		KeyID:  kid,
+		Role:   store.RoleAdmin,
+		Scopes: []string{auth.ScopeAll},
+	}, true
 }
 
 // SetCatalog sets the provider catalog for listing available providers.
@@ -333,87 +382,7 @@ func (s *Server) Handler() *gin.Engine {
 	r.POST("/v1/auth/token", s.handleAuthToken)
 
 	// API routes — protected when password users or API keys exist.
-	v1 := r.Group("/v1", s.authMiddleware())
-	v1.GET("/auth/keys", s.handleAuthKeysList)
-	v1.POST("/auth/keys", s.handleAuthKeysCreate)
-	v1.DELETE("/auth/keys/:id", s.handleAuthKeysDelete)
-	v1.GET("/auth/me", s.handleAuthMe)
-	v1.POST("/agents/run", s.handleRun)
-	v1.POST("/agents/approve", s.handleApprove)
-	v1.POST("/agents/optimize", s.handleOptimizePrompt)
-	v1.GET("/tools", s.handleTools)
-	v1.GET("/agents", s.handleAgents)
-	v1.POST("/agents", s.handleAgentCreate)
-	v1.GET("/agents/:id", s.handleAgentGet)
-	v1.PUT("/agents/:id", s.handleAgentPut)
-	v1.DELETE("/agents/:id", s.handleAgentDelete)
-	v1.POST("/agents/validate", s.handleAgentValidate)
-	v1.GET("/mcp", s.handleMCPList)
-	v1.POST("/mcp/global", s.handleMCPGlobalUpsert)
-	v1.DELETE("/mcp/global/:name", s.handleMCPGlobalDelete)
-	v1.GET("/background", s.handleBackgroundGet)
-	v1.HEAD("/background", s.handleBackgroundGet)
-	v1.POST("/background", s.handleBackgroundUpload)
-	v1.DELETE("/background", s.handleBackgroundDelete)
-	v1.GET("/knowledge", s.handleKnowledgeList)
-	v1.POST("/knowledge", s.handleKnowledgeCreate)
-	v1.POST("/knowledge/search", s.handleKnowledgeSearch)
-	v1.GET("/knowledge/:id", s.handleKnowledgeGet)
-	v1.PATCH("/knowledge/:id", s.handleKnowledgeUpdate)
-	v1.DELETE("/knowledge/:id", s.handleKnowledgeDelete)
-	v1.GET("/knowledge/:id/documents", s.handleKnowledgeDocsList)
-	v1.POST("/knowledge/:id/documents", s.handleKnowledgeDocUpload)
-	v1.DELETE("/knowledge/:id/documents/:docId", s.handleKnowledgeDocDelete)
-	v1.POST("/knowledge/:id/reindex", s.handleKnowledgeReindex)
-	v1.GET("/embedding", s.handleEmbeddingGet)
-	v1.PUT("/embedding", s.handleEmbeddingPut)
-	v1.GET("/embedding/vendors", s.handleEmbeddingVendors)
-	v1.GET("/skills", s.handleSkillsList)
-	v1.POST("/skills", s.handleSkillCreate)
-	v1.POST("/skills/install", s.handleSkillsInstall)
-	v1.GET("/skills/:name", s.handleSkillGet)
-	v1.PUT("/skills/:name", s.handleSkillUpdate)
-	v1.DELETE("/skills/:name", s.handleSkillDelete)
-	v1.GET("/fs/list", s.handleFSList)
-	v1.GET("/events", s.handleEvents)
-
-	// Conditional endpoints (auth middleware applies via group).
-	if s.store != nil {
-		v1.GET("/sessions", s.handleSessionsList)
-		v1.GET("/sessions/:id", s.handleSessionsGet)
-		v1.PATCH("/sessions/:id", s.handleSessionPatch)
-		v1.DELETE("/sessions/:id", s.handleSessionsDelete)
-	}
-
-	// Kanban endpoints (when the state DB is configured).
-	if s.stateDB != nil {
-		v1.GET("/kanban", s.handleKanbanList)
-		v1.POST("/kanban", s.handleKanbanCreate)
-		v1.PATCH("/kanban/:id", s.handleKanbanPatch)
-		v1.DELETE("/kanban/:id", s.handleKanbanDelete)
-		v1.POST("/kanban/:id/approve", s.handleKanbanApprove)
-		v1.POST("/kanban/:id/reject", s.handleKanbanReject)
-		v1.POST("/kanban/:id/requeue", s.handleKanbanRequeue)
-	}
-
-	if s.eventLogger != nil {
-		v1.GET("/sessions/:id/replay", s.handleSessionReplay)
-	}
-
-	v1.GET("/vendors", s.handleVendors)
-	v1.GET("/providers", s.handleProvidersList)
-	v1.POST("/providers", s.handleProviderUpsert)
-	v1.DELETE("/providers/:name", s.handleProviderDelete)
-	v1.GET("/providers/:name/models", s.handleProviderModels)
-	v1.POST("/providers/models", s.handleProviderModelsTest)
-
-	if s.auditStore != nil {
-		v1.GET("/audit/export", s.handleAuditExport)
-	}
-
-	if s.requestLogger != nil {
-		v1.GET("/audit/requests", s.handleAuditRequests)
-	}
+	s.mountAPIRoutes(r)
 
 	// Static frontend serving (only when embedded).
 	if s.staticFS != nil {

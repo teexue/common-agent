@@ -23,7 +23,12 @@ interface ConversationActionsProps {
 }
 
 /** Conversation search + export buttons, rendered in the top bar. */
-export function ConversationActions({ searchOpen, onToggleSearch, messages, agentName }: ConversationActionsProps) {
+export function ConversationActions({
+  searchOpen,
+  onToggleSearch,
+  messages,
+  agentName,
+}: ConversationActionsProps) {
   const { t } = useTranslation()
   return (
     <div className="flex items-center gap-0.5">
@@ -56,13 +61,26 @@ export function ConversationActions({ searchOpen, onToggleSearch, messages, agen
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40 rounded-xl">
           <DropdownMenuItem
-            onClick={() => downloadFile(exportToMarkdown(messages, agentName), `${agentName}-${Date.now()}.md`, "text/markdown")}
+            onClick={() =>
+              downloadFile(
+                exportToMarkdown(messages, agentName),
+                `${agentName}-${Date.now()}.md`,
+                "text/markdown"
+              )
+            }
             className="gap-2 text-xs"
           >
-            <FileText className="h-3.5 w-3.5" /> {t("conversation.exportMarkdown")}
+            <FileText className="h-3.5 w-3.5" />{" "}
+            {t("conversation.exportMarkdown")}
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={() => downloadFile(exportToJson(messages, agentName), `${agentName}-${Date.now()}.json`, "application/json")}
+            onClick={() =>
+              downloadFile(
+                exportToJson(messages, agentName),
+                `${agentName}-${Date.now()}.json`,
+                "application/json"
+              )
+            }
             className="gap-2 text-xs"
           >
             <FileJson className="h-3.5 w-3.5" /> {t("conversation.exportJson")}

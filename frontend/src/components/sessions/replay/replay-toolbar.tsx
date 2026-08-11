@@ -1,11 +1,5 @@
 import { useTranslation } from "react-i18next"
-import {
-  ChevronLeft,
-  ChevronRight,
-  Pause,
-  Play,
-  RotateCcw,
-} from "lucide-react"
+import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { PlaybackSpeed } from "@/types/replay"
@@ -76,7 +70,11 @@ export function ReplayToolbar({
         onClick={onToggle}
         title={isPlaying ? t("replay.pause") : t("replay.play")}
       >
-        {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+        {isPlaying ? (
+          <Pause className="h-3.5 w-3.5" />
+        ) : (
+          <Play className="h-3.5 w-3.5" />
+        )}
       </Button>
 
       <Button
@@ -97,10 +95,10 @@ export function ReplayToolbar({
             key={s}
             onClick={() => onSpeedChange(s)}
             className={cn(
-              "rounded px-1.5 py-0.5 text-[10px] font-mono transition-colors",
+              "rounded px-1.5 py-0.5 font-mono text-[10px] transition-colors",
               speed === s
                 ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted",
+                : "text-muted-foreground hover:bg-muted"
             )}
           >
             {s}x

@@ -6,11 +6,7 @@ import {
 import { BackgroundLayer } from "@/components/background/background-layer"
 import { TopBar } from "./top-bar"
 import { Sidebar } from "./sidebar"
-import type {
-  AgentInfo,
-  SessionMeta,
-  StreamStatus,
-} from "@/types/agent"
+import type { AgentInfo, SessionMeta, StreamStatus } from "@/types/agent"
 
 interface AppLayoutProps {
   sidebarCollapsed: boolean
@@ -43,9 +39,19 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({
-  inspectorOpen, showInspector = true, leftPanel, rightPanel, topBarActions,
-  agent, agents, agentLocked, onSelectAgent,
-  status, onToggleInspector, theme, onToggleTheme,
+  inspectorOpen,
+  showInspector = true,
+  leftPanel,
+  rightPanel,
+  topBarActions,
+  agent,
+  agents,
+  agentLocked,
+  onSelectAgent,
+  status,
+  onToggleInspector,
+  theme,
+  onToggleTheme,
   ...sidebarProps
 }: AppLayoutProps) {
   return (
@@ -76,22 +82,28 @@ export function AppLayout({
 
         {showInspector ? (
           <ResizablePanelGroup orientation="horizontal" className="flex-1">
-            <ResizablePanel defaultSize={inspectorOpen ? 74 : 100} minSize={35} className="bg-background">
+            <ResizablePanel
+              defaultSize={inspectorOpen ? 74 : 100}
+              minSize={35}
+              className="bg-background"
+            >
               {leftPanel}
             </ResizablePanel>
             {inspectorOpen && rightPanel && (
               <>
                 <ResizableHandle className="w-1 bg-border transition-colors hover:bg-primary/25" />
-                <ResizablePanel defaultSize={26} minSize={20} className="border-l border-border bg-background">
+                <ResizablePanel
+                  defaultSize={26}
+                  minSize={20}
+                  className="border-l border-border bg-background"
+                >
                   {rightPanel}
                 </ResizablePanel>
               </>
             )}
           </ResizablePanelGroup>
         ) : (
-          <div className="flex-1 overflow-hidden">
-            {leftPanel}
-          </div>
+          <div className="flex-1 overflow-hidden">{leftPanel}</div>
         )}
       </div>
     </div>

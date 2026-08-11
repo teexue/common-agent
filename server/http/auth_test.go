@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -133,54 +134,80 @@ func TestAuthKeys_CRUD_JWT(t *testing.T) {
 	assert.True(t, listResp.Enabled)
 	assert.Empty(t, listResp.Keys)
 
-	// Create with client-generated key — response has token, not raw key.
-	body, _ := json.Marshal(map[string]string{"name": "ui", "key": "ca_from_ui_001_secret"})
+	// Create — raw key returned once, no token in the response.
+	body, _ := json.Marshal(map[string]any{"name": "ui", "scopes": []string{"agents"}})
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("POST", "/v1/auth/keys", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &raw))
+	_, hasToken := raw["token"]
+	assert.False(t, hasToken, "keys create must not return a JWT")
 	var created createAPIKeyResponse
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&created))
-	assert.Equal(t, "ui", created.Name)
-	assert.NotEmpty(t, created.Token)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &created))
 	assert.NotEmpty(t, created.ID)
-	assert.NotContains(t, w.Body.String(), "ca_from_ui_001_secret")
+	assert.True(t, strings.HasPrefix(created.Key, "ca_"))
+	assert.Equal(t, []string{"agents"}, created.Scopes)
 
-	// Key JWT works.
+	// Raw key authenticates within its scope.
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("GET", "/v1/tools", nil)
-	req.Header.Set("Authorization", "Bearer "+created.Token)
+	req.Header.Set("X-API-Key", created.Key)
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	// Raw key still works for CLI-style clients.
+	// ...but not outside it.
 	w = httptest.NewRecorder()
-	req, _ = http.NewRequest("GET", "/v1/tools", nil)
-	req.Header.Set("X-API-Key", "ca_from_ui_001_secret")
+	req, _ = http.NewRequest("GET", "/v1/fs/list", nil)
+	req.Header.Set("X-API-Key", created.Key)
 	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, http.StatusForbidden, w.Code)
 
 	// Add a second key so auth stays enabled after deleting the first.
-	body2, _ := json.Marshal(map[string]string{"name": "ui2", "key": "ca_from_ui_002_secret"})
+	body2, _ := json.Marshal(map[string]any{"name": "ui2"})
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("POST", "/v1/auth/keys", bytes.NewReader(body2))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+created.Token)
+	req.Header.Set("Authorization", "Bearer "+token)
 	router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
-	// Delete first key — its JWT is revoked.
+	// Disable the first key — it stops authenticating.
+	patchBody, _ := json.Marshal(map[string]any{"enabled": false})
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("PATCH", "/v1/auth/keys/"+created.ID, bytes.NewReader(patchBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/v1/tools", nil)
+	req.Header.Set("X-API-Key", created.Key)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	// Re-enable, then delete.
+	patchBody, _ = json.Marshal(map[string]any{"enabled": true})
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("PATCH", "/v1/auth/keys/"+created.ID, bytes.NewReader(patchBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("DELETE", "/v1/auth/keys/"+created.ID, nil)
-	req.Header.Set("Authorization", "Bearer "+created.Token)
+	req.Header.Set("Authorization", "Bearer "+token)
 	router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("GET", "/v1/tools", nil)
-	req.Header.Set("Authorization", "Bearer "+created.Token)
+	req.Header.Set("X-API-Key", created.Key)
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
@@ -222,10 +249,18 @@ func TestAuth_RegisterLoginMultiUser(t *testing.T) {
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	// Register bob.
+	// Bob registration is rejected while open registration is disabled.
 	body, _ = json.Marshal(map[string]string{
 		"username": "bob", "password": "secret2",
 	})
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/v1/auth/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusForbidden, w.Code)
+
+	// Enable open registration, then bob registers as member.
+	require.NoError(t, db.SetAllowRegistration(true))
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("POST", "/v1/auth/register", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -238,25 +273,28 @@ func TestAuth_RegisterLoginMultiUser(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&bobSession))
 	assert.NotEqual(t, aliceSession.UserID, bobSession.UserID)
 
-	// Each user gets isolated API keys.
-	keyBody, _ := json.Marshal(map[string]string{"name": "a1", "key": "ca_alice_key_001"})
+	// Key management is admin-only: bob (member) gets 403.
+	keyBody, _ := json.Marshal(map[string]any{"name": "a1"})
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/v1/auth/keys", bytes.NewReader(keyBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+bobSession.Token)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/v1/auth/keys", nil)
+	req.Header.Set("Authorization", "Bearer "+bobSession.Token)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	// Alice (first user = admin) manages her own keys.
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("POST", "/v1/auth/keys", bytes.NewReader(keyBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+aliceSession.Token)
 	router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-
-	w = httptest.NewRecorder()
-	req, _ = http.NewRequest("GET", "/v1/auth/keys", nil)
-	req.Header.Set("Authorization", "Bearer "+bobSession.Token)
-	router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
-	var bobKeys struct {
-		Keys []store.APIKeyInfo `json:"keys"`
-	}
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&bobKeys))
-	assert.Empty(t, bobKeys.Keys)
 
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("GET", "/v1/auth/keys", nil)

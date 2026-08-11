@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next"
 import { Check, Loader2, RotateCcw, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ListRow } from "@/components/shared/list-row"
 import { cn } from "@/lib/utils"
 import type { KanbanItem } from "@/types/agent"
 
@@ -20,7 +21,7 @@ function priorityClass(priority: number): string {
     case 3:
       return "bg-destructive/10 text-destructive"
     case 2:
-      return "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+      return "bg-amber-500/10 text-warning"
     default:
       return "bg-muted text-muted-foreground"
   }
@@ -51,10 +52,9 @@ export function KanbanCard({
     item.status !== "done"
 
   return (
-    <button
-      type="button"
+    <ListRow
       onClick={() => onOpen(item)}
-      className="flex w-full flex-col gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-left transition-colors hover:border-primary/20 hover:bg-muted/30"
+      className="flex w-full flex-col gap-2 px-3 py-2.5 text-left"
     >
       <p className="text-xs leading-snug font-medium text-foreground">
         {item.title}
@@ -160,6 +160,6 @@ export function KanbanCard({
           </Button>
         </div>
       )}
-    </button>
+    </ListRow>
   )
 }

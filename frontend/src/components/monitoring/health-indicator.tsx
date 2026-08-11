@@ -47,14 +47,15 @@ export function HealthIndicator() {
             />
           </div>
         }
-      >
-      </TooltipTrigger>
+      ></TooltipTrigger>
       <TooltipContent>
         {isHealthy ? (
           <span>{t("monitoring.healthy")}</span>
         ) : (
           <div className="flex flex-col gap-1">
-            <span className="text-destructive">{t("monitoring.unhealthy")}</span>
+            <span className="text-destructive">
+              {t("monitoring.unhealthy")}
+            </span>
             {health?.details?.map((d) => (
               <span key={d.name} className="text-[10px]">
                 {d.name}: {d.status}

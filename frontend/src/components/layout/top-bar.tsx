@@ -1,5 +1,12 @@
 import { useTranslation } from "react-i18next"
-import { ChevronDown, Lock, Moon, PanelRightClose, PanelRightOpen, Sun } from "lucide-react"
+import {
+  ChevronDown,
+  Lock,
+  Moon,
+  PanelRightClose,
+  PanelRightOpen,
+  Sun,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -31,10 +38,27 @@ interface TopBarProps {
   actions?: React.ReactNode
 }
 
-function TopBarButton({ tooltip, onClick, children }: { tooltip: string; onClick: () => void; children: React.ReactNode }) {
+function TopBarButton({
+  tooltip,
+  onClick,
+  children,
+}: {
+  tooltip: string
+  onClick: () => void
+  children: React.ReactNode
+}) {
   return (
     <Tooltip>
-      <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={onClick} className="h-7 w-7 rounded-lg" />}>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onClick}
+            className="h-7 w-7 rounded-lg"
+          />
+        }
+      >
         {children}
       </TooltipTrigger>
       <TooltipContent>{tooltip}</TooltipContent>
@@ -43,7 +67,10 @@ function TopBarButton({ tooltip, onClick, children }: { tooltip: string; onClick
 }
 
 function AgentSwitcher({
-  agent, agents, locked, onSelectAgent,
+  agent,
+  agents,
+  locked,
+  onSelectAgent,
 }: {
   agent: AgentInfo
   agents: AgentInfo[]
@@ -55,9 +82,16 @@ function AgentSwitcher({
   if (!onSelectAgent || agents.length === 0) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium tracking-tight text-foreground">{agent.name}</span>
+        <span className="text-sm font-medium tracking-tight text-foreground">
+          {agent.name}
+        </span>
         {agent.model && (
-          <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px] font-mono">{agent.model}</Badge>
+          <Badge
+            variant="secondary"
+            className="rounded-md px-1.5 py-0 font-mono text-[10px]"
+          >
+            {agent.model}
+          </Badge>
         )}
       </div>
     )
@@ -74,9 +108,16 @@ function AgentSwitcher({
             />
           }
         >
-          <span className="text-sm font-medium tracking-tight text-foreground">{agent.name}</span>
+          <span className="text-sm font-medium tracking-tight text-foreground">
+            {agent.name}
+          </span>
           {agent.model && (
-            <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px] font-mono">{agent.model}</Badge>
+            <Badge
+              variant="secondary"
+              className="rounded-md px-1.5 py-0 font-mono text-[10px]"
+            >
+              {agent.model}
+            </Badge>
           )}
           <Lock className="h-3 w-3 text-muted-foreground/60" />
         </TooltipTrigger>
@@ -92,13 +133,18 @@ function AgentSwitcher({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 rounded-lg px-2 text-foreground hover:bg-muted"
+            className="h-8 gap-1.5 px-2 text-foreground hover:bg-muted"
           />
         }
       >
         <span className="text-sm font-medium tracking-tight">{agent.name}</span>
         {agent.model && (
-          <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px] font-mono">{agent.model}</Badge>
+          <Badge
+            variant="secondary"
+            className="rounded-md px-1.5 py-0 font-mono text-[10px]"
+          >
+            {agent.model}
+          </Badge>
         )}
         <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
       </DropdownMenuTrigger>
@@ -112,7 +158,9 @@ function AgentSwitcher({
             <div className="min-w-0 flex-1">
               <span className="block truncate font-medium">{a.name}</span>
               {a.model && (
-                <span className="block truncate font-mono text-[10px] text-muted-foreground">{a.model}</span>
+                <span className="block truncate font-mono text-[10px] text-muted-foreground">
+                  {a.model}
+                </span>
               )}
             </div>
           </DropdownMenuItem>
@@ -123,14 +171,27 @@ function AgentSwitcher({
 }
 
 export function TopBar({
-  agent, agents = [], agentLocked = false, onSelectAgent,
-  status, artifactOpen, onToggleArtifact, theme, onToggleTheme, actions,
+  agent,
+  agents = [],
+  agentLocked = false,
+  onSelectAgent,
+  status,
+  artifactOpen,
+  onToggleArtifact,
+  theme,
+  onToggleTheme,
+  actions,
 }: TopBarProps) {
   const { t } = useTranslation()
   return (
     <header className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-background px-4">
       <div className="flex items-center gap-2.5">
-        <AgentSwitcher agent={agent} agents={agents} locked={agentLocked} onSelectAgent={onSelectAgent} />
+        <AgentSwitcher
+          agent={agent}
+          agents={agents}
+          locked={agentLocked}
+          onSelectAgent={onSelectAgent}
+        />
         <StatusIndicator status={status} />
       </div>
 
@@ -138,10 +199,25 @@ export function TopBar({
         {actions}
         <HealthIndicator />
         <TopBarButton tooltip={t("layout.toggleTheme")} onClick={onToggleTheme}>
-          {theme === "dark" ? <Sun className="h-3.5 w-3.5 text-muted-foreground" /> : <Moon className="h-3.5 w-3.5 text-muted-foreground" />}
+          {theme === "dark" ? (
+            <Sun className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <Moon className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
         </TopBarButton>
-        <TopBarButton tooltip={artifactOpen ? t("layout.closeInspector") : t("layout.openInspector")} onClick={onToggleArtifact}>
-          {artifactOpen ? <PanelRightClose className="h-3.5 w-3.5 text-muted-foreground" /> : <PanelRightOpen className="h-3.5 w-3.5 text-muted-foreground" />}
+        <TopBarButton
+          tooltip={
+            artifactOpen
+              ? t("layout.closeInspector")
+              : t("layout.openInspector")
+          }
+          onClick={onToggleArtifact}
+        >
+          {artifactOpen ? (
+            <PanelRightClose className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <PanelRightOpen className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
         </TopBarButton>
       </div>
     </header>

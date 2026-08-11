@@ -44,7 +44,10 @@ function eventsToEntries(
   return state.messages.map((m, i) => ({
     ...m,
     id: `replay-entry-${i}`,
-    toolCalls: m.toolCalls?.map((tc, j) => ({ ...tc, id: `replay-tc-${i}-${j}` })),
+    toolCalls: m.toolCalls?.map((tc, j) => ({
+      ...tc,
+      id: `replay-tc-${i}-${j}`,
+    })),
   }))
 }
 
@@ -90,7 +93,10 @@ export function SessionConversation({
           setError(null)
           // Stop polling once the run has ended — nothing more will arrive.
           const lastType = recs[recs.length - 1]?.event?.type
-          if ((lastType === "done" || lastType === "error") && timer !== undefined) {
+          if (
+            (lastType === "done" || lastType === "error") &&
+            timer !== undefined
+          ) {
             clearInterval(timer)
             timer = undefined
           }
@@ -198,7 +204,9 @@ export function SessionConversationDialog({
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-2">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              <p className="text-xs text-muted-foreground">{t("kanban.waitingStart")}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("kanban.waitingStart")}
+              </p>
             </div>
           )}
         </div>

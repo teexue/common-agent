@@ -50,8 +50,9 @@ sdk/{ts,python}
 
 - **格式**：无分号、双引号、2 空格缩进、尾逗号 ES5（Prettier 强制）
 - **组件**：函数组件 + hooks，禁止 class 组件，禁止 `any` 类型
-- **样式**：Tailwind utility-first，用 `cn()` 合并类名，禁止内联 style
-- **命名**：组件文件 PascalCase，工具函数 camelCase，hooks 以 `use` 前缀
+- **样式**：Tailwind utility-first，用 `cn()` 合并类名，禁止内联 style（动态计算值如进度百分比、背景图 URL 除外）；颜色必须用 index.css 设计 token（primary / muted-foreground / success / warning / chart-*），禁止散装色板类
+- **页面原语**：页面必须经由 `components/shared/` 的 PageHeader / PageShell / PageMain / EmptyState / ListRow 组装，禁止手写页头与空态拷贝
+- **命名**：组件文件 kebab-case，工具函数 camelCase，hooks 以 `use` 前缀
 - **TypeScript**：strict mode，对象用 `interface`，联合用 `type`，优先 `as const` 替代 `enum`
 
 ## 测试

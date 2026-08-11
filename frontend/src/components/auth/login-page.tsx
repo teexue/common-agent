@@ -13,7 +13,7 @@ type Mode = "login" | "register"
 export function LoginPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { state, hasUsers, refresh } = useAuth()
+  const { state, hasUsers, allowRegistration, refresh } = useAuth()
   const [mode, setMode] = useState<Mode>(hasUsers ? "login" : "register")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
@@ -24,6 +24,11 @@ export function LoginPage() {
   useEffect(() => {
     setMode(hasUsers ? "login" : "register")
   }, [hasUsers])
+
+  // Open registration may be disabled by an admin; force login mode then.
+  const canRegister = !hasUsers || allowRegistration
+  const effectiveMode: Mode =
+    mode === "register" && !canRegister ? "login" : mode
 
   if (state === "loading") {
     return (
@@ -42,7 +47,7 @@ export function LoginPage() {
     setError(null)
     try {
       const session =
-        mode === "register"
+        effectiveMode === "register"
           ? await registerUser(username, password, displayName)
           : await loginUser(username, password)
       setAccessToken(session.token)
@@ -59,18 +64,33 @@ export function LoginPage() {
     <div className="flex h-full min-h-svh items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-3 text-center">
-          <img src="/logo.png" alt="common-agent" className="h-12 w-12 rounded-xl" />
+          <img
+            src="/logo.png"
+            alt="common-agent"
+            className="h-12 w-12 rounded-xl"
+          />
           <div>
-            <h1 className="font-heading text-xl tracking-tight text-foreground">common-agent</h1>
+            <h1 className="font-heading text-xl tracking-tight text-foreground">
+              common-agent
+            </h1>
             <p className="mt-1 text-xs text-muted-foreground">
-              {mode === "login" ? t("auth.loginHint") : t("auth.registerHint")}
+              {effectiveMode === "login"
+                ? t("auth.loginHint")
+                : t("auth.registerHint")}
             </p>
           </div>
         </div>
 
-        <div className="space-y-3 rounded-2xl border border-border bg-card p-5">
+        <div className="space-y-3 rounded-xl border border-border bg-card p-5">
+          {effectiveMode === "register" && !hasUsers && (
+            <p className="rounded-lg bg-primary/10 px-3 py-2 text-[11px] leading-relaxed text-primary">
+              {t("auth.firstUserAdminHint")}
+            </p>
+          )}
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("auth.username")}</Label>
+            <Label className="text-xs text-muted-foreground">
+              {t("auth.username")}
+            </Label>
             <Input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -83,21 +103,27 @@ export function LoginPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">{t("auth.password")}</Label>
+            <Label className="text-xs text-muted-foreground">
+              {t("auth.password")}
+            </Label>
             <Input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="h-10 rounded-xl text-sm"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              autoComplete={
+                effectiveMode === "login" ? "current-password" : "new-password"
+              }
               onKeyDown={(e) => {
                 if (e.key === "Enter") void handleSubmit()
               }}
             />
           </div>
-          {mode === "register" && (
+          {effectiveMode === "register" && (
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">{t("auth.displayName")}</Label>
+              <Label className="text-xs text-muted-foreground">
+                {t("auth.displayName")}
+              </Label>
               <Input
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
@@ -110,27 +136,31 @@ export function LoginPage() {
           {error && <p className="text-xs text-destructive">{error}</p>}
 
           <Button
-            className="h-10 w-full rounded-xl text-sm"
+            className="h-10 w-full text-sm"
             onClick={() => void handleSubmit()}
             disabled={saving || !username.trim() || password.length < 6}
           >
             {saving
               ? t("common.loading")
-              : mode === "login"
+              : effectiveMode === "login"
                 ? t("auth.login")
                 : t("auth.register")}
           </Button>
 
-          <button
-            type="button"
-            className="w-full text-center text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              setMode(mode === "login" ? "register" : "login")
-              setError(null)
-            }}
-          >
-            {mode === "login" ? t("auth.switchRegister") : t("auth.switchLogin")}
-          </button>
+          {(canRegister || effectiveMode === "register") && (
+            <button
+              type="button"
+              className="w-full text-center text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setMode(effectiveMode === "login" ? "register" : "login")
+                setError(null)
+              }}
+            >
+              {effectiveMode === "login"
+                ? t("auth.switchRegister")
+                : t("auth.switchLogin")}
+            </button>
+          )}
         </div>
       </div>
     </div>

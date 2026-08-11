@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -63,6 +64,14 @@ func Open(home string) (*DB, error) {
 		_ = sqlDB.Close()
 		return nil, err
 	}
+	if err := db.ensureAdminUser(); err != nil {
+		_ = sqlDB.Close()
+		return nil, err
+	}
+	if err := db.backfillAPIKeyDefaults(); err != nil {
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("backfill api key defaults: %w", err)
+	}
 	if err := db.MigrateFromFiles(); err != nil {
 		_ = sqlDB.Close()
 		return nil, fmt.Errorf("migrate from files: %w", err)
@@ -118,4 +127,36 @@ func (db *DB) ensureDefaultUser() error {
 	return db.Model(&User{}).
 		Where("id = ? AND (username = '' OR username IS NULL)", DefaultUserID).
 		Update("username", "local").Error
+}
+
+// ensureAdminUser promotes a user to admin when the users table has no admin.
+// The earliest-created real user wins; usr_local is promoted only when it is
+// the sole account.
+func (db *DB) ensureAdminUser() error {
+	var n int64
+	if err := db.Model(&User{}).Where("role = ?", RoleAdmin).Count(&n).Error; err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	var u User
+	err := db.Where("id <> ?", DefaultUserID).Order("created_at asc").First(&u).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = db.Where("id = ?", DefaultUserID).First(&u).Error
+	}
+	if err != nil {
+		return fmt.Errorf("find user to promote: %w", err)
+	}
+	if err := db.Model(&User{}).Where("id = ?", u.ID).Update("role", RoleAdmin).Error; err != nil {
+		return fmt.Errorf("promote user %q to admin: %w", u.ID, err)
+	}
+	return nil
+}
+
+// backfillAPIKeyDefaults repairs rows created before scopes/enabled existed.
+func (db *DB) backfillAPIKeyDefaults() error {
+	return db.Model(&APIKey{}).
+		Where("scopes IS NULL OR scopes = ''").
+		Update("scopes", "*").Error
 }

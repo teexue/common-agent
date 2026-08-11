@@ -13,18 +13,37 @@ interface SearchBarProps {
   onNext: () => void
 }
 
-function MatchNav({ matchCount, currentMatch, onPrev, onNext }: Pick<SearchBarProps, "matchCount" | "currentMatch" | "onPrev" | "onNext">) {
+function MatchNav({
+  matchCount,
+  currentMatch,
+  onPrev,
+  onNext,
+}: Pick<SearchBarProps, "matchCount" | "currentMatch" | "onPrev" | "onNext">) {
   const { t } = useTranslation()
   return (
     <>
-      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-        {matchCount > 0 ? `${currentMatch + 1}/${matchCount}` : t("conversation.noMatch")}
+      <span className="text-[10px] whitespace-nowrap text-muted-foreground">
+        {matchCount > 0
+          ? `${currentMatch + 1}/${matchCount}`
+          : t("conversation.noMatch")}
       </span>
       <div className="flex items-center gap-0.5">
-        <Button variant="ghost" size="icon-xs" className="h-5 w-5 rounded-md" onClick={onPrev} disabled={matchCount === 0}>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="h-5 w-5 rounded-md"
+          onClick={onPrev}
+          disabled={matchCount === 0}
+        >
           <ChevronUp className="h-3 w-3" />
         </Button>
-        <Button variant="ghost" size="icon-xs" className="h-5 w-5 rounded-md" onClick={onNext} disabled={matchCount === 0}>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="h-5 w-5 rounded-md"
+          onClick={onNext}
+          disabled={matchCount === 0}
+        >
           <ChevronDown className="h-3 w-3" />
         </Button>
       </div>
@@ -32,12 +51,21 @@ function MatchNav({ matchCount, currentMatch, onPrev, onNext }: Pick<SearchBarPr
   )
 }
 
-export function SearchBar({ onSearch, onClear, matchCount, currentMatch, onPrev, onNext }: SearchBarProps) {
+export function SearchBar({
+  onSearch,
+  onClear,
+  matchCount,
+  currentMatch,
+  onPrev,
+  onNext,
+}: SearchBarProps) {
   const { t } = useTranslation()
   const [query, setQuery] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { inputRef.current?.focus() }, [])
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
 
   useEffect(() => {
     const timer = setTimeout(() => onSearch(query), 200)
@@ -45,19 +73,36 @@ export function SearchBar({ onSearch, onClear, matchCount, currentMatch, onPrev,
   }, [query, onSearch])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") { e.preventDefault(); e.shiftKey ? onPrev() : onNext() }
+    if (e.key === "Enter") {
+      e.preventDefault()
+      e.shiftKey ? onPrev() : onNext()
+    }
     if (e.key === "Escape") onClear()
   }
 
   return (
     <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-sm">
       <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <Input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleKeyDown}
-        placeholder={t("conversation.searchPlaceholder")} className="h-6 flex-1 border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0" />
+      <Input
+        ref={inputRef}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={t("conversation.searchPlaceholder")}
+        className="h-6 flex-1 border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
+      />
       {query && (
         <>
           <MatchNav {...{ matchCount, currentMatch, onPrev, onNext }} />
-          <Button variant="ghost" size="icon-xs" className="h-5 w-5 rounded-md" onClick={() => { setQuery(""); onClear() }}>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="h-5 w-5 rounded-md"
+            onClick={() => {
+              setQuery("")
+              onClear()
+            }}
+          >
             <X className="h-3 w-3" />
           </Button>
         </>

@@ -53,16 +53,23 @@ export function saveBackgroundSettings(s: BackgroundSettings): void {
 /** Probes the backend for a stored background; resolves to its media kind, or null if absent. */
 export async function probeBackground(): Promise<BackgroundMediaKind | null> {
   try {
-    const res = await fetch(BACKGROUND_URL, { method: "HEAD", headers: apiHeaders() })
+    const res = await fetch(BACKGROUND_URL, {
+      method: "HEAD",
+      headers: apiHeaders(),
+    })
     if (!res.ok) return null
-    return (res.headers.get("Content-Type") ?? "").startsWith("video/") ? "video" : "image"
+    return (res.headers.get("Content-Type") ?? "").startsWith("video/")
+      ? "video"
+      : "image"
   } catch {
     return null
   }
 }
 
 /** Uploads an image or video file as the background; returns the cache-busted URL and media kind. */
-export async function uploadBackground(file: File): Promise<{ url: string; kind: BackgroundMediaKind }> {
+export async function uploadBackground(
+  file: File
+): Promise<{ url: string; kind: BackgroundMediaKind }> {
   const form = new FormData()
   form.append("file", file)
   const res = await fetch(BACKGROUND_URL, {
@@ -72,7 +79,10 @@ export async function uploadBackground(file: File): Promise<{ url: string; kind:
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(err?.message ?? i18n.t("api.backgroundUploadFailed", { status: res.status }))
+    throw new Error(
+      err?.message ??
+        i18n.t("api.backgroundUploadFailed", { status: res.status })
+    )
   }
   return {
     url: backgroundImageURL(Date.now()),
@@ -94,8 +104,11 @@ interface HSL {
 }
 
 function rgbToHsl(r: number, g: number, b: number): HSL {
-  r /= 255; g /= 255; b /= 255
-  const max = Math.max(r, g, b); const min = Math.min(r, g, b)
+  r /= 255
+  g /= 255
+  b /= 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
   let h = 0
   const l = (max + min) / 2
   const d = max - min
@@ -103,9 +116,15 @@ function rgbToHsl(r: number, g: number, b: number): HSL {
   if (d !== 0) {
     s = d / (1 - Math.abs(2 * l - 1))
     switch (max) {
-      case r: h = ((g - b) / d) % 6; break
-      case g: h = (b - r) / d + 2; break
-      default: h = (r - g) / d + 4; break
+      case r:
+        h = ((g - b) / d) % 6
+        break
+      case g:
+        h = (b - r) / d + 2
+        break
+      default:
+        h = (r - g) / d + 4
+        break
     }
     h *= 60
     if (h < 0) h += 360
@@ -141,14 +160,22 @@ function loadVideoFrame(url: string): Promise<HTMLVideoElement | null> {
 }
 
 /** Loads the media and extracts its dominant color + average luminance via canvas. */
-export async function extractDominant(mediaUrl: string, kind: BackgroundMediaKind = "image"): Promise<AdaptResult | null> {
-  const source = kind === "video" ? await loadVideoFrame(mediaUrl) : await loadImage(mediaUrl)
+export async function extractDominant(
+  mediaUrl: string,
+  kind: BackgroundMediaKind = "image"
+): Promise<AdaptResult | null> {
+  const source =
+    kind === "video"
+      ? await loadVideoFrame(mediaUrl)
+      : await loadImage(mediaUrl)
   if (!source) return null
-  if (source instanceof HTMLImageElement && source.naturalWidth === 0) return null
+  if (source instanceof HTMLImageElement && source.naturalWidth === 0)
+    return null
 
   const size = 64
   const canvas = document.createElement("canvas")
-  canvas.width = size; canvas.height = size
+  canvas.width = size
+  canvas.height = size
   const ctx = canvas.getContext("2d")
   if (!ctx) return null
   ctx.drawImage(source, 0, 0, size, size)
@@ -159,11 +186,15 @@ export async function extractDominant(mediaUrl: string, kind: BackgroundMediaKin
     return null
   }
 
-  const buckets: { h: number; s: number; l: number; weight: number }[] = Array.from({ length: 36 }, () => ({ h: 0, s: 0, l: 0, weight: 0 }))
+  const buckets: { h: number; s: number; l: number; weight: number }[] =
+    Array.from({ length: 36 }, () => ({ h: 0, s: 0, l: 0, weight: 0 }))
   let totalLum = 0
   let count = 0
   for (let i = 0; i < data.length; i += 4) {
-    const r = data[i]; const g = data[i + 1]; const b = data[i + 2]; const a = data[i + 3]
+    const r = data[i]
+    const g = data[i + 1]
+    const b = data[i + 2]
+    const a = data[i + 3]
     if (a === 0) continue
     const { h, s, l } = rgbToHsl(r, g, b)
     totalLum += l
@@ -171,7 +202,10 @@ export async function extractDominant(mediaUrl: string, kind: BackgroundMediaKin
     if (s < 0.12) continue // skip near-grey pixels for hue dominance
     const bucket = Math.floor(h / 10) % 36
     const w = buckets[bucket]
-    w.h += h; w.s += s; w.l += l; w.weight += s
+    w.h += h
+    w.s += s
+    w.l += l
+    w.weight += s
   }
   if (count === 0) return null
 
@@ -182,7 +216,11 @@ export async function extractDominant(mediaUrl: string, kind: BackgroundMediaKin
     return { hsl: { h: 210, s: 0.1, l: 0.5 }, luminance: totalLum / count }
   }
   return {
-    hsl: { h: best.h / best.weight, s: Math.min(best.s / best.weight, 0.85), l: best.l / best.weight },
+    hsl: {
+      h: best.h / best.weight,
+      s: Math.min(best.s / best.weight, 0.85),
+      l: best.l / best.weight,
+    },
     luminance: totalLum / count,
   }
 }

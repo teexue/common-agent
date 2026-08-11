@@ -101,14 +101,18 @@ export function FieldTable({ rows }: { rows: FieldRow[] }) {
             <code className="font-mono text-[13px] font-medium text-foreground">
               {row.name}
             </code>
-            <span className="font-mono text-xs text-muted-foreground">{row.type}</span>
+            <span className="font-mono text-xs text-muted-foreground">
+              {row.type}
+            </span>
             {row.required && (
               <span className="text-xs font-medium text-primary">
                 {t("apiDocs.required")}
               </span>
             )}
           </div>
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{row.desc}</p>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+            {row.desc}
+          </p>
         </div>
       ))}
     </dl>
@@ -131,9 +135,13 @@ export function EndpointCard({
     <div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <MethodBadge method={method} />
-        <code className="font-mono text-sm font-medium text-foreground">{path}</code>
+        <code className="font-mono text-sm font-medium text-foreground">
+          {path}
+        </code>
       </div>
-      <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{title}</p>
+      <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+        {title}
+      </p>
       {children ? <div className="mt-4 space-y-4">{children}</div> : null}
     </div>
   )
@@ -176,9 +184,13 @@ export function DocsSection({
       className="scroll-mt-8 overflow-hidden rounded-xl border border-border bg-card"
     >
       <div className="border-b border-border bg-muted/50 px-6 py-4">
-        <h2 className="font-heading text-base tracking-tight text-foreground">{title}</h2>
+        <h2 className="font-heading text-base tracking-tight text-foreground">
+          {title}
+        </h2>
         {hint && (
-          <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">{hint}</p>
+          <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+            {hint}
+          </p>
         )}
       </div>
       <div className="space-y-6 p-6">{children}</div>

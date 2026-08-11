@@ -30,7 +30,7 @@ export function ToolDetailDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg rounded-2xl border-border bg-card">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 font-heading text-sm tracking-tight">
+          <DialogTitle className="flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-muted">
               <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
@@ -55,7 +55,7 @@ export function ToolDetailDialog({
           <Separator />
 
           <div>
-            <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            <h4 className="mb-1.5 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
               {t("tools.paramSchema")}
             </h4>
             <JsonViewer data={tool.parameters} />

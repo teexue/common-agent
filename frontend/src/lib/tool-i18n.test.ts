@@ -29,7 +29,9 @@ describe("toolDisplayDescription", () => {
   })
 
   it("returns localized description when available", () => {
-    expect(toolDisplayDescription("get_time", "fallback")).toBe("返回当前 UTC 时间（RFC3339）。")
+    expect(toolDisplayDescription("get_time", "fallback")).toBe(
+      "返回当前 UTC 时间（RFC3339）。"
+    )
   })
 
   it("falls back to provided description for unknown tools", () => {

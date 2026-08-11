@@ -22,7 +22,13 @@ export interface ToolCallNode {
 export interface SystemNode {
   type: "system"
   eventIndex: number
-  kind: "compaction" | "sub_agent_start" | "sub_agent_end" | "error" | "done" | "approval_required"
+  kind:
+    | "compaction"
+    | "sub_agent_start"
+    | "sub_agent_end"
+    | "error"
+    | "done"
+    | "approval_required"
   content?: string
   agent?: string
 }
@@ -46,7 +52,13 @@ export interface ReplayEntry {
   timestamp: number
   textDeltas: { index: number; content: string }[]
   reasoningDeltas: { index: number; content: string }[]
-  toolCalls: { startIndex: number; resultIndex?: number; toolCallId: string; name: string; input: unknown }[]
+  toolCalls: {
+    startIndex: number
+    resultIndex?: number
+    toolCallId: string
+    name: string
+    input: unknown
+  }[]
   systemEvents: { index: number; kind: string; content?: string }[]
 }
 

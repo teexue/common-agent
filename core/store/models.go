@@ -2,23 +2,34 @@ package store
 
 import "time"
 
+// User roles for RBAC.
+const (
+	RoleAdmin  = "admin"
+	RoleMember = "member"
+)
+
 // User is a local account (multi-user).
 type User struct {
 	ID           string    `gorm:"primaryKey;size:64"`
 	Username     string    `gorm:"uniqueIndex;not null;size:64"`
 	PasswordHash string    `gorm:"not null"`
 	Name         string    `gorm:"not null"` // display name
+	Role         string    `gorm:"not null;default:member;size:16"`
 	CreatedAt    time.Time `gorm:"not null"`
 }
 
 // APIKey is a hashed server API key bound to a user.
 type APIKey struct {
-	ID        string    `gorm:"primaryKey;size:64"`
-	UserID    string    `gorm:"index;not null;size:64;uniqueIndex:idx_api_keys_user_name"`
-	Name      string    `gorm:"not null;uniqueIndex:idx_api_keys_user_name"`
-	KeyHash   string    `gorm:"uniqueIndex;not null"`
-	Prefix    string    `gorm:"not null"`
-	CreatedAt time.Time `gorm:"not null"`
+	ID         string     `gorm:"primaryKey;size:64"`
+	UserID     string     `gorm:"index;not null;size:64;uniqueIndex:idx_api_keys_user_name"`
+	Name       string     `gorm:"not null;uniqueIndex:idx_api_keys_user_name"`
+	KeyHash    string     `gorm:"uniqueIndex;not null"`
+	Prefix     string     `gorm:"not null"`
+	Scopes     string     `gorm:"not null;default:*"` // comma-separated, "*" = all
+	ExpiresAt  *time.Time `gorm:""`
+	LastUsedAt *time.Time `gorm:""`
+	Enabled    bool       `gorm:"not null;default:true"`
+	CreatedAt  time.Time  `gorm:"not null"`
 }
 
 // Meta stores opaque key/value pairs (jwt_secret, migration flags, …).

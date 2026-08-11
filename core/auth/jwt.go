@@ -16,8 +16,11 @@ type TokenService struct {
 }
 
 // Claims are JWT claims for a user session or API key.
+// Role is informational only: authorization always re-reads the current role
+// from the store, never from this claim.
 type Claims struct {
 	KeyID string `json:"kid"`
+	Role  string `json:"role,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -59,6 +62,7 @@ func (s *TokenService) sign(id Identity) (string, error) {
 	now := time.Now().UTC()
 	claims := Claims{
 		KeyID: id.KeyID,
+		Role:  id.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   id.UserID,
 			IssuedAt:  jwt.NewNumericDate(now),

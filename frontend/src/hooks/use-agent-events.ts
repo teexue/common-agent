@@ -15,7 +15,10 @@ interface UseAgentEventsOptions {
  * Connects to /v1/events SSE endpoint and calls onAgentChange
  * when an agent file is created, updated, or deleted.
  */
-export function useAgentEvents({ onAgentChange, enabled = true }: UseAgentEventsOptions) {
+export function useAgentEvents({
+  onAgentChange,
+  enabled = true,
+}: UseAgentEventsOptions) {
   const callbackRef = useRef(onAgentChange)
   callbackRef.current = onAgentChange
   const [keyEpoch, setKeyEpoch] = useState(0)

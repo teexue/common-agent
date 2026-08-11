@@ -175,7 +175,7 @@ export function KanbanCreateDialog({
                     type="button"
                     onClick={() => setPriority(p)}
                     className={cn(
-                      "h-full rounded-[10px] px-3 text-xs transition-colors",
+                      "h-full rounded-lg px-3 text-xs transition-colors",
                       priority === p
                         ? "bg-primary text-primary-foreground"
                         : "text-muted-foreground hover:text-foreground"
@@ -219,7 +219,7 @@ export function KanbanCreateDialog({
                     type="button"
                     variant="outline"
                     size="icon-xs"
-                    className="h-8 w-8 shrink-0 rounded-lg"
+                    className="h-8 w-8 shrink-0"
                     onClick={() => setPickerOpen(true)}
                   >
                     <FolderOpen className="h-3.5 w-3.5" />
@@ -264,7 +264,7 @@ export function KanbanCreateDialog({
               type="button"
               variant="ghost"
               size="sm"
-              className="h-8 rounded-xl text-xs"
+              className="h-8 text-xs"
               onClick={() => onOpenChange(false)}
             >
               {t("common.cancel")}
@@ -272,7 +272,7 @@ export function KanbanCreateDialog({
             <Button
               type="submit"
               size="sm"
-              className="h-8 gap-1.5 rounded-xl text-xs"
+              className="h-8 gap-1.5 text-xs"
               disabled={saving || !agent}
             >
               {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

@@ -42,12 +42,14 @@ export function ThinkingBlock({
           <ChevronRight className="h-3 w-3" />
         )}
         <span className="font-mono text-[10px]">
-          {isStreaming ? t("status.thinking") : t("status.thinkingTokens", { tokens })}
+          {isStreaming
+            ? t("status.thinking")
+            : t("status.thinkingTokens", { tokens })}
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <div className="ml-3 mt-1 border-l-2 border-primary/15 pl-3">
-          <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+        <div className="mt-1 ml-3 border-l-2 border-primary/15 pl-3">
+          <p className="text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground">
             {content}
           </p>
         </div>

@@ -71,7 +71,11 @@ with requests.post(url, headers=headers, json=payload, stream=True) as r:
 }
 
 /** Builds auth token exchange samples. */
-export function buildTokenSamples(base: string, loginLabel: string, exchangeLabel: string) {
+export function buildTokenSamples(
+  base: string,
+  loginLabel: string,
+  exchangeLabel: string
+) {
   return [
     {
       id: "login",

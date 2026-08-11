@@ -21,6 +21,7 @@ interface AuthContextValue {
   state: AuthState
   user: AuthUserInfo | null
   hasUsers: boolean
+  allowRegistration: boolean
   logout: () => void
   refresh: () => Promise<void>
 }
@@ -32,13 +33,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>("loading")
   const [user, setUser] = useState<AuthUserInfo | null>(null)
   const [hasUsers, setHasUsers] = useState(false)
+  const [allowRegistration, setAllowRegistration] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
       const status = await fetchAuthStatus()
       setHasUsers(!!status.has_users)
+      setAllowRegistration(!!status.allow_registration)
     } catch {
       setHasUsers(false)
+      setAllowRegistration(false)
     }
 
     const token = getAccessToken()
@@ -93,7 +97,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ state, user, hasUsers, logout, refresh }}>
+    <AuthContext.Provider
+      value={{ state, user, hasUsers, allowRegistration, logout, refresh }}
+    >
       {children}
     </AuthContext.Provider>
   )

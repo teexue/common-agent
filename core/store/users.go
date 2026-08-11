@@ -17,44 +17,54 @@ type UserInfo struct {
 	ID        string    `json:"id"`
 	Username  string    `json:"username"`
 	Name      string    `json:"name"`
+	Role      string    `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 // CreateUser registers a new user with username/password.
-func (db *DB) CreateUser(username, password, displayName string) (User, error) {
+// role must be RoleAdmin or RoleMember; an empty role defaults to RoleMember.
+func (db *DB) CreateUser(username, password, name, role string) (*User, error) {
 	username = strings.TrimSpace(strings.ToLower(username))
-	displayName = strings.TrimSpace(displayName)
+	name = strings.TrimSpace(name)
+	role = strings.TrimSpace(role)
+	if role == "" {
+		role = RoleMember
+	}
+	if err := validateRole(role); err != nil {
+		return nil, err
+	}
 	if err := validateUsername(username); err != nil {
-		return User{}, err
+		return nil, err
 	}
 	if len(password) < 6 {
-		return User{}, fmt.Errorf("password must be at least 6 characters")
+		return nil, fmt.Errorf("password must be at least 6 characters")
 	}
-	if displayName == "" {
-		displayName = username
+	if name == "" {
+		name = username
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return User{}, fmt.Errorf("hash password: %w", err)
+		return nil, fmt.Errorf("hash password: %w", err)
 	}
 	id, err := generateID("usr")
 	if err != nil {
-		return User{}, err
+		return nil, err
 	}
 	u := User{
 		ID:           id,
 		Username:     username,
 		PasswordHash: string(hash),
-		Name:         displayName,
+		Name:         name,
+		Role:         role,
 		CreatedAt:    time.Now().UTC(),
 	}
 	if err := db.Create(&u).Error; err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "unique") {
-			return User{}, fmt.Errorf("username %q already exists", username)
+			return nil, fmt.Errorf("username %q already exists", username)
 		}
-		return User{}, fmt.Errorf("create user: %w", err)
+		return nil, fmt.Errorf("create user: %w", err)
 	}
-	return u, nil
+	return &u, nil
 }
 
 // AuthenticateUser verifies username/password and returns the user.
@@ -108,24 +118,111 @@ func (db *DB) CountUsersWithPassword() (int64, error) {
 	return n, err
 }
 
-// ListUsers returns public user info.
-func (db *DB) ListUsers() ([]UserInfo, error) {
+// ListUsers returns all users ordered by creation time.
+func (db *DB) ListUsers() ([]User, error) {
 	var rows []User
 	if err := db.Order("created_at asc").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	out := make([]UserInfo, 0, len(rows))
-	for _, u := range rows {
-		out = append(out, UserInfo{
-			ID: u.ID, Username: u.Username, Name: u.Name, CreatedAt: u.CreatedAt,
-		})
+	return rows, nil
+}
+
+// UpdateUserRole changes a user's role. The last remaining admin cannot be demoted.
+func (db *DB) UpdateUserRole(id, role string) error {
+	role = strings.TrimSpace(role)
+	if err := validateRole(role); err != nil {
+		return err
 	}
-	return out, nil
+	u, err := db.GetUser(id)
+	if err != nil {
+		return err
+	}
+	if u.Role == role {
+		return nil
+	}
+	if u.Role == RoleAdmin {
+		if err := db.ensureNotLastAdmin(); err != nil {
+			return err
+		}
+	}
+	res := db.Model(&User{}).Where("id = ?", id).Update("role", role)
+	if res.Error != nil {
+		return fmt.Errorf("update user role: %w", res.Error)
+	}
+	return nil
+}
+
+// ResetUserPassword replaces a user's password hash.
+func (db *DB) ResetUserPassword(id, newPassword string) error {
+	if len(newPassword) < 6 {
+		return fmt.Errorf("password must be at least 6 characters")
+	}
+	if _, err := db.GetUser(id); err != nil {
+		return err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	res := db.Model(&User{}).Where("id = ?", id).Update("password_hash", string(hash))
+	if res.Error != nil {
+		return fmt.Errorf("reset password: %w", res.Error)
+	}
+	return nil
+}
+
+// DeleteUser removes a user and their API keys. The last remaining admin cannot be deleted.
+func (db *DB) DeleteUser(id string) error {
+	u, err := db.GetUser(id)
+	if err != nil {
+		return err
+	}
+	if u.Role == RoleAdmin {
+		if err := db.ensureNotLastAdmin(); err != nil {
+			return err
+		}
+	}
+	if err := db.Where("user_id = ?", id).Delete(&APIKey{}).Error; err != nil {
+		return fmt.Errorf("delete user api keys: %w", err)
+	}
+	res := db.Where("id = ?", id).Delete(&User{})
+	if res.Error != nil {
+		return fmt.Errorf("delete user: %w", res.Error)
+	}
+	return nil
+}
+
+// GetUserRole returns the current role of a user.
+func (db *DB) GetUserRole(id string) (string, error) {
+	u, err := db.GetUser(id)
+	if err != nil {
+		return "", err
+	}
+	return u.Role, nil
+}
+
+// ensureNotLastAdmin errors when only one admin remains.
+func (db *DB) ensureNotLastAdmin() error {
+	var n int64
+	if err := db.Model(&User{}).Where("role = ?", RoleAdmin).Count(&n).Error; err != nil {
+		return fmt.Errorf("count admins: %w", err)
+	}
+	if n <= 1 {
+		return fmt.Errorf("cannot remove the last admin")
+	}
+	return nil
 }
 
 // ToUserInfo converts a User to UserInfo.
 func (u User) ToUserInfo() UserInfo {
-	return UserInfo{ID: u.ID, Username: u.Username, Name: u.Name, CreatedAt: u.CreatedAt}
+	return UserInfo{ID: u.ID, Username: u.Username, Name: u.Name, Role: u.Role, CreatedAt: u.CreatedAt}
+}
+
+func validateRole(role string) error {
+	if role != RoleAdmin && role != RoleMember {
+		return fmt.Errorf("role must be %q or %q", RoleAdmin, RoleMember)
+	}
+	return nil
 }
 
 func validateUsername(username string) error {

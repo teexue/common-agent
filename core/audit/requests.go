@@ -20,6 +20,8 @@ const requestRecordMaxBytes = 128 * 1024
 type RequestRecord struct {
 	Timestamp    time.Time       `json:"ts"`
 	SessionID    string          `json:"session_id,omitempty"`
+	UserID       string          `json:"user_id,omitempty"`
+	KeyID        string          `json:"key_id,omitempty"`
 	Agent        string          `json:"agent,omitempty"`
 	Source       string          `json:"source,omitempty"` // chat | http | kanban | cli | optimize
 	Model        string          `json:"model,omitempty"`

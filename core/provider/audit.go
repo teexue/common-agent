@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/teexue/common-agent/core/audit"
+	"github.com/teexue/common-agent/core/auth"
 )
 
 // RunMeta describes the run an LLM request belongs to, carried via context
@@ -102,9 +103,12 @@ func (a *auditedProvider) Stream(ctx context.Context, req Request) (<-chan Chunk
 
 func (a *auditedProvider) record(ctx context.Context, meta RunMeta, req Request, resp json.RawMessage, callErr error, start time.Time, tokens ...int) {
 	reqData, _ := json.Marshal(req)
+	id := auth.IdentityFromContext(ctx)
 	rec := audit.RequestRecord{
 		Timestamp:  start,
 		SessionID:  meta.SessionID,
+		UserID:     id.UserID,
+		KeyID:      id.KeyID,
 		Agent:      meta.Agent,
 		Source:     meta.Source,
 		Model:      req.Model,
