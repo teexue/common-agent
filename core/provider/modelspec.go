@@ -43,8 +43,14 @@ func EffectiveMaxOutput(model string, configured int) int {
 	return DefaultMaxTokens
 }
 
+// DefaultContextWindow is the conservative context size assumed for models
+// without a known spec. It keeps compaction active for any model so long
+// histories get trimmed instead of growing unboundedly.
+const DefaultContextWindow = 128 * 1024 // 128K tokens
+
 // EffectiveContextWindow resolves the model context window: an explicit
-// configuration wins, then the model's official spec (0 when unknown).
+// configuration wins, then the model's official spec, then a conservative
+// default so compaction never silently disables itself for unknown models.
 func EffectiveContextWindow(model string, configured int) int {
 	if configured > 0 {
 		return configured
@@ -52,5 +58,5 @@ func EffectiveContextWindow(model string, configured int) int {
 	if spec, ok := SpecForModel(model); ok {
 		return spec.ContextWindow
 	}
-	return 0
+	return DefaultContextWindow
 }

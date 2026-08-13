@@ -31,9 +31,9 @@ type Event struct {
 	Content string `json:"content,omitempty"`
 
 	// tool_start / tool_result / tool_approval_required
-	Tool      string          `json:"tool,omitempty"`
-	Input     json.RawMessage `json:"input,omitempty"`
-	ToolCallID string         `json:"tool_call_id,omitempty"`
+	Tool       string          `json:"tool,omitempty"`
+	Input      json.RawMessage `json:"input,omitempty"`
+	ToolCallID string          `json:"tool_call_id,omitempty"`
 
 	// tool_approval_required
 	ApprovalID string `json:"approval_id,omitempty"`
@@ -46,11 +46,16 @@ type Event struct {
 	Message string `json:"message,omitempty"`
 
 	// done
-	Status       string `json:"status,omitempty"`
-	Turns        int    `json:"turns,omitempty"`
-	InputTokens  int    `json:"input_tokens,omitempty"`
-	OutputTokens int    `json:"output_tokens,omitempty"`
-	SessionID    string `json:"session_id,omitempty"`
+	Status        string `json:"status,omitempty"`
+	Turns         int    `json:"turns,omitempty"`
+	InputTokens   int    `json:"input_tokens,omitempty"`
+	OutputTokens  int    `json:"output_tokens,omitempty"`
+	ContextWindow int    `json:"context_window,omitempty"`
+	SessionID     string `json:"session_id,omitempty"`
+
+	// done — prompt cache usage across the run (0 when providers do not report it).
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
 }
 
 // StreamEvents writes JSON-line events to w until done or ctx cancelled.

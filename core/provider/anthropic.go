@@ -126,12 +126,12 @@ func (a *Anthropic) ListModels(ctx context.Context) ([]ModelInfo, error) {
 }
 
 type anthropicRequest struct {
-	Model     string              `json:"model"`
-	System    string              `json:"system,omitempty"`
-	Messages  []anthropicMessage  `json:"messages"`
-	Tools     []anthropicTool     `json:"tools,omitempty"`
-	MaxTokens int                 `json:"max_tokens"`
-	Stream    bool                `json:"stream"`
+	Model     string             `json:"model"`
+	System    string             `json:"system,omitempty"`
+	Messages  []anthropicMessage `json:"messages"`
+	Tools     []anthropicTool    `json:"tools,omitempty"`
+	MaxTokens int                `json:"max_tokens"`
+	Stream    bool               `json:"stream"`
 }
 
 type anthropicMessage struct {
@@ -166,19 +166,19 @@ type anthropicStreamEvent struct {
 	Type         string `json:"type"`
 	Index        int    `json:"index"`
 	ContentBlock struct {
-		Type string          `json:"type"`
-		ID   string          `json:"id"`
-		Name string          `json:"name"`
+		Type string `json:"type"`
+		ID   string `json:"id"`
+		Name string `json:"name"`
 		// Some Anthropic-compatible vendors (e.g. DeepSeek) send the complete
 		// tool input here instead of streaming input_json_delta events.
 		Input json.RawMessage `json:"input,omitempty"`
 	} `json:"content_block"`
 	Delta struct {
-		Type         string `json:"type"`
-		Text         string `json:"text"`
-		Thinking     string `json:"thinking"`
-		PartialJSON  string `json:"partial_json"`
-		StopReason   string `json:"stop_reason"`
+		Type        string `json:"type"`
+		Text        string `json:"text"`
+		Thinking    string `json:"thinking"`
+		PartialJSON string `json:"partial_json"`
+		StopReason  string `json:"stop_reason"`
 	} `json:"delta"`
 	Usage *anthropicUsage `json:"usage,omitempty"`
 	// message_start nests usage under "message" per the Anthropic spec.
@@ -190,6 +190,10 @@ type anthropicStreamEvent struct {
 type anthropicUsage struct {
 	InputTokens  int `json:"input_tokens"`
 	OutputTokens int `json:"output_tokens"`
+	// Prompt caching usage (Anthropic Messages API): tokens read from cache
+	// and tokens written into cache for this request.
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
 }
 
 // Stream implements Provider.
@@ -339,7 +343,7 @@ func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk
 
 	toolAcc := map[int]*ToolCall{}
 	lastToolIdx := -1
-	var inputTokens, outputTokens int
+	var inputTokens, outputTokens, cacheRead, cacheCreation int
 
 	flushLastTool := func() {
 		if lastToolIdx < 0 {
@@ -378,10 +382,11 @@ func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk
 			continue
 		}
 
-		sec := StreamEventContext{Ctx: ctx, Ch: ch, ToolAcc: toolAcc, LastToolIdx: &lastToolIdx, FlushLastTool: flushLastTool, InputTokens: inputTokens, OutputTokens: outputTokens}
+		sec := StreamEventContext{Ctx: ctx, Ch: ch, ToolAcc: toolAcc, LastToolIdx: &lastToolIdx, FlushLastTool: flushLastTool, InputTokens: inputTokens, OutputTokens: outputTokens, CacheReadInputTokens: cacheRead, CacheCreationInputTokens: cacheCreation}
 		done, tokens := a.processStreamEvent(sec, ev)
 		if tokens != nil {
 			inputTokens, outputTokens = tokens.InputTokens, tokens.OutputTokens
+			cacheRead, cacheCreation = tokens.CacheReadInputTokens, tokens.CacheCreationInputTokens
 		}
 		if done {
 			return
@@ -392,13 +397,15 @@ func (a *Anthropic) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk
 
 // StreamEventContext holds state for processing Anthropic SSE events.
 type StreamEventContext struct {
-	Ctx           context.Context
-	Ch            chan<- Chunk
-	ToolAcc       map[int]*ToolCall
-	LastToolIdx   *int
-	FlushLastTool func()
-	InputTokens   int
-	OutputTokens  int
+	Ctx                      context.Context
+	Ch                       chan<- Chunk
+	ToolAcc                  map[int]*ToolCall
+	LastToolIdx              *int
+	FlushLastTool            func()
+	InputTokens              int
+	OutputTokens             int
+	CacheReadInputTokens     int
+	CacheCreationInputTokens int
 }
 
 // processStreamEvent processes a single Anthropic SSE event. Returns (finished, tokenUpdate).
@@ -411,6 +418,8 @@ func (a *Anthropic) processStreamEvent(sec StreamEventContext, ev anthropicStrea
 		}
 		if usage != nil {
 			sec.InputTokens = usage.InputTokens
+			sec.CacheReadInputTokens = usage.CacheReadInputTokens
+			sec.CacheCreationInputTokens = usage.CacheCreationInputTokens
 		}
 	case "content_block_start":
 		sec.FlushLastTool()
@@ -431,19 +440,27 @@ func (a *Anthropic) processStreamEvent(sec StreamEventContext, ev anthropicStrea
 	case "message_delta":
 		if ev.Usage != nil {
 			sec.OutputTokens = ev.Usage.OutputTokens
+			// message_delta usage typically carries only output_tokens; do not
+			// clobber cache stats parsed from message_start when absent.
+			if ev.Usage.CacheReadInputTokens > 0 {
+				sec.CacheReadInputTokens = ev.Usage.CacheReadInputTokens
+			}
+			if ev.Usage.CacheCreationInputTokens > 0 {
+				sec.CacheCreationInputTokens = ev.Usage.CacheCreationInputTokens
+			}
 		}
 		sec.FlushLastTool()
 		*sec.LastToolIdx = -1
 		if ev.Delta.StopReason == "end_turn" {
-			sendChunk(sec.Ctx, sec.Ch, Chunk{Done: true, InputTokens: sec.InputTokens, OutputTokens: sec.OutputTokens})
+			sendChunk(sec.Ctx, sec.Ch, Chunk{Done: true, InputTokens: sec.InputTokens, OutputTokens: sec.OutputTokens, CacheReadInputTokens: sec.CacheReadInputTokens, CacheCreationInputTokens: sec.CacheCreationInputTokens})
 			return true, nil
 		}
 	case "message_stop":
 		sec.FlushLastTool()
-		sendChunk(sec.Ctx, sec.Ch, Chunk{Done: true, InputTokens: sec.InputTokens, OutputTokens: sec.OutputTokens})
+		sendChunk(sec.Ctx, sec.Ch, Chunk{Done: true, InputTokens: sec.InputTokens, OutputTokens: sec.OutputTokens, CacheReadInputTokens: sec.CacheReadInputTokens, CacheCreationInputTokens: sec.CacheCreationInputTokens})
 		return true, nil
 	}
-	return false, &Chunk{InputTokens: sec.InputTokens, OutputTokens: sec.OutputTokens}
+	return false, &Chunk{InputTokens: sec.InputTokens, OutputTokens: sec.OutputTokens, CacheReadInputTokens: sec.CacheReadInputTokens, CacheCreationInputTokens: sec.CacheCreationInputTokens}
 }
 
 func handleContentBlockDelta(sec StreamEventContext, ev anthropicStreamEvent) bool {

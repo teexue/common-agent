@@ -15,6 +15,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  TokenUsageIndicator,
+  type SessionTokenUsage,
+} from "./token-usage-indicator"
+import { isComposingEvent } from "@/lib/keys"
 
 export interface ImageAttachment {
   dataUrl: string
@@ -30,6 +35,7 @@ interface InputBarProps {
   visionEnabled?: boolean
   optimizing?: boolean
   accessory?: React.ReactNode
+  tokenUsage?: SessionTokenUsage
 }
 
 function HintText({ isStreaming }: { isStreaming: boolean }) {
@@ -68,6 +74,7 @@ export function InputBar({
   visionEnabled,
   optimizing,
   accessory,
+  tokenUsage,
 }: InputBarProps) {
   const { t } = useTranslation()
   const [text, setText] = useState("")
@@ -93,6 +100,9 @@ export function InputBar({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Skip while an IME composition is active (e.g. confirming a candidate
+    // with Enter in a Chinese input method) so it doesn't send the message.
+    if (isComposingEvent(e)) return
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       if (isStreaming) {
@@ -199,6 +209,7 @@ export function InputBar({
             />
           </div>
           <div className="flex items-center gap-1">
+            {tokenUsage && <TokenUsageIndicator usage={tokenUsage} />}
             {!isStreaming && onOptimize && (
               <Tooltip>
                 <TooltipTrigger

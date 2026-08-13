@@ -15,12 +15,13 @@ import (
 
 // AgentListItem is the HTTP DTO for GET /v1/agents.
 type AgentListItem struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Provider string   `json:"provider"`
-	Model    string   `json:"model"`
-	Tools    []string `json:"tools"`
-	MaxTurns int      `json:"max_turns"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Provider      string   `json:"provider"`
+	Model         string   `json:"model"`
+	Tools         []string `json:"tools"`
+	MaxTurns      int      `json:"max_turns"`
+	ContextWindow int      `json:"context_window,omitempty"`
 }
 
 // AgentDetail is the HTTP DTO for GET /v1/agents/:id.
@@ -35,7 +36,7 @@ type AgentDetail struct {
 	MaxTokens     int                     `json:"max_tokens"`
 	ToolExecution *agent.ToolExecution    `json:"tool_execution,omitempty"`
 	Permissions   *permission.Permissions `json:"permissions,omitempty"`
-	MCPServers    []agent.MCPServerConfig  `json:"mcp_servers,omitempty"`
+	MCPServers    []agent.MCPServerConfig `json:"mcp_servers,omitempty"`
 	Knowledge     *agent.KnowledgeConfig  `json:"knowledge,omitempty"`
 	Optimize      *agent.OptimizeConfig   `json:"optimize,omitempty"`
 	Compaction    *agent.CompactionConfig `json:"compaction,omitempty"`
@@ -46,12 +47,13 @@ func (s *Server) handleAgents(c *gin.Context) {
 	items := make([]AgentListItem, len(summaries))
 	for i, a := range summaries {
 		items[i] = AgentListItem{
-			ID:       a.ID,
-			Name:     a.Name,
-			Provider: a.Provider,
-			Model:    a.Model,
-			Tools:    a.Tools,
-			MaxTurns: a.MaxTurns,
+			ID:            a.ID,
+			Name:          a.Name,
+			Provider:      a.Provider,
+			Model:         a.Model,
+			Tools:         a.Tools,
+			MaxTurns:      a.MaxTurns,
+			ContextWindow: a.ContextWindow,
 		}
 	}
 	c.JSON(http.StatusOK, items)

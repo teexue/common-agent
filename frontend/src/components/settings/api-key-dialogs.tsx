@@ -19,6 +19,7 @@ import {
   type AuthKeyInfo,
   type CreatedAuthKey,
 } from "@/lib/api"
+import { isComposingEvent } from "@/lib/keys"
 import { cn } from "@/lib/utils"
 
 export function CreateKeyDialog({
@@ -76,7 +77,14 @@ export function CreateKeyDialog({
         <DialogHeader>
           <DialogTitle>{t("settings.apiKeyAdd")}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => {
+            // Don't submit while confirming an IME candidate with Enter.
+            if (isComposingEvent(e)) e.preventDefault()
+          }}
+          className="space-y-3"
+        >
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">
               {t("settings.apiKeyName")}

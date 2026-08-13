@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest"
 
+import { chatReducer } from "@/hooks/use-chat-state"
+import type { ChatState } from "@/hooks/use-chat-state"
+
 // Import the pure functions we want to test.
 // Since parseSSELine and chatReducer are not exported, we'll test them
 // through the exported useChat hook's behavior, or we can extract them.
@@ -149,7 +152,6 @@ describe("toBackendMessages", () => {
     const result = toBackendMessages(entries)
     expect(result).toEqual([{ role: "user", content: "hello" }])
   })
-
   it("converts assistant message without tool calls", () => {
     const entries: ConversationEntry[] = [
       { id: "1", role: "assistant", content: "hi there" },
@@ -211,5 +213,114 @@ describe("toBackendMessages", () => {
     expect(result[0].role).toBe("user")
     expect(result[1].role).toBe("assistant")
     expect(result[2].role).toBe("user")
+  })
+})
+
+// ─── Session Token Accumulation Tests ────────────────────────────
+
+function baseState(): ChatState {
+  return {
+    messages: [],
+    isStreaming: false,
+    error: null,
+    sessionId: null,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    contextWindow: 0,
+  }
+}
+
+describe("chatReducer token accumulation", () => {
+  it("accumulates session token totals across runs", () => {
+    let state = chatReducer(baseState(), {
+      type: "ADD_USER_MESSAGE",
+      text: "hi",
+    })
+    state = chatReducer(state, { type: "START_ASSISTANT", entryId: "a1" })
+    state = chatReducer(state, {
+      type: "STREAM_DONE",
+      entryId: "a1",
+      status: "completed",
+      turns: 1,
+      inputTokens: 500,
+      outputTokens: 200,
+      contextWindow: 1_000_000,
+    })
+    expect(state.inputTokens).toBe(500)
+    expect(state.outputTokens).toBe(200)
+    expect(state.contextWindow).toBe(1_000_000)
+
+    // A second run adds on top; the context window persists when not resent.
+    state = chatReducer(state, { type: "ADD_USER_MESSAGE", text: "hi again" })
+    state = chatReducer(state, { type: "START_ASSISTANT", entryId: "a2" })
+    state = chatReducer(state, {
+      type: "STREAM_DONE",
+      entryId: "a2",
+      status: "completed",
+      turns: 1,
+      inputTokens: 300,
+      outputTokens: 100,
+    })
+    expect(state.inputTokens).toBe(800)
+    expect(state.outputTokens).toBe(300)
+    expect(state.contextWindow).toBe(1_000_000)
+  })
+
+  it("resets totals on clear and load session", () => {
+    const used: ChatState = {
+      ...baseState(),
+      inputTokens: 900,
+      outputTokens: 400,
+      contextWindow: 1_000_000,
+    }
+    const cleared = chatReducer(used, { type: "CLEAR" })
+    expect(cleared.inputTokens).toBe(0)
+    expect(cleared.outputTokens).toBe(0)
+    expect(cleared.contextWindow).toBe(0)
+
+    const loaded = chatReducer(used, {
+      type: "LOAD_SESSION",
+      sessionId: "s1",
+      messages: [],
+    })
+    expect(loaded.inputTokens).toBe(0)
+    expect(loaded.outputTokens).toBe(0)
+    expect(loaded.contextWindow).toBe(0)
+  })
+
+  it("restores cumulative usage from persisted session metadata", () => {
+    const state = chatReducer(baseState(), {
+      type: "LOAD_SESSION",
+      sessionId: "s1",
+      messages: [],
+      metadata: {
+        "usage.total_input_tokens": "1302",
+        "usage.total_output_tokens": "1900",
+        "usage.cache_read_tokens": "58300",
+        "usage.cache_creation_tokens": "300",
+        "usage.context_window": "200000",
+      },
+    })
+    expect(state.inputTokens).toBe(1302)
+    expect(state.outputTokens).toBe(1900)
+    expect(state.cacheReadTokens).toBe(58300)
+    expect(state.cacheCreationTokens).toBe(300)
+    expect(state.contextWindow).toBe(200000)
+  })
+
+  it("ignores malformed usage metadata", () => {
+    const state = chatReducer(baseState(), {
+      type: "LOAD_SESSION",
+      sessionId: "s1",
+      messages: [],
+      metadata: {
+        "usage.total_input_tokens": "abc",
+        "usage.context_window": "-5",
+      },
+    })
+    expect(state.inputTokens).toBe(0)
+    expect(state.contextWindow).toBe(0)
   })
 })

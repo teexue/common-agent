@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest"
 
 import i18n from "@/i18n"
-import { formatRelativeTime, formatTimestamp } from "@/lib/format"
+import {
+  cacheHitPercent,
+  formatRelativeTime,
+  formatTimestamp,
+  formatTokenCount,
+} from "@/lib/format"
 
 describe("format i18n", () => {
   beforeEach(async () => {
@@ -26,5 +31,25 @@ describe("format i18n", () => {
   it("formatTimestamp returns a non-empty time string", () => {
     const s = formatTimestamp(Date.now())
     expect(s.length).toBeGreaterThan(0)
+  })
+
+  it("formatTokenCount prefers the largest unit", () => {
+    expect(formatTokenCount(0)).toBe("0")
+    expect(formatTokenCount(123)).toBe("123")
+    expect(formatTokenCount(1_234)).toBe("1.2K")
+    expect(formatTokenCount(12_345)).toBe("12.3K")
+    expect(formatTokenCount(123_456)).toBe("123K")
+    expect(formatTokenCount(1_234_567)).toBe("1.2M")
+    expect(formatTokenCount(12_345_678)).toBe("12.3M")
+    expect(formatTokenCount(123_456_789)).toBe("123M")
+  })
+
+  it("cacheHitPercent uses total input (cached + fresh) as denominator", () => {
+    // Real-world case: 57.5K cached vs 302 fresh input → ~99%, not 19000%+.
+    expect(cacheHitPercent(57_500, 302)).toBe(99)
+    expect(cacheHitPercent(100, 0)).toBe(100)
+    expect(cacheHitPercent(250, 250)).toBe(50)
+    expect(cacheHitPercent(0, 302)).toBe(0)
+    expect(cacheHitPercent(0, 0)).toBe(0)
   })
 })

@@ -124,3 +124,50 @@ func TestConcurrentAccess(t *testing.T) {
 		t.Fatalf("got %d messages, want 50", len(s.GetMessages()))
 	}
 }
+
+func TestLastUsage(t *testing.T) {
+	s := session.New("demo")
+	in, n := s.LastUsage()
+	if in != 0 || n != 0 {
+		t.Fatalf("initial usage = %d/%d, want 0/0", in, n)
+	}
+	s.SetLastUsage(12345, 42)
+	in, n = s.LastUsage()
+	if in != 12345 || n != 42 {
+		t.Fatalf("usage = %d/%d, want 12345/42", in, n)
+	}
+	s.ClearUsage()
+	in, n = s.LastUsage()
+	if in != 0 || n != 0 {
+		t.Fatalf("after clear usage = %d/%d, want 0/0", in, n)
+	}
+}
+
+func TestUsageTotals(t *testing.T) {
+	s := session.New("demo")
+	in, out, cr, cc, win := s.UsageTotals()
+	if in != 0 || out != 0 || cr != 0 || cc != 0 || win != 0 {
+		t.Fatalf("initial totals = %d/%d/%d/%d/%d, want all zero", in, out, cr, cc, win)
+	}
+
+	// First run accumulates and records the window.
+	s.AddUsage(1000, 500, 800, 200, 200000)
+	in, out, cr, cc, win = s.UsageTotals()
+	if in != 1000 || out != 500 || cr != 800 || cc != 200 || win != 200000 {
+		t.Fatalf("totals after first run = %d/%d/%d/%d/%d, want 1000/500/800/200/200000", in, out, cr, cc, win)
+	}
+
+	// A resumed run adds to the previous totals.
+	s.AddUsage(302, 1400, 57500, 100, 200000)
+	in, out, cr, cc, win = s.UsageTotals()
+	if in != 1302 || out != 1900 || cr != 58300 || cc != 300 || win != 200000 {
+		t.Fatalf("totals after resume = %d/%d/%d/%d/%d, want 1302/1900/58300/300/200000", in, out, cr, cc, win)
+	}
+
+	// A zero-window add keeps the previous window.
+	s.AddUsage(0, 0, 0, 0, 0)
+	_, _, _, _, win = s.UsageTotals()
+	if win != 200000 {
+		t.Fatalf("window = %d, want 200000 (unchanged)", win)
+	}
+}

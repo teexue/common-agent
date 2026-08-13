@@ -7,17 +7,29 @@ import (
 	"strings"
 
 	"github.com/teexue/common-agent/core/agent"
+	"github.com/teexue/common-agent/core/provider"
 	"gopkg.in/yaml.v3"
 )
 
 // AgentSummary is the lightweight representation of an agent for list endpoints.
 type AgentSummary struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Provider string   `json:"provider"`
-	Model    string   `json:"model"`
-	Tools    []string `json:"tools"`
-	MaxTurns int      `json:"max_turns"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Provider      string   `json:"provider"`
+	Model         string   `json:"model"`
+	Tools         []string `json:"tools"`
+	MaxTurns      int      `json:"max_turns"`
+	ContextWindow int      `json:"context_window,omitempty"`
+}
+
+// agentContextWindow resolves the agent's effective model context window the
+// same way the loop does: agent compaction config wins, then the model spec.
+func agentContextWindow(a *agent.Agent) int {
+	window := 0
+	if a.Compaction != nil {
+		window = a.Compaction.ContextWindow
+	}
+	return provider.EffectiveContextWindow(a.Model, window)
 }
 
 // ListAgents loads all agents and returns summaries. Errors per-agent are logged
@@ -34,12 +46,13 @@ func (s *Service) ListAgents() []AgentSummary {
 	out := make([]AgentSummary, len(result.Agents))
 	for i, a := range result.Agents {
 		out[i] = AgentSummary{
-			ID:       a.ID,
-			Name:     a.Name,
-			Provider: a.Provider,
-			Model:    a.Model,
-			Tools:    a.Tools,
-			MaxTurns: a.MaxTurns,
+			ID:            a.ID,
+			Name:          a.Name,
+			Provider:      a.Provider,
+			Model:         a.Model,
+			Tools:         a.Tools,
+			MaxTurns:      a.MaxTurns,
+			ContextWindow: agentContextWindow(a),
 		}
 	}
 	return out

@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/shared/page-header"
 import { PageMain, PageShell } from "@/components/shared/page-shell"
 import { RequestLogRow } from "./request-logs-list"
 import { fetchRequestLogs } from "@/lib/api"
+import { isComposingEvent } from "@/lib/keys"
 import type { RequestLogRecord } from "@/types/agent"
 
 const SOURCES = ["http", "kanban", "optimize", "cli"] as const
@@ -97,6 +98,7 @@ export function RequestLogsPage() {
           value={sessionInput}
           onChange={(e) => setSessionInput(e.target.value)}
           onKeyDown={(e) => {
+            if (isComposingEvent(e)) return
             if (e.key === "Enter") setSessionFilter(sessionInput.trim())
           }}
           placeholder={t("audit.filterSession")}

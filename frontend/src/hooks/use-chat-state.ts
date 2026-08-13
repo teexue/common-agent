@@ -9,6 +9,35 @@ import {
 
 export type { ChatAction, ChatState } from "./chat-state-types"
 
+// Metadata keys written by the backend (core/session/session.go) that carry
+// cumulative token usage so it survives session reloads.
+const META_TOTAL_INPUT = "usage.total_input_tokens"
+const META_TOTAL_OUTPUT = "usage.total_output_tokens"
+const META_CACHE_READ = "usage.cache_read_tokens"
+const META_CACHE_CREATION = "usage.cache_creation_tokens"
+const META_CONTEXT_WINDOW = "usage.context_window"
+
+function parseMetaInt(v: string | undefined): number {
+  const n = v === undefined ? NaN : Number(v)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+/** Extracts cumulative token usage from persisted session metadata. */
+export function usageFromMetadata(
+  metadata?: Record<string, string>
+): Pick<
+  ChatState,
+  "inputTokens" | "outputTokens" | "cacheReadTokens" | "cacheCreationTokens" | "contextWindow"
+> {
+  return {
+    inputTokens: parseMetaInt(metadata?.[META_TOTAL_INPUT]),
+    outputTokens: parseMetaInt(metadata?.[META_TOTAL_OUTPUT]),
+    cacheReadTokens: parseMetaInt(metadata?.[META_CACHE_READ]),
+    cacheCreationTokens: parseMetaInt(metadata?.[META_CACHE_CREATION]),
+    contextWindow: parseMetaInt(metadata?.[META_CONTEXT_WINDOW]),
+  }
+}
+
 // ─── Reducer ──────────────────────────────────────────────────────
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -254,6 +283,12 @@ function reduceSessionAction(
       return {
         ...state,
         isStreaming: false,
+        inputTokens: state.inputTokens + (action.inputTokens ?? 0),
+        outputTokens: state.outputTokens + (action.outputTokens ?? 0),
+        cacheReadTokens: state.cacheReadTokens + (action.cacheReadTokens ?? 0),
+        cacheCreationTokens:
+          state.cacheCreationTokens + (action.cacheCreationTokens ?? 0),
+        contextWindow: action.contextWindow ?? state.contextWindow,
         messages: state.messages.map((m) => {
           if (!m.isStreaming) return m
           const isTarget = m.id === action.entryId
@@ -265,6 +300,8 @@ function reduceSessionAction(
                 ? {
                     inputTokens: action.inputTokens ?? 0,
                     outputTokens: action.outputTokens ?? 0,
+                    cacheReadTokens: action.cacheReadTokens ?? 0,
+                    cacheCreationTokens: action.cacheCreationTokens ?? 0,
                   }
                 : m.usage,
           }
@@ -282,7 +319,17 @@ function reduceSessionAction(
         ),
       }
     case "CLEAR":
-      return { messages: [], isStreaming: false, error: null, sessionId: null }
+      return {
+        messages: [],
+        isStreaming: false,
+        error: null,
+        sessionId: null,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        contextWindow: 0,
+      }
     case "SET_SESSION_ID":
       return { ...state, sessionId: action.sessionId }
     case "LOAD_SESSION":
@@ -292,6 +339,7 @@ function reduceSessionAction(
         messages: action.messages,
         isStreaming: false,
         error: null,
+        ...usageFromMetadata(action.metadata),
       }
     default:
       return state

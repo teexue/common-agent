@@ -27,6 +27,9 @@ export interface AgentEvent {
   turns?: number // done
   input_tokens?: number // done
   output_tokens?: number // done
+  context_window?: number // done: effective model context window
+  cache_read_input_tokens?: number // done: prompt cache hits across the run
+  cache_creation_input_tokens?: number // done: prompt cache writes across the run
   session_id?: string // done
 }
 
@@ -43,6 +46,7 @@ export interface AgentInfo {
   model: string
   tools: string[]
   maxTurns: number
+  contextWindow?: number
   systemPrompt?: string
 }
 
@@ -167,6 +171,8 @@ export interface ConversationEntry {
 export interface TokenUsage {
   inputTokens: number
   outputTokens: number
+  cacheReadTokens?: number
+  cacheCreationTokens?: number
 }
 
 export interface ToolCallEntry {

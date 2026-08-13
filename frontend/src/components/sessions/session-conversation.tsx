@@ -26,6 +26,11 @@ function eventsToEntries(
     isStreaming: false,
     error: null,
     sessionId: null,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    contextWindow: 0,
   }
   if (prompt) {
     state = chatReducer(state, { type: "ADD_USER_MESSAGE", text: prompt })

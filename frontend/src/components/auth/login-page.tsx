@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth"
 import { loginUser, registerUser, setAccessToken } from "@/lib/api"
+import { isComposingEvent } from "@/lib/keys"
 
 type Mode = "login" | "register"
 
@@ -99,6 +100,7 @@ export function LoginPage() {
               autoComplete="username"
               autoFocus
               onKeyDown={(e) => {
+                if (isComposingEvent(e)) return
                 if (e.key === "Enter") void handleSubmit()
               }}
             />
@@ -116,6 +118,7 @@ export function LoginPage() {
                 effectiveMode === "login" ? "current-password" : "new-password"
               }
               onKeyDown={(e) => {
+                if (isComposingEvent(e)) return
                 if (e.key === "Enter") void handleSubmit()
               }}
             />

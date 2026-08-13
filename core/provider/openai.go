@@ -109,13 +109,13 @@ type openAIStreamOptions struct {
 }
 
 type openAIRequest struct {
-	Model         string              `json:"model"`
-	Messages      []openAIMessage     `json:"messages"`
-	Tools         []openAITool        `json:"tools,omitempty"`
-	Stream        bool                `json:"stream"`
+	Model         string               `json:"model"`
+	Messages      []openAIMessage      `json:"messages"`
+	Tools         []openAITool         `json:"tools,omitempty"`
+	Stream        bool                 `json:"stream"`
 	StreamOptions *openAIStreamOptions `json:"stream_options,omitempty"`
-	MaxTokens     int                 `json:"max_tokens,omitempty"`
-	Thinking      *openAIThinking     `json:"thinking,omitempty"`
+	MaxTokens     int                  `json:"max_tokens,omitempty"`
+	Thinking      *openAIThinking      `json:"thinking,omitempty"`
 }
 
 type openAIMessage struct {
@@ -176,6 +176,15 @@ type openAIStreamResponse struct {
 type openAIUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
+	// OpenAI official: prompt_tokens_details.cached_tokens.
+	PromptTokensDetails *openAIPromptTokensDetails `json:"prompt_tokens_details,omitempty"`
+	// DeepSeek-style prompt caching: prompt_cache_hit_tokens / prompt_cache_miss_tokens.
+	PromptCacheHitTokens  int `json:"prompt_cache_hit_tokens,omitempty"`
+	PromptCacheMissTokens int `json:"prompt_cache_miss_tokens,omitempty"`
+}
+
+type openAIPromptTokensDetails struct {
+	CachedTokens int `json:"cached_tokens,omitempty"`
 }
 
 // Stream implements Provider.
@@ -312,6 +321,12 @@ func (o *OpenAI) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
 			if lastUsage != nil {
 				doneChunk.InputTokens = lastUsage.PromptTokens
 				doneChunk.OutputTokens = lastUsage.CompletionTokens
+				if lastUsage.PromptTokensDetails != nil {
+					doneChunk.CacheReadInputTokens = lastUsage.PromptTokensDetails.CachedTokens
+				}
+				if lastUsage.PromptCacheHitTokens > 0 {
+					doneChunk.CacheReadInputTokens = lastUsage.PromptCacheHitTokens
+				}
 			}
 			ch <- doneChunk
 			return
@@ -350,8 +365,8 @@ func (o *OpenAI) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
 // openAIStreamChoice represents a single choice in an OpenAI stream response.
 type openAIStreamChoice = struct {
 	Delta struct {
-		Content          string          `json:"content"`
-		ReasoningContent string          `json:"reasoning_content"`
+		Content          string           `json:"content"`
+		ReasoningContent string           `json:"reasoning_content"`
 		ToolCalls        []openAIToolCall `json:"tool_calls"`
 	} `json:"delta"`
 	FinishReason *string `json:"finish_reason"`

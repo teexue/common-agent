@@ -128,3 +128,36 @@ data: {"type":"message_stop"}
 		t.Fatalf("reasoning = %q", reasoning)
 	}
 }
+
+// Prompt caching usage should surface on the final chunk.
+func TestAnthropicStreamCacheUsage(t *testing.T) {
+	payload := `event: message_start
+data: {"type":"message_start","message":{"usage":{"input_tokens":1000,"cache_read_input_tokens":800,"cache_creation_input_tokens":200}}}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":50}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+`
+	chunks := collectStream(t, payload)
+	var done *Chunk
+	for i := range chunks {
+		if chunks[i].Done {
+			done = &chunks[i]
+		}
+	}
+	if done == nil {
+		t.Fatal("no done chunk")
+	}
+	if done.InputTokens != 1000 || done.OutputTokens != 50 {
+		t.Fatalf("tokens = %d/%d, want 1000/50", done.InputTokens, done.OutputTokens)
+	}
+	if done.CacheReadInputTokens != 800 {
+		t.Fatalf("cache read = %d, want 800", done.CacheReadInputTokens)
+	}
+	if done.CacheCreationInputTokens != 200 {
+		t.Fatalf("cache creation = %d, want 200", done.CacheCreationInputTokens)
+	}
+}

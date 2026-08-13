@@ -42,7 +42,8 @@ function useSessions(chat: ReturnType<typeof useChat>) {
             tool_calls?: Array<{ id: string; name: string; arguments: unknown }>
             tool_call_id?: string
             name?: string
-          }>
+          }>,
+          sess.metadata
         )
         return { agent: sess.agent, workdir: sess.metadata?.workdir || null }
       } catch (err) {
@@ -248,6 +249,16 @@ export function WorkspaceRoute() {
       ) ?? null)
     : null
 
+  // Session-wide token totals (accumulated in chat state) against the current
+  // agent's effective context window (from the agent list, with the streamed
+  // value as a fallback).
+  const tokenUsage = {
+    inputTokens: chat.inputTokens,
+    outputTokens: chat.outputTokens,
+    contextWindow: agentInfo?.contextWindow ?? chat.contextWindow,
+    cacheReadTokens: chat.cacheReadTokens,
+  }
+
   return (
     <TooltipProvider delay={300}>
       <AppLayout
@@ -320,6 +331,7 @@ export function WorkspaceRoute() {
                 onClear={() => void handleWorkdirChange("")}
               />
             }
+            tokenUsage={tokenUsage}
           />
         }
         rightPanel={

@@ -26,8 +26,8 @@ type ToolCall struct {
 
 // ContentPart represents a multimodal content block (text or image).
 type ContentPart struct {
-	Type     string `json:"type"`                // "text" | "image_url"
-	Text     string `json:"text,omitempty"`      // for type="text"
+	Type     string    `json:"type"`                // "text" | "image_url"
+	Text     string    `json:"text,omitempty"`      // for type="text"
 	ImageURL *ImageURL `json:"image_url,omitempty"` // for type="image_url"
 }
 
@@ -39,13 +39,13 @@ type ImageURL struct {
 
 // Message is a conversation turn.
 type Message struct {
-	Role              Role          `json:"role"`
-	Content           string        `json:"content,omitempty"`
-	ContentParts      []ContentPart `json:"content_parts,omitempty"` // multimodal; when set, takes precedence over Content
-	ReasoningContent  string        `json:"reasoning_content,omitempty"`
-	ToolCalls         []ToolCall    `json:"tool_calls,omitempty"`
-	ToolCallID        string        `json:"tool_call_id,omitempty"`
-	Name              string        `json:"name,omitempty"`
+	Role             Role          `json:"role"`
+	Content          string        `json:"content,omitempty"`
+	ContentParts     []ContentPart `json:"content_parts,omitempty"` // multimodal; when set, takes precedence over Content
+	ReasoningContent string        `json:"reasoning_content,omitempty"`
+	ToolCalls        []ToolCall    `json:"tool_calls,omitempty"`
+	ToolCallID       string        `json:"tool_call_id,omitempty"`
+	Name             string        `json:"name,omitempty"`
 }
 
 // ToolDefinition describes a tool for the LLM.
@@ -74,6 +74,13 @@ type Chunk struct {
 	// Usage is populated on the final chunk when the provider reports token counts.
 	InputTokens  int `json:"input_tokens,omitempty"`
 	OutputTokens int `json:"output_tokens,omitempty"`
+
+	// Prompt cache usage reported by the provider (0 when the provider does
+	// not support or report caching). CacheReadInputTokens is the portion of
+	// input tokens served from the provider's prompt cache; CacheCreationInputTokens
+	// is the portion written into the cache for this request.
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
 }
 
 // ThinkingConfig controls Kimi-style reasoning mode (OpenAI-compatible extensions).

@@ -30,6 +30,7 @@
 
   /* Semantic colors */
   --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
 
   /* Sidebar tokens */
@@ -103,6 +104,7 @@
   --ring: #c05746;
   --radius: 12px;
   --success: #2d7a4f;
+  --success-foreground: #5cb882;
   --warning: #b45309;
 
   --chart-1: #c05746;
@@ -144,6 +146,7 @@
   --ring: #e07a5f;
   --radius: 12px;
   --success: #5cb882;
+  --success-foreground: #2d7a4f;
   --warning: #fbbf24;
 
   --chart-1: #e07a5f;
@@ -185,6 +188,7 @@
   --ring: #0e7490;
   --radius: 12px;
   --success: #2d7a4f;
+  --success-foreground: #5cb882;
   --warning: #b45309;
 
   --chart-1: #0e7490;
@@ -226,6 +230,7 @@
   --ring: #22d3ee;
   --radius: 12px;
   --success: #5cb882;
+  --success-foreground: #2d7a4f;
   --warning: #fbbf24;
 
   --chart-1: #22d3ee;

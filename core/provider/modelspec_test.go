@@ -46,7 +46,7 @@ func TestEffectiveContextWindow(t *testing.T) {
 	if got := EffectiveContextWindow("deepseek-v4-pro", 0); got != 1_048_576 {
 		t.Errorf("spec should apply, got %d", got)
 	}
-	if got := EffectiveContextWindow("unknown-model", 0); got != 0 {
-		t.Errorf("unknown model should yield 0, got %d", got)
+	if got := EffectiveContextWindow("unknown-model", 0); got != DefaultContextWindow {
+		t.Errorf("unknown model should fall back to DefaultContextWindow, got %d", got)
 	}
 }

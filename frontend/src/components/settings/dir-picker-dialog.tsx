@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { fetchDirList, type DirListResponse } from "@/lib/api"
+import { isComposingEvent } from "@/lib/keys"
 
 interface DirPickerDialogProps {
   open: boolean
@@ -72,6 +73,7 @@ export function DirPickerDialog({
             value={pathInput}
             onChange={(e) => setPathInput(e.target.value)}
             onKeyDown={(e) => {
+              if (isComposingEvent(e)) return
               if (e.key === "Enter") void load(pathInput.trim())
             }}
             className="h-9 flex-1 rounded-lg font-mono text-xs"

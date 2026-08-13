@@ -85,7 +85,9 @@
     "hintSend": "发送 ·",
     "hintNewline": "换行",
     "optimizePrompt": "优化提示词",
-    "optimizing": "优化中..."
+    "optimizing": "优化中...",
+    "tokenUsageTooltip": "输入 {{input}} · 输出 {{output}} · 上下文窗口 {{window}}（{{percent}}%）",
+    "cacheHitTooltip": "缓存命中：{{cached}}（命中率 {{pct}}%）"
   },
   "layout": {
     "expandSidebar": "展开侧边栏",

@@ -7,6 +7,14 @@ export interface ChatState {
   isStreaming: boolean
   error: string | null
   sessionId: string | null
+  /** Cumulative token usage across every run in the current session. */
+  inputTokens: number
+  outputTokens: number
+  /** Cumulative prompt cache hits/writes across the session (0 until reported). */
+  cacheReadTokens: number
+  cacheCreationTokens: number
+  /** Effective model context window in tokens (0 until known). */
+  contextWindow: number
 }
 
 export type ChatAction =
@@ -51,8 +59,17 @@ export type ChatAction =
       turns: number
       inputTokens?: number
       outputTokens?: number
+      cacheReadTokens?: number
+      cacheCreationTokens?: number
+      contextWindow?: number
     }
   | { type: "STREAM_ERROR"; message: string }
   | { type: "CLEAR" }
   | { type: "SET_SESSION_ID"; sessionId: string | null }
-  | { type: "LOAD_SESSION"; sessionId: string; messages: ConversationEntry[] }
+  | {
+      type: "LOAD_SESSION"
+      sessionId: string
+      messages: ConversationEntry[]
+      /** Session metadata from the backend; restores cumulative token usage. */
+      metadata?: Record<string, string>
+    }

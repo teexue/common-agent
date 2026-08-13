@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -90,5 +91,47 @@ func TestOpenAICapabilities(t *testing.T) {
 	caps := o.Capabilities()
 	if !caps.Vision || !caps.Reasoning {
 		t.Fatalf("caps = %#v", caps)
+	}
+}
+
+func TestOpenAIStreamCachedTokens(t *testing.T) {
+	// OpenAI official style: prompt_tokens_details.cached_tokens.
+	payload := "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":1000,\"completion_tokens\":50,\"prompt_tokens_details\":{\"cached_tokens\":700}}}\n\ndata: [DONE]\n\n"
+	o := &OpenAI{}
+	ch := make(chan Chunk, 16)
+	o.readStream(context.Background(), strings.NewReader(payload), ch)
+	close(ch)
+	var done *Chunk
+	for c := range ch {
+		if c.Done {
+			done = &c
+		}
+	}
+	if done == nil {
+		t.Fatal("no done chunk")
+	}
+	if done.CacheReadInputTokens != 700 {
+		t.Fatalf("cache read = %d, want 700", done.CacheReadInputTokens)
+	}
+}
+
+func TestOpenAIStreamDeepSeekCacheHits(t *testing.T) {
+	// DeepSeek style: prompt_cache_hit_tokens.
+	payload := "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":900,\"completion_tokens\":40,\"prompt_cache_hit_tokens\":600,\"prompt_cache_miss_tokens\":300}}\n\ndata: [DONE]\n\n"
+	o := &OpenAI{}
+	ch := make(chan Chunk, 16)
+	o.readStream(context.Background(), strings.NewReader(payload), ch)
+	close(ch)
+	var done *Chunk
+	for c := range ch {
+		if c.Done {
+			done = &c
+		}
+	}
+	if done == nil {
+		t.Fatal("no done chunk")
+	}
+	if done.CacheReadInputTokens != 600 {
+		t.Fatalf("cache read = %d, want 600", done.CacheReadInputTokens)
 	}
 }

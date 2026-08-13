@@ -85,7 +85,9 @@
     "hintSend": "Send ·",
     "hintNewline": "Newline",
     "optimizePrompt": "Optimize prompt",
-    "optimizing": "Optimizing..."
+    "optimizing": "Optimizing...",
+    "tokenUsageTooltip": "Input {{input}} · Output {{output}} · Context window {{window}} ({{percent}}%)",
+    "cacheHitTooltip": "Cache hit: {{cached}} ({{pct}}% hit rate)"
   },
   "layout": {
     "expandSidebar": "Expand sidebar",

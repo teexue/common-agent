@@ -1,6 +1,7 @@
 package compaction
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/teexue/common-agent/core/provider"
@@ -19,7 +20,7 @@ func NewSlidingWindowCompactor(keepRecent int) *SlidingWindowCompactor {
 
 // Compact reduces messages to the configured window size.
 // Returns nil if messages already fit within the window.
-func (c *SlidingWindowCompactor) Compact(messages []provider.Message) (*Result, error) {
+func (c *SlidingWindowCompactor) Compact(ctx context.Context, messages []provider.Message) (*Result, error) {
 	if len(messages) <= c.keepRecent {
 		return nil, nil
 	}

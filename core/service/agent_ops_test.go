@@ -64,3 +64,37 @@ tools: [echo]
 	assert.Equal(t, "fresh", a.Name)
 	assert.Equal(t, "agt_", a.ID[:4])
 }
+
+func TestListAgents_ContextWindow(t *testing.T) {
+	dir := t.TempDir()
+	svc := &service.Service{AgentsDir: dir, Logger: slog.Default()}
+
+	// Model with an official spec → 1M window.
+	require.NoError(t, svc.SaveAgent("spec", []byte(`id: spec
+name: spec-agent
+provider: openai
+model: deepseek-v4-pro
+system_prompt: hi
+tools: [echo]
+`)))
+	// Unknown model + explicit compaction window → configured value wins.
+	require.NoError(t, svc.SaveAgent("cfg", []byte(`id: cfg
+name: cfg-agent
+provider: openai
+model: unknown-model
+system_prompt: hi
+tools: [echo]
+compaction:
+  context_window: 262144
+`)))
+
+	summaries := svc.ListAgents()
+	require.Len(t, summaries, 2)
+
+	byID := map[string]service.AgentSummary{}
+	for _, s := range summaries {
+		byID[s.ID] = s
+	}
+	assert.Equal(t, 1_048_576, byID["spec"].ContextWindow, "model spec window")
+	assert.Equal(t, 262144, byID["cfg"].ContextWindow, "configured compaction window")
+}

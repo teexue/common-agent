@@ -20,6 +20,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { DirPickerDialog } from "@/components/settings/dir-picker-dialog"
 import { createKanbanItem, fetchAgents } from "@/lib/api"
+import { isComposingEvent } from "@/lib/keys"
 import { cn } from "@/lib/utils"
 import type { AgentInfo } from "@/types/agent"
 
@@ -112,7 +113,14 @@ export function KanbanCreateDialog({
           <DialogTitle>{t("kanban.createTitle")}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => {
+            // Don't submit while confirming an IME candidate with Enter.
+            if (isComposingEvent(e)) e.preventDefault()
+          }}
+          className="space-y-4"
+        >
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}

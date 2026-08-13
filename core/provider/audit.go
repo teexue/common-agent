@@ -73,7 +73,7 @@ func (a *auditedProvider) Stream(ctx context.Context, req Request) (<-chan Chunk
 	go func() {
 		defer close(tee)
 		var resp auditedResponse
-		var inTok, outTok int
+		var inTok, outTok, cacheRead, cacheCreation int
 		for c := range out {
 			resp.Text += c.TextDelta
 			resp.Reasoning += c.ReasoningDelta
@@ -84,19 +84,25 @@ func (a *auditedProvider) Stream(ctx context.Context, req Request) (<-chan Chunk
 			if c.OutputTokens > 0 {
 				outTok = c.OutputTokens
 			}
+			if c.CacheReadInputTokens > 0 {
+				cacheRead = c.CacheReadInputTokens
+			}
+			if c.CacheCreationInputTokens > 0 {
+				cacheCreation = c.CacheCreationInputTokens
+			}
 			select {
 			case tee <- c:
 			case <-ctx.Done():
 				// Record the aborted call too — timeouts/cancellations are
 				// exactly what the audit log is for.
-				a.record(ctx, meta, req, nil, ctx.Err(), start, inTok, outTok)
+				a.record(ctx, meta, req, nil, ctx.Err(), start, inTok, outTok, cacheRead, cacheCreation)
 				return
 			}
 		}
 		resp.Text = truncateRunes(resp.Text, textTruncateLimit)
 		resp.Reasoning = truncateRunes(resp.Reasoning, textTruncateLimit)
 		data, _ := json.Marshal(resp)
-		a.record(ctx, meta, req, data, nil, start, inTok, outTok)
+		a.record(ctx, meta, req, data, nil, start, inTok, outTok, cacheRead, cacheCreation)
 	}()
 	return tee, nil
 }
@@ -116,8 +122,12 @@ func (a *auditedProvider) record(ctx context.Context, meta RunMeta, req Request,
 		Request:    reqData,
 		Response:   resp,
 	}
-	if len(tokens) == 2 {
+	switch len(tokens) {
+	case 2:
 		rec.InputTokens, rec.OutputTokens = tokens[0], tokens[1]
+	case 4:
+		rec.InputTokens, rec.OutputTokens = tokens[0], tokens[1]
+		rec.CacheReadInputTokens, rec.CacheCreationInputTokens = tokens[2], tokens[3]
 	}
 	if callErr != nil {
 		rec.Error = callErr.Error()

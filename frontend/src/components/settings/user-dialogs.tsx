@@ -18,6 +18,7 @@ import {
   updateAdminUser,
   type AdminUserInfo,
 } from "@/lib/api"
+import { isComposingEvent } from "@/lib/keys"
 
 export function CreateUserDialog({
   open,
@@ -71,7 +72,14 @@ export function CreateUserDialog({
         <DialogHeader>
           <DialogTitle>{t("settings.userCreateTitle")}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => {
+            // Don't submit while confirming an IME candidate with Enter.
+            if (isComposingEvent(e)) e.preventDefault()
+          }}
+          className="space-y-3"
+        >
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">
               {t("auth.username")}
@@ -173,7 +181,14 @@ export function ResetPasswordDialog({
             {t("settings.userResetPasswordTitle", { name: user?.username })}
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => {
+            // Don't submit while confirming an IME candidate with Enter.
+            if (isComposingEvent(e)) e.preventDefault()
+          }}
+          className="space-y-3"
+        >
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">
               {t("settings.userNewPassword")}

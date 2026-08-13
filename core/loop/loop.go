@@ -11,7 +11,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/teexue/common-agent/core/compaction"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/hook"
 	"github.com/teexue/common-agent/core/knowledge"
@@ -119,6 +118,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 	maxTurns := cfg.Agent.MaxTurns // 0 = unlimited until model returns without tool calls
 	log := cfg.Logger
 	tel := cfg.Telemetry
+	window := effectiveContextWindow(cfg)
 
 	runStart := time.Now()
 	if tel != nil {
@@ -128,7 +128,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		defer span.End()
 	}
 
-	var totalInputTokens, totalOutputTokens int
+	var totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation int
 	if log == nil {
 		log = slog.Default()
 	}
@@ -145,16 +145,20 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 	for turn := 1; maxTurns <= 0 || turn <= maxTurns; turn++ {
 		select {
 		case <-ctx.Done():
-			emitCancelled(out, cfg.Session.ID, turn, totalInputTokens, totalOutputTokens)
+			emitCancelled(out, cfg.Session.ID, turn, totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation, window)
+			cfg.Session.AddUsage(totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation, window)
 			return
 		default:
 		}
 
-		tc := TurnContext{Ctx: ctx, Config: cfg, ToolDefs: toolDefs, Out: out, Turn: turn, Log: log, Pol: pol, Hooks: hooks, Approver: approver, Tel: tel}
+		tc := TurnContext{Ctx: ctx, Config: cfg, ToolDefs: toolDefs, Out: out, Turn: turn, Log: log, Pol: pol, Hooks: hooks, Approver: approver, Tel: tel, ContextWindow: window}
 		tokens, done := executeTurn(tc)
 		totalInputTokens += tokens.input
 		totalOutputTokens += tokens.output
+		totalCacheRead += tokens.cacheRead
+		totalCacheCreation += tokens.cacheCreation
 		if done {
+			cfg.Session.AddUsage(totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation, window)
 			return
 		}
 	}
@@ -163,23 +167,29 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		tel.RecordRunDuration(ctx, time.Since(runStart), attribute.String("agent.name", cfg.Agent.Name))
 	}
 	forceEmit(out, event.Event{Type: event.TypeError, Code: "max_turns", Message: fmt.Sprintf("exceeded max turns %d", maxTurns)})
-	forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: maxTurns, InputTokens: totalInputTokens, OutputTokens: totalOutputTokens, SessionID: cfg.Session.ID})
+	forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: maxTurns, InputTokens: totalInputTokens, OutputTokens: totalOutputTokens, ContextWindow: window, SessionID: cfg.Session.ID, CacheReadInputTokens: totalCacheRead, CacheCreationInputTokens: totalCacheCreation})
+	cfg.Session.AddUsage(totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation, window)
 }
 
-type tokenDelta struct{ input, output int }
+type tokenDelta struct {
+	input, output int
+	cacheRead     int
+	cacheCreation int
+}
 
 // TurnContext holds all dependencies for a single agent turn.
 type TurnContext struct {
-	Ctx      context.Context
-	Config   Config
-	ToolDefs []provider.ToolDefinition
-	Out      chan<- event.Event
-	Turn     int
-	Log      *slog.Logger
-	Pol      permission.Policy
-	Hooks    *hook.Chain
-	Approver Approver
-	Tel      *telemetry.Telemetry
+	Ctx           context.Context
+	Config        Config
+	ToolDefs      []provider.ToolDefinition
+	Out           chan<- event.Event
+	Turn          int
+	Log           *slog.Logger
+	Pol           permission.Policy
+	Hooks         *hook.Chain
+	Approver      Approver
+	Tel           *telemetry.Telemetry
+	ContextWindow int
 }
 
 // executeTurn executes a single turn of the agent loop. Returns token deltas and
@@ -193,19 +203,27 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 
 	fireOnTurnStart(tc.Hooks, tc.Turn, tc.Log)
 
+	// Message count at request time; used to record real usage so the next
+	// compaction can project the delta appended after this response.
+	reqMsgCount := len(tc.Config.Session.GetMessages())
 	chunks, err := tc.Config.Provider.Stream(tc.Ctx, provider.Request{
 		Model: tc.Config.Agent.Model, Messages: tc.Config.Session.GetMessages(),
 		Tools: tc.ToolDefs, MaxTokens: tc.Config.Agent.MaxTokens,
 	})
 	if err != nil {
 		forceEmit(tc.Out, event.Event{Type: event.TypeError, Code: "provider_error", Message: err.Error()})
-		forceEmit(tc.Out, event.Event{Type: event.TypeDone, Status: "failed", Turns: tc.Turn, SessionID: tc.Config.Session.ID})
+		forceEmit(tc.Out, event.Event{Type: event.TypeDone, Status: "failed", Turns: tc.Turn, ContextWindow: tc.ContextWindow, SessionID: tc.Config.Session.ID})
 		return tokenDelta{}, true
 	}
 
 	text, reasoning, toolCalls, tokens, cancelled := consumeStream(tc.Ctx, chunks, tc.Out)
+	// Persist the real prompt token count reported by the provider. This is
+	// the authoritative usage of the request that just completed.
+	if tokens.input > 0 {
+		tc.Config.Session.SetLastUsage(tokens.input, reqMsgCount)
+	}
 	if cancelled {
-		emitCancelled(tc.Out, tc.Config.Session.ID, tc.Turn, tokens.input, tokens.output)
+		emitCancelled(tc.Out, tc.Config.Session.ID, tc.Turn, tokens.input, tokens.output, tokens.cacheRead, tokens.cacheCreation, tc.ContextWindow)
 		return tokens, true
 	}
 
@@ -214,7 +232,10 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 			Role: provider.RoleAssistant, Content: text, ReasoningContent: reasoning,
 		})
 		endTurn(turnSpan, tc.Tel, turnCtx, tc.Turn)
-		forceEmit(tc.Out, event.Event{Type: event.TypeDone, Status: "completed", Turns: tc.Turn, InputTokens: tokens.input, OutputTokens: tokens.output, SessionID: tc.Config.Session.ID})
+		forceEmit(tc.Out, event.Event{Type: event.TypeDone, Status: "completed", Turns: tc.Turn, InputTokens: tokens.input, OutputTokens: tokens.output, CacheReadInputTokens: tokens.cacheRead, CacheCreationInputTokens: tokens.cacheCreation, ContextWindow: tc.ContextWindow, SessionID: tc.Config.Session.ID})
+		// Compact even for plain text turns — otherwise pure chat sessions
+		// (no tool calls) never trigger context management.
+		compactIfNeeded(tc.Ctx, tc.Config, tc.Out, tc.Turn, tc.Log)
 		return tokens, true
 	}
 
@@ -241,6 +262,8 @@ func consumeStream(ctx context.Context, chunks <-chan provider.Chunk, out chan<-
 	for chunk := range chunks {
 		tokens.input += chunk.InputTokens
 		tokens.output += chunk.OutputTokens
+		tokens.cacheRead += chunk.CacheReadInputTokens
+		tokens.cacheCreation += chunk.CacheCreationInputTokens
 
 		if chunk.ReasoningDelta != "" {
 			reasoning += chunk.ReasoningDelta
@@ -338,55 +361,8 @@ func collectSerialResults(tc ToolCollectContext) []pendingResult {
 func recordToolResults(cfg Config, results []pendingResult) {
 	for _, tr := range results {
 		cfg.Session.AddMessages(provider.Message{
-			Role: provider.RoleTool, ToolCallID: tr.callID, Name: tr.toolName, Content: string(tr.output),
+			Role: provider.RoleTool, ToolCallID: tr.callID, Name: tr.toolName, Content: truncateToolOutput(string(tr.output)),
 		})
-	}
-}
-
-func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, turn int, log *slog.Logger) {
-	comp := cfg.Agent.Compaction
-	window := cfg.ContextWindow
-	ratio := 0.0
-	keepRecent := 0
-	maxMessages := 0
-	strategy := compaction.StrategyTruncation
-	if comp != nil {
-		if comp.ContextWindow > 0 {
-			window = comp.ContextWindow
-		}
-		ratio = comp.TriggerRatio
-		keepRecent = comp.KeepRecent
-		maxMessages = comp.MaxMessages
-		strategy = compaction.Strategy(comp.Strategy)
-	}
-	// Fall back to the model's official context window when unset, and
-	// reserve its max output so the next completion always fits.
-	window = provider.EffectiveContextWindow(cfg.Agent.Model, window)
-	reserve := provider.EffectiveMaxOutput(cfg.Agent.Model, cfg.Agent.MaxTokens)
-	tokenLimit := compaction.ResolveTokenLimit(window, reserve, ratio)
-	if tokenLimit <= 0 && maxMessages <= 0 {
-		return // no context window and no legacy message trigger
-	}
-
-	cmp := compaction.NewCompactor(compaction.Config{
-		Strategy:    strategy,
-		TokenLimit:  tokenLimit,
-		MaxMessages: maxMessages,
-		KeepRecent:  keepRecent,
-	})
-	result, err := cmp.Compact(cfg.Session.GetMessages())
-	if err != nil {
-		log.Warn("log.compaction.error", "turn", turn, "error", err)
-	} else if result != nil {
-		cfg.Session.SetMessages(result.Compacted)
-		emit(ctx, out, event.Event{Type: event.TypeCompaction, Content: result.Summary})
-		log.Info("log.compaction.compacted",
-			"turn", turn,
-			"old_messages", result.OldCount,
-			"new_messages", result.NewCount,
-			"token_limit", tokenLimit,
-			"est_tokens", compaction.EstimateTokens(result.Compacted),
-		)
 	}
 }
 
@@ -415,7 +391,7 @@ func endTurn(span trace.Span, tel *telemetry.Telemetry, ctx context.Context, tur
 	}
 }
 
-func emitCancelled(out chan<- event.Event, sessionID string, turn, inputTokens, outputTokens int) {
+func emitCancelled(out chan<- event.Event, sessionID string, turn, inputTokens, outputTokens, cacheRead, cacheCreation, contextWindow int) {
 	forceEmit(out, event.Event{Type: event.TypeError, Code: "cancelled", Message: "context cancelled"})
-	forceEmit(out, event.Event{Type: event.TypeDone, Status: "cancelled", Turns: turn, InputTokens: inputTokens, OutputTokens: outputTokens, SessionID: sessionID})
+	forceEmit(out, event.Event{Type: event.TypeDone, Status: "cancelled", Turns: turn, InputTokens: inputTokens, OutputTokens: outputTokens, CacheReadInputTokens: cacheRead, CacheCreationInputTokens: cacheCreation, ContextWindow: contextWindow, SessionID: sessionID})
 }

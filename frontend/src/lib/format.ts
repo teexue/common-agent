@@ -30,6 +30,36 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 3)
 }
 
+/**
+ * Formats a token count with the largest suitable unit (M > K).
+ * e.g. 1234567 → "1.2M", 12345 → "12.3K", 123 → "123".
+ */
+export function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) {
+    const v = n / 1_000_000
+    return `${v >= 100 ? Math.round(v) : v.toFixed(1)}M`
+  }
+  if (n >= 1_000) {
+    const v = n / 1_000
+    return `${v >= 100 ? Math.round(v) : v.toFixed(1)}K`
+  }
+  return String(n)
+}
+
+/**
+ * Percentage of input tokens served from the prompt cache.
+ * Cache-hit tokens count towards total input, so the share is
+ * cached / (cached + fresh). Returns 0 when there is no input at all.
+ */
+export function cacheHitPercent(
+  cachedTokens: number,
+  freshTokens: number
+): number {
+  const total = cachedTokens + freshTokens
+  if (total <= 0) return 0
+  return Math.round((cachedTokens / total) * 100)
+}
+
 export function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr)
   const now = new Date()

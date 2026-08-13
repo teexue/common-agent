@@ -13,6 +13,14 @@ import (
 
 const defaultCommandTimeout = 30 * time.Second
 
+// maxCommandOutputBytes caps the captured stdout/stderr per command. Without a
+// cap, a chatty command (logs, build output, tests) can produce megabytes that
+// then get re-sent to the LLM on every following turn.
+const maxCommandOutputBytes = 1024 * 1024 // 1 MB each
+
+// MaxCommandOutputForTest exposes the cap for tests.
+const MaxCommandOutputForTest = maxCommandOutputBytes
+
 // RunCommand executes a shell command.
 type RunCommand struct {
 	WorkDir string // working directory for command execution
@@ -91,13 +99,17 @@ func (rc RunCommand) Execute(ctx context.Context, input json.RawMessage) (tool.R
 
 	err := cmd.Run()
 
+	// Cap captured output so chatty commands can't flood session history.
+	stdoutOut := capOutput(stdout.String(), maxCommandOutputBytes)
+	stderrOut := capOutput(stderr.String(), maxCommandOutputBytes)
+
 	exitCode := 0
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
 		} else if ctx.Err() == context.DeadlineExceeded {
 			out, _ := json.Marshal(map[string]any{
-				"stdout":     stdout.String(),
+				"stdout":     stdoutOut,
 				"stderr":     "command timed out",
 				"exit_code":  -1,
 				"timed_out":  true,
@@ -109,9 +121,17 @@ func (rc RunCommand) Execute(ctx context.Context, input json.RawMessage) (tool.R
 	}
 
 	out, _ := json.Marshal(map[string]any{
-		"stdout":    stdout.String(),
-		"stderr":    stderr.String(),
+		"stdout":    stdoutOut,
+		"stderr":    stderrOut,
 		"exit_code": exitCode,
 	})
 	return tool.Result{Output: out}, nil
+}
+
+// capOutput truncates s to max bytes, appending a marker when truncated.
+func capOutput(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "\n...[output truncated]"
 }

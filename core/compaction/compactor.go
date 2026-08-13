@@ -3,7 +3,11 @@
 // window (not by raw message count).
 package compaction
 
-import "github.com/teexue/common-agent/core/provider"
+import (
+	"context"
+
+	"github.com/teexue/common-agent/core/provider"
+)
 
 // Strategy identifies a compaction strategy.
 type Strategy string
@@ -11,6 +15,7 @@ type Strategy string
 const (
 	StrategyTruncation Strategy = "truncation"
 	StrategySliding    Strategy = "sliding_window"
+	StrategySummarize  Strategy = "summarize"
 )
 
 // Result describes what a compaction pass did.
@@ -29,7 +34,7 @@ type Result struct {
 type Compactor interface {
 	// Compact reduces the messages and returns the result.
 	// If no compaction is needed, it returns nil, nil.
-	Compact(messages []provider.Message) (*Result, error)
+	Compact(ctx context.Context, messages []provider.Message) (*Result, error)
 }
 
 // Config configures compaction behavior.
@@ -41,10 +46,27 @@ type Config struct {
 	MaxMessages int `yaml:"max_messages"`
 	// KeepRecent is the number of recent conversation messages to preserve.
 	KeepRecent int `yaml:"keep_recent"`
+	// KeepHead is the number of oldest conversation messages to preserve
+	// verbatim. It keeps the prompt prefix stable for provider-side prompt
+	// caching and retains the initial task definition.
+	KeepHead int `yaml:"keep_head"`
+	// CurrentTokens is the known token usage of the message list (e.g. the
+	// real input_tokens reported by the provider for the last request, plus
+	// an estimate of messages appended since). When 0, usage is derived from
+	// EstimateTokens.
+	CurrentTokens int `yaml:"-"`
+	// Provider drives LLM summarization for StrategySummarize. When nil, the
+	// summarize strategy falls back to truncation.
+	Provider provider.Provider `yaml:"-"`
+	// Model is the model used for LLM summarization.
+	Model string `yaml:"-"`
+	// MaxOutput caps the generated summary length in tokens.
+	MaxOutput int `yaml:"-"`
 }
 
 const (
-	defaultKeepRecent  = 20
+	defaultKeepRecent   = 20
+	defaultKeepHead     = 2
 	defaultTriggerRatio = 0.85
 )
 
@@ -52,6 +74,11 @@ const (
 func (c Config) Defaults() Config {
 	if c.KeepRecent <= 0 {
 		c.KeepRecent = defaultKeepRecent
+	}
+	if c.KeepHead < 0 {
+		c.KeepHead = 0
+	} else if c.KeepHead == 0 {
+		c.KeepHead = defaultKeepHead
 	}
 	if c.Strategy == "" {
 		c.Strategy = StrategyTruncation
@@ -65,8 +92,28 @@ func NewCompactor(cfg Config) Compactor {
 	switch cfg.Strategy {
 	case StrategySliding:
 		return NewSlidingWindowCompactor(cfg.KeepRecent)
+	case StrategySummarize:
+		if cfg.Provider == nil {
+			// No provider available — degrade to truncation so the loop
+			// never fails because summarization is unavailable.
+			tc := NewTruncationCompactorWithHead(cfg.TokenLimit, cfg.MaxMessages, cfg.KeepRecent, cfg.KeepHead)
+			tc.currentTokens = cfg.CurrentTokens
+			return tc
+		}
+		sc := NewSummarizingCompactor(SummarizeConfig{
+			Provider:   cfg.Provider,
+			Model:      cfg.Model,
+			TokenLimit: cfg.TokenLimit,
+			MaxOutput:  cfg.MaxOutput,
+			KeepRecent: cfg.KeepRecent,
+			KeepHead:   cfg.KeepHead,
+		})
+		sc.currentTokens = cfg.CurrentTokens
+		return sc
 	default:
-		return NewTruncationCompactor(cfg.TokenLimit, cfg.MaxMessages, cfg.KeepRecent)
+		tc := NewTruncationCompactorWithHead(cfg.TokenLimit, cfg.MaxMessages, cfg.KeepRecent, cfg.KeepHead)
+		tc.currentTokens = cfg.CurrentTokens
+		return tc
 	}
 }
 
@@ -81,7 +128,17 @@ func NeedsCompactionByTokens(messages []provider.Message, tokenLimit int) bool {
 	return tokenLimit > 0 && EstimateTokens(messages) > tokenLimit
 }
 
-// EstimateTokens approximates prompt tokens for a message list (chars/3 heuristic).
+// NeedsCompactionByTokensCount returns true when the given token count exceeds
+// the soft limit. Prefer it over NeedsCompactionByTokens when the caller has a
+// known token count (e.g. real provider usage) instead of an estimate.
+func NeedsCompactionByTokensCount(tokens, tokenLimit int) bool {
+	return tokenLimit > 0 && tokens > tokenLimit
+}
+
+// EstimateTokens approximates prompt tokens for a message list. CJK characters
+// are weighted ~1 token per character; other text uses the ~4 bytes/token
+// English convention. This keeps the estimate close to real tokenizer output
+// for both Chinese and code-heavy conversations.
 func EstimateTokens(messages []provider.Message) int {
 	n := 0
 	for _, m := range messages {
@@ -110,7 +167,28 @@ func estimateString(s string) int {
 	if s == "" {
 		return 0
 	}
-	return (len(s) + 2) / 3
+	// A CJK rune is 3 bytes in UTF-8 and costs ~1 token; everything else is
+	// approximated at 4 bytes per token (English/code convention).
+	cjk := 0
+	for _, r := range s {
+		if isCJK(r) {
+			cjk++
+		}
+	}
+	asciiBytes := len(s) - cjk*3
+	return cjk + (asciiBytes+3)/4
+}
+
+// isCJK reports whether r is a CJK ideograph, kana, hangul syllable, or CJK
+// punctuation / fullwidth form that tokenizers typically charge ~1 token for.
+func isCJK(r rune) bool {
+	return (r >= 0x2E80 && r <= 0x303F) || // CJK radicals + punctuation
+		(r >= 0x3040 && r <= 0x30FF) || // kana
+		(r >= 0x3400 && r <= 0x4DBF) || // CJK ext A
+		(r >= 0x4E00 && r <= 0x9FFF) || // CJK unified
+		(r >= 0xAC00 && r <= 0xD7AF) || // hangul syllables
+		(r >= 0xF900 && r <= 0xFAFF) || // CJK compatibility
+		(r >= 0xFF00 && r <= 0xFFEF) // fullwidth forms
 }
 
 // ResolveTokenLimit derives the soft compaction threshold from a context window.

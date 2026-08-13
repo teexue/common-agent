@@ -3,6 +3,7 @@ package session
 import (
 	"crypto/rand"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,26 @@ const MetadataKeyWorkdir = "workdir"
 // session (e.g. "kanban"). Kanban-created sessions are hidden from the
 // conversation session list.
 const MetadataKeySource = "source"
+
+// MetadataKeyUsageInputTokens stores the real prompt token count (provider
+// input_tokens) of the most recent LLM request for this session. Combined with
+// MetadataKeyUsageMsgCount it lets compaction trigger off real usage instead
+// of a raw estimate, which matters for CJK-heavy conversations.
+const MetadataKeyUsageInputTokens = "usage.input_tokens"
+
+// MetadataKeyUsageMsgCount stores the message count at the time of the most
+// recent LLM request, so compaction can estimate only the delta appended since.
+const MetadataKeyUsageMsgCount = "usage.message_count"
+
+// MetadataKeyUsageTotalInputTokens and friends store the cumulative provider
+// token usage across every run of this session (unlike MetadataKeyUsageInputTokens
+// which only holds the most recent single request for compaction). The UI reads
+// these to restore the token-usage indicator after reloading a session.
+const MetadataKeyUsageTotalInputTokens = "usage.total_input_tokens"
+const MetadataKeyUsageTotalOutputTokens = "usage.total_output_tokens"
+const MetadataKeyUsageCacheReadTokens = "usage.cache_read_tokens"
+const MetadataKeyUsageCacheCreationTokens = "usage.cache_creation_tokens"
+const MetadataKeyUsageContextWindow = "usage.context_window"
 
 // SourceKanban marks sessions created by kanban task runs.
 const SourceKanban = "kanban"
@@ -139,6 +160,70 @@ func (s *Session) SetMetadata(key, value string) {
 	}
 	s.Metadata[key] = value
 	s.touch()
+}
+
+// SetLastUsage records the real provider token usage of the most recent LLM
+// request. msgCount must be the number of messages in the session at request
+// time (before any messages added after the response).
+func (s *Session) SetLastUsage(inputTokens, msgCount int) {
+	s.SetMetadata(MetadataKeyUsageInputTokens, strconv.Itoa(inputTokens))
+	s.SetMetadata(MetadataKeyUsageMsgCount, strconv.Itoa(msgCount))
+}
+
+// LastUsage returns the recorded real usage of the most recent LLM request.
+// Returns (0, 0) when no usage has been recorded (e.g. new sessions).
+func (s *Session) LastUsage() (inputTokens, msgCount int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	inputTokens, _ = strconv.Atoi(s.Metadata[MetadataKeyUsageInputTokens])
+	msgCount, _ = strconv.Atoi(s.Metadata[MetadataKeyUsageMsgCount])
+	return inputTokens, msgCount
+}
+
+// ClearUsage removes recorded usage. Called after compaction so the next
+// projection starts from the compacted message list.
+func (s *Session) ClearUsage() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.Metadata, MetadataKeyUsageInputTokens)
+	delete(s.Metadata, MetadataKeyUsageMsgCount)
+	s.touch()
+}
+
+// AddUsage accumulates provider token usage for this run into session metadata
+// so it survives reloads. contextWindow replaces any previously stored value
+// (the effective window is a property of the model, not cumulative).
+func (s *Session) AddUsage(inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, contextWindow int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.Metadata == nil {
+		s.Metadata = make(map[string]string)
+	}
+	add := func(key string, delta int) {
+		prev, _ := strconv.Atoi(s.Metadata[key])
+		s.Metadata[key] = strconv.Itoa(prev + delta)
+	}
+	add(MetadataKeyUsageTotalInputTokens, inputTokens)
+	add(MetadataKeyUsageTotalOutputTokens, outputTokens)
+	add(MetadataKeyUsageCacheReadTokens, cacheReadTokens)
+	add(MetadataKeyUsageCacheCreationTokens, cacheCreationTokens)
+	if contextWindow > 0 {
+		s.Metadata[MetadataKeyUsageContextWindow] = strconv.Itoa(contextWindow)
+	}
+	s.touch()
+}
+
+// UsageTotals returns the cumulative token usage recorded for this session
+// across all runs. Returns all zeros when nothing has been recorded.
+func (s *Session) UsageTotals() (inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, contextWindow int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	inputTokens, _ = strconv.Atoi(s.Metadata[MetadataKeyUsageTotalInputTokens])
+	outputTokens, _ = strconv.Atoi(s.Metadata[MetadataKeyUsageTotalOutputTokens])
+	cacheReadTokens, _ = strconv.Atoi(s.Metadata[MetadataKeyUsageCacheReadTokens])
+	cacheCreationTokens, _ = strconv.Atoi(s.Metadata[MetadataKeyUsageCacheCreationTokens])
+	contextWindow, _ = strconv.Atoi(s.Metadata[MetadataKeyUsageContextWindow])
+	return inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, contextWindow
 }
 
 // titleMaxRunes is the maximum display length for an auto-generated title.

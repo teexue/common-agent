@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { ActivityEntry } from "./activity-entry"
 import { InputBar, type ImageAttachment } from "./input-bar"
 import { SearchBar } from "./search-bar"
+import type { SessionTokenUsage } from "./token-usage-indicator"
 import { useAutoScroll } from "@/hooks/use-auto-scroll"
 import type { MessageSearch } from "@/hooks/use-message-search"
 import { optimizePrompt } from "@/lib/api"
@@ -27,6 +28,7 @@ interface WorkspacePanelProps {
   visionEnabled?: boolean
   search: MessageSearch
   inputAccessory?: React.ReactNode
+  tokenUsage?: SessionTokenUsage
 }
 
 function EmptyState({
@@ -104,6 +106,7 @@ export function WorkspacePanel({
   visionEnabled,
   search,
   inputAccessory,
+  tokenUsage,
 }: WorkspacePanelProps) {
   const { containerRef, handleScroll } = useAutoScroll(messages)
   const isEmpty = messages.length === 0 && !error
@@ -207,6 +210,7 @@ export function WorkspacePanel({
         visionEnabled={visionEnabled}
         optimizing={optimizing}
         accessory={inputAccessory}
+        tokenUsage={tokenUsage}
       />
     </div>
   )

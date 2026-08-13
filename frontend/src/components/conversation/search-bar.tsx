@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { isComposingEvent } from "@/lib/keys"
 
 interface SearchBarProps {
   onSearch: (query: string) => void
@@ -73,6 +74,7 @@ export function SearchBar({
   }, [query, onSearch])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isComposingEvent(e)) return
     if (e.key === "Enter") {
       e.preventDefault()
       if (e.shiftKey) onPrev()

@@ -137,6 +137,9 @@ export function dispatchSSEEvent(
         turns: event.turns ?? 0,
         inputTokens: event.input_tokens,
         outputTokens: event.output_tokens,
+        cacheReadTokens: event.cache_read_input_tokens,
+        cacheCreationTokens: event.cache_creation_input_tokens,
+        contextWindow: event.context_window,
       })
       return true
     default:
@@ -192,6 +195,11 @@ export function useChat() {
     isStreaming: false,
     error: null,
     sessionId: null,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    contextWindow: 0,
   })
 
   const abortRef = useRef<AbortController | null>(null)
@@ -265,10 +273,14 @@ export function useChat() {
   }, [abort])
 
   const loadSession = useCallback(
-    async (sessionId: string, messages: BackendMsg[]) => {
+    async (
+      sessionId: string,
+      messages: BackendMsg[],
+      metadata?: Record<string, string>
+    ) => {
       abort()
       const entries = fromBackendMessages(messages)
-      dispatch({ type: "LOAD_SESSION", sessionId, messages: entries })
+      dispatch({ type: "LOAD_SESSION", sessionId, messages: entries, metadata })
     },
     [abort]
   )

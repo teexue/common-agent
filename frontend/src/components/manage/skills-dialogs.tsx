@@ -24,6 +24,7 @@ import {
   updateSkill,
   type SkillPayload,
 } from "@/lib/api"
+import { isComposingEvent } from "@/lib/keys"
 import type { AgentInfo, SkillInfo } from "@/types/agent"
 
 /** Agent Skills standard: lowercase letters/digits/hyphens, ≤64 chars,
@@ -252,6 +253,10 @@ function SkillForm({
   return (
     <form
       onSubmit={handleSubmit}
+      onKeyDown={(e) => {
+        // Don't submit while confirming an IME candidate with Enter.
+        if (isComposingEvent(e)) e.preventDefault()
+      }}
       className="max-h-[70vh] space-y-3 overflow-y-auto pr-1"
     >
       <div className="grid gap-3 sm:grid-cols-2">

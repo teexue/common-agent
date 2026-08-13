@@ -112,6 +112,38 @@ export function RuntimeTab({
             </Select>
           </Field>
           <Field
+            label={t("agent.compactionStrategy")}
+            hint={t("agent.compactionStrategyHint")}
+          >
+            <Select
+              value={{
+                value: form.compactionStrategy,
+                label: t(`agent.compactionStrategy_${form.compactionStrategy}`),
+              }}
+              onValueChange={(v) => {
+                if (v && typeof v === "object" && "value" in v) {
+                  setForm((f) => ({
+                    ...f,
+                    compactionStrategy: (v as { value: AgentFormData["compactionStrategy"] }).value,
+                  }))
+                }
+              }}
+            >
+              <SelectTrigger className="h-9 w-full rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                {(["truncation", "sliding_window", "summarize"] as const).map(
+                  (s) => (
+                    <SelectItem key={s} value={{ value: s, label: t(`agent.compactionStrategy_${s}`) }}>
+                      {t(`agent.compactionStrategy_${s}`)}
+                    </SelectItem>
+                  )
+                )}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field
             label={t("agent.contextWindow")}
             hint={t("agent.contextWindowHint")}
           >

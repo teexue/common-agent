@@ -43,6 +43,13 @@ func (m *MockProvider) Stream(ctx context.Context, req Request) (<-chan Chunk, e
 	return ch, nil
 }
 
+// StreamCallCount returns how many times Stream has been invoked.
+func (m *MockProvider) StreamCallCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.index
+}
+
 func (m *MockProvider) runSteps(ctx context.Context, ch chan<- Chunk, steps []MockStep) {
 	if len(steps) == 0 {
 		m.handleEmptyResponse(ctx, ch)

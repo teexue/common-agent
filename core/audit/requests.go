@@ -31,6 +31,9 @@ type RequestRecord struct {
 	Error        string          `json:"error,omitempty"`
 	InputTokens  int             `json:"input_tokens,omitempty"`
 	OutputTokens int             `json:"output_tokens,omitempty"`
+	// Prompt cache usage reported by the provider (0 when not reported).
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
 }
 
 // RequestLogger persists LLM request records as per-day NDJSON files.

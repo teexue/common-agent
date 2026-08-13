@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScopeFields } from "@/components/manage/skills-dialogs"
 import { installSkill } from "@/lib/api"
+import { isComposingEvent } from "@/lib/keys"
 import type { AgentInfo } from "@/types/agent"
 
 function SkillInstallForm({
@@ -53,7 +54,14 @@ function SkillInstallForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form
+      onSubmit={handleSubmit}
+      onKeyDown={(e) => {
+        // Don't submit while confirming an IME candidate with Enter.
+        if (isComposingEvent(e)) e.preventDefault()
+      }}
+      className="space-y-3"
+    >
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">URL</Label>
         <Input
