@@ -21,6 +21,18 @@ export async function fetchTools(): Promise<
 
 // ─── Health & Metrics API ─────────────────────────────────────────
 
+/** Fetches the server build version (injected at release time). */
+export async function fetchVersion(): Promise<string> {
+  try {
+    const res = await fetch("/v1/system/version", { headers: langHeaders() })
+    if (!res.ok) return ""
+    const data = (await res.json()) as { version?: string }
+    return data.version ?? ""
+  } catch {
+    return ""
+  }
+}
+
 /** Fetches Prometheus-format metrics from the server. */
 export async function fetchMetrics(): Promise<MetricsData> {
   const res = await fetch("/metrics", { headers: langHeaders() })

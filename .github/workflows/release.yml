@@ -32,7 +32,10 @@ jobs:
         run: pnpm --dir frontend install --frozen-lockfile
 
       - name: Build frontend and cross-compile binaries
-        run: make release
+        # Inject the release tag (e.g. v1.2.3) as the build version; the
+        # linker flag writes it into core/version.Version and the UI reads it
+        # back from GET /v1/system/version.
+        run: make release VERSION=${{ github.event.release.tag_name }}
 
       - name: Generate checksums
         working-directory: bin

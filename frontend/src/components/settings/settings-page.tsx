@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router"
 import { useTranslation } from "react-i18next"
 import i18n from "@/i18n"
@@ -27,6 +27,7 @@ import {
 import { PageHeader } from "@/components/shared/page-header"
 import { PageMain, PageShell } from "@/components/shared/page-shell"
 import { Input } from "@/components/ui/input"
+import { fetchVersion } from "@/lib/api"
 import { MetricsPanel } from "@/components/monitoring/metrics-panel"
 import { ApiKeysPanel } from "@/components/settings/api-keys-panel"
 import { BackgroundPanel } from "@/components/settings/background-panel"
@@ -152,6 +153,17 @@ function GeneralTab() {
     () => localStorage.getItem("workDir") || ""
   )
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [appVersion, setAppVersion] = useState("")
+
+  useEffect(() => {
+    let cancelled = false
+    fetchVersion().then((v) => {
+      if (!cancelled) setAppVersion(v)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const themeOptions = [
     { value: "light", label: t("settings.themeLight") },
@@ -337,7 +349,7 @@ function GeneralTab() {
           className="block rounded-xl border border-border bg-muted/30 px-3.5 py-3 transition-colors hover:border-primary/30 hover:bg-muted/50"
         >
           <p className="font-mono text-xs font-medium text-foreground">
-            common-agent v0.0.1
+            common-agent {appVersion || "dev"}
           </p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
             {t("settings.aboutDesc")}

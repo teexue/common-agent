@@ -71,6 +71,8 @@ func main() {
 		runValidate(os.Args[2:])
 	case "skills":
 		runSkills(os.Args[2:])
+	case "version":
+		runVersion(os.Args[2:])
 	default:
 		usage()
 		os.Exit(1)

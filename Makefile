@@ -7,7 +7,13 @@ BIN_DIR := bin
 BINARY  := agent-server
 PKG     := ./cmd
 CGO     := 0
-LDFLAGS := -s -w
+
+# Release version, injected into core/version at build time.
+# Defaults to a git tag (or "dev" when none is present); override with
+# `make release VERSION=v1.2.3` (CI passes the release tag).
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+
+LDFLAGS := -s -w -X github.com/teexue/common-agent/core/version.Version=$(VERSION)
 
 all: build
 
@@ -49,12 +55,13 @@ build-windows-arm64:
 	$(call GO_CROSS,windows,arm64,.exe)
 
 # ── Cross-compile all platforms (frontend once) ───────────────────
-# Usage: make release
+# Usage: make release VERSION=v1.2.3
 
 release: frontend \
 	build-darwin-amd64 build-darwin-arm64 \
 	build-linux-amd64 build-linux-arm64 \
 	build-windows-amd64 build-windows-arm64
 	@echo ""
+	@echo "Built version: $(VERSION)"
 	@echo "Artifacts in $(BIN_DIR)/:"
 	@ls -lh $(BIN_DIR)/$(BINARY)-*

@@ -375,6 +375,9 @@ func (s *Server) Handler() *gin.Engine {
 	r.GET("/readyz", gin.WrapF(s.health.HandleReady))
 	r.GET("/metrics", gin.WrapF(s.health.HandleMetrics))
 
+	// Build version — public so the UI can render it pre-auth.
+	r.GET("/v1/system/version", s.handleVersion)
+
 	// Public auth endpoints (status / register / login / raw-key → JWT).
 	r.GET("/v1/auth/status", s.handleAuthStatus)
 	r.POST("/v1/auth/register", s.handleAuthRegister)

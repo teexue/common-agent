@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"sync"
 	"sync/atomic"
+
+	"github.com/teexue/common-agent/core/version"
 )
 
 // StdioClient communicates with an MCP server over stdin/stdout.
@@ -90,7 +92,7 @@ func (c *StdioClient) Connect(ctx context.Context) error {
 	initParams, _ := json.Marshal(InitializeParams{
 		ProtocolVersion: "2024-11-05",
 		Capabilities:    ClientCapabilities{Tools: &ToolsCapability{}},
-		ClientInfo:      ClientInfo{Name: "common-agent", Version: "0.1.0"},
+		ClientInfo:      ClientInfo{Name: "common-agent", Version: version.Version},
 	})
 
 	resp, err := c.sendRequest(ctx, "initialize", initParams)
