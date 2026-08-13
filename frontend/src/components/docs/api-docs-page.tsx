@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { useTranslation } from "react-i18next"
 import { FileCode2 } from "lucide-react"
 import { PageHeader } from "@/components/shared/page-header"

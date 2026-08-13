@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useTheme } from "@/components/theme-provider"
 import { AppLayout } from "@/components/layout/app-layout"

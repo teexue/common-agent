@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router"
 import { useTranslation } from "react-i18next"
 import i18n from "@/i18n"
 import { useTheme } from "@/components/theme-provider"

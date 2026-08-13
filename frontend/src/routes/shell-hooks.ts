@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
 import { fetchSessions, fetchSession, deleteSession } from "@/lib/api"
 import type { SessionMeta } from "@/types/agent"

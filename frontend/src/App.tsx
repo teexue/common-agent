@@ -1,4 +1,4 @@
-import { Outlet, Route, Routes, Navigate } from "react-router-dom"
+import { Outlet, Route, Routes, Navigate } from "react-router"
 import { ThemeProvider } from "@/components/theme-provider"
 import { BackgroundProvider } from "@/components/background/background-provider"
 import { LoginPage } from "@/components/auth/login-page"
