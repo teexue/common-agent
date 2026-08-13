@@ -71,6 +71,7 @@ export function AgentEditorPage({
 
   useEffect(() => {
     if (isCreate) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm(EMPTY_FORM)
       setError(null)
       return

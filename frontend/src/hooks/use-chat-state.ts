@@ -271,7 +271,16 @@ function reduceSessionAction(
         }),
       }
     case "STREAM_ERROR":
-      return { ...state, isStreaming: false, error: action.message }
+      return {
+        ...state,
+        isStreaming: false,
+        error: action.message,
+        // Close any message still marked as streaming so the UI never gets
+        // stuck on a "generating…" bubble after an error.
+        messages: state.messages.map((m) =>
+          m.isStreaming ? { ...m, isStreaming: false } : m
+        ),
+      }
     case "CLEAR":
       return { messages: [], isStreaming: false, error: null, sessionId: null }
     case "SET_SESSION_ID":

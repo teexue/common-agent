@@ -62,6 +62,11 @@ func (w WriteFile) Execute(ctx context.Context, input json.RawMessage) (tool.Res
 		return tool.Result{}, err
 	}
 
+	// Serialize writes per path: parallel tool execution can interleave a full
+	// overwrite with a targeted edit of the same file (see edit_file).
+	unlock := lockPath(safePath)
+	defer unlock()
+
 	// Create parent directories
 	if err := os.MkdirAll(filepath.Dir(safePath), 0o755); err != nil {
 		return tool.Result{}, fmt.Errorf("create directories: %w", err)

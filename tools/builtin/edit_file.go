@@ -70,6 +70,12 @@ func (ef EditFile) Execute(ctx context.Context, input json.RawMessage) (tool.Res
 		return tool.Result{}, err
 	}
 
+	// Serialize read-modify-write per path: parallel tool execution may issue
+	// concurrent edits to the same file, and an unlocked read→replace→write
+	// lets the last writer clobber the other's change.
+	unlock := lockPath(safePath)
+	defer unlock()
+
 	data, err := os.ReadFile(safePath)
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("read file: %w", err)

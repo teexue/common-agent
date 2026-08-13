@@ -263,6 +263,8 @@ export interface MCPServerInfo {
   name: string
   type: string // "stdio" | "sse"
   command?: string
+  args?: string[]
+  env?: Record<string, string>
   url?: string
   agent: string // agent name for agent-scoped servers; "" for global
   scope: "global" | "agent"

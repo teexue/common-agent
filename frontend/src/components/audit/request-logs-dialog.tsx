@@ -53,7 +53,7 @@ export function RequestLogsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-2xl sm:!max-w-2xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <ScrollText className="h-4 w-4 text-primary" />

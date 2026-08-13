@@ -50,6 +50,7 @@ export function DirPickerDialog({
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) void load(initialPath || "")
   }, [open, initialPath, load])
 

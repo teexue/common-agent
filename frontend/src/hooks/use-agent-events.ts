@@ -20,8 +20,12 @@ export function useAgentEvents({
   enabled = true,
 }: UseAgentEventsOptions) {
   const callbackRef = useRef(onAgentChange)
-  callbackRef.current = onAgentChange
   const [keyEpoch, setKeyEpoch] = useState(0)
+
+  // Keep the latest callback without reconnecting the EventSource.
+  useEffect(() => {
+    callbackRef.current = onAgentChange
+  }, [onAgentChange])
 
   useEffect(() => {
     const onKeyChange = () => setKeyEpoch((n) => n + 1)

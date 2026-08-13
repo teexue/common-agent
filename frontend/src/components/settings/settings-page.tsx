@@ -41,7 +41,9 @@ export function SettingsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const activeTab = searchParams.get("tab") || "general"
+  const tabValues = ["general", "monitoring", "providers", "embedding", "mcp", "security"]
+  const rawTab = searchParams.get("tab") || "general"
+  const activeTab = tabValues.includes(rawTab) ? rawTab : "general"
   const { user } = useAuth()
   const isAdmin = user?.role === "admin"
 

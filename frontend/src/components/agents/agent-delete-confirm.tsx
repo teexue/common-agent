@@ -45,7 +45,7 @@ export function AgentDeleteConfirm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm border-border bg-card">
+      <DialogContent className="sm:max-w-sm border-border bg-card">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <AlertTriangle className="h-4 w-4 text-destructive" />{" "}

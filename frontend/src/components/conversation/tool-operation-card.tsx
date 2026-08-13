@@ -146,7 +146,7 @@ function ApprovalButtons({
             className="h-7 gap-1.5 rounded-lg bg-success text-xs text-primary-foreground hover:bg-success/90"
             onClick={(e) => {
               e.stopPropagation()
-              approvalId && onApprove?.(approvalId)
+              if (approvalId) onApprove?.(approvalId)
             }}
             disabled={!approvalId}
           >
@@ -158,7 +158,7 @@ function ApprovalButtons({
             className="h-7 gap-1.5 rounded-lg border-destructive/30 text-xs text-destructive hover:bg-destructive/10"
             onClick={(e) => {
               e.stopPropagation()
-              approvalId && onDeny?.(approvalId)
+              if (approvalId) onDeny?.(approvalId)
             }}
             disabled={!approvalId}
           >
@@ -249,7 +249,8 @@ export function ToolOperationCard({
   const [expanded, setExpanded] = useState(
     toolCall.status === "pending_approval" || toolCall.status === "denied"
   )
-  const config = getStatusConfig(t)[toolCall.status]
+  const config =
+    getStatusConfig(t)[toolCall.status] ?? getStatusConfig(t).pending
   const duration = formatDuration(toolCall.startTime, toolCall.endTime)
   const needsApproval = toolCall.status === "pending_approval"
   const inputSummary = extractInputSummary(toolCall.name, toolCall.input)

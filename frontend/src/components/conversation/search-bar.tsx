@@ -75,7 +75,8 @@ export function SearchBar({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault()
-      e.shiftKey ? onPrev() : onNext()
+      if (e.shiftKey) onPrev()
+      else onNext()
     }
     if (e.key === "Escape") onClear()
   }

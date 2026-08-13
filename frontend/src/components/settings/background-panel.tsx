@@ -176,9 +176,7 @@ export function BackgroundPanel() {
             <ImageIcon className="h-5 w-5" />
           )}
           <span className="text-xs">
-            {uploading
-              ? t("settings.backgroundUpload")
-              : t("settings.backgroundUpload")}
+            {t("settings.backgroundUpload")}
           </span>
         </button>
       )}

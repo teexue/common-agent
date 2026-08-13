@@ -81,7 +81,11 @@ export function AppLayout({
         )}
 
         {showInspector ? (
-          <ResizablePanelGroup orientation="horizontal" className="flex-1">
+          <ResizablePanelGroup
+            key={inspectorOpen ? "inspector-open" : "inspector-closed"}
+            orientation="horizontal"
+            className="flex-1"
+          >
             <ResizablePanel
               defaultSize={inspectorOpen ? 74 : 100}
               minSize={35}

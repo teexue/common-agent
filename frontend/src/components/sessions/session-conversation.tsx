@@ -187,7 +187,7 @@ export function SessionConversationDialog({
   const { t } = useTranslation()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-3xl sm:!max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <MessageSquare className="h-4 w-4 text-primary" />

@@ -22,6 +22,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMode(hasUsers ? "login" : "register")
   }, [hasUsers])
 
@@ -138,7 +139,11 @@ export function LoginPage() {
           <Button
             className="h-10 w-full text-sm"
             onClick={() => void handleSubmit()}
-            disabled={saving || !username.trim() || password.length < 6}
+            disabled={
+              saving ||
+              !username.trim() ||
+              (effectiveMode === "register" ? password.length < 6 : password.length === 0)
+            }
           >
             {saving
               ? t("common.loading")

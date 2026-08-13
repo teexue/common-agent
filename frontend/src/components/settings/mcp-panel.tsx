@@ -32,6 +32,7 @@ export function McpPanel() {
       .finally(() => setLoading(false))
   }
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh()
   }, [])
 
@@ -86,8 +87,10 @@ export function McpPanel() {
                 name: s.name,
                 type: s.type === "sse" ? "sse" : "stdio",
                 command: s.command ?? "",
-                args: "",
-                env: "",
+                args: (s.args ?? []).join("\n"),
+                env: Object.entries(s.env ?? {})
+                  .map(([k, v]) => `${k}=${v}`)
+                  .join("\n"),
                 url: s.url ?? "",
               }}
               onSaved={() => {

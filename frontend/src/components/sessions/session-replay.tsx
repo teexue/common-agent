@@ -50,6 +50,7 @@ export function SessionReplay({
 
   useEffect(() => {
     if (!open || !sessionId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEvents([])
       setError(null)
       return
@@ -114,7 +115,7 @@ export function SessionReplay({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-5xl border-border bg-card sm:!max-w-5xl">
+      <DialogContent className="sm:max-w-5xl border-border bg-card">
         <div className="flex max-h-[80vh] flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 font-heading">

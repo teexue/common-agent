@@ -151,6 +151,7 @@ export function KnowledgeDetailPanel({
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void reload()
   }, [kbId])
 
@@ -213,8 +214,15 @@ export function KnowledgeDetailPanel({
       )
     )
       return
-    await deleteKnowledgeBase(kbId)
-    onBack()
+    setBusy(true)
+    setError(null)
+    try {
+      await deleteKnowledgeBase(kbId)
+      onBack()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setBusy(false)
+    }
   }
 
   return (

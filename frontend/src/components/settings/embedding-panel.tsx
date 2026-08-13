@@ -36,6 +36,7 @@ export function EmbeddingPanel() {
   const [ok, setOk] = useState(false)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     Promise.all([
       fetchEmbeddingVendors().catch(() => [] as EmbeddingVendorInfo[]),

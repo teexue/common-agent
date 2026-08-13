@@ -235,7 +235,7 @@ export function DeleteUserDialog({
 
   return (
     <Dialog open={!!user} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-sm border-border bg-card">
+      <DialogContent className="sm:max-w-sm border-border bg-card">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <Trash2 className="h-4 w-4 text-destructive" />{" "}

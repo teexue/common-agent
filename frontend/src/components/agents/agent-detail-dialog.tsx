@@ -167,6 +167,7 @@ export function AgentDetailDialog({
 
   useEffect(() => {
     if (!open || !agentId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDetail(null)
       setError(null)
       return
@@ -181,7 +182,7 @@ export function AgentDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg border-border bg-card">
+      <DialogContent className="sm:max-w-lg border-border bg-card">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bot className="h-4 w-4 text-primary" /> {t("agent.detailTitle")}

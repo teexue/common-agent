@@ -365,7 +365,7 @@ export function SkillFormDialog({
   const { t } = useTranslation()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl rounded-2xl border-border bg-card">
+      <DialogContent className="sm:max-w-2xl rounded-2xl border-border bg-card">
         <DialogHeader>
           <DialogTitle>
             {mode === "edit"

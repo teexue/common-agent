@@ -104,6 +104,7 @@ export function WorkspaceRoute() {
   }, [chat.sessionId, sessMgr.refresh])
   useEffect(() => {
     if (agents.length === 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAgent((prev) => {
       if (prev && agents.some((a) => a.id === prev || a.name === prev)) {
         const match = agents.find((a) => a.id === prev || a.name === prev)

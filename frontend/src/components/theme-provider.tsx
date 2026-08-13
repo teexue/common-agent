@@ -84,24 +84,40 @@ export function ThemeProvider({
   ...props
 }: ThemeProviderProps) {
   const [mode, setModeState] = React.useState<ThemeMode>(() => {
-    const stored = localStorage.getItem(modeKey)
-    return isMode(stored) ? stored : defaultMode
+    try {
+      const stored = localStorage.getItem(modeKey)
+      return isMode(stored) ? stored : defaultMode
+    } catch {
+      return defaultMode
+    }
   })
   const [palette, setPaletteState] = React.useState<ThemePalette>(() => {
-    const stored = localStorage.getItem(paletteKey)
-    return isPalette(stored) ? stored : defaultPalette
+    try {
+      const stored = localStorage.getItem(paletteKey)
+      return isPalette(stored) ? stored : defaultPalette
+    } catch {
+      return defaultPalette
+    }
   })
 
   const setMode = React.useCallback(
     (next: ThemeMode) => {
-      localStorage.setItem(modeKey, next)
+      try {
+        localStorage.setItem(modeKey, next)
+      } catch {
+        // ignore quota / private mode errors
+      }
       setModeState(next)
     },
     [modeKey]
   )
   const setPalette = React.useCallback(
     (next: ThemePalette) => {
-      localStorage.setItem(paletteKey, next)
+      try {
+        localStorage.setItem(paletteKey, next)
+      } catch {
+        // ignore quota / private mode errors
+      }
       setPaletteState(next)
     },
     [paletteKey]
@@ -139,6 +155,9 @@ export function ThemeProvider({
         e.ctrlKey ||
         e.altKey ||
         isEditableTarget(e.target) ||
+        // Let open dialogs / sheets own the keyboard; a bare "d" while a modal
+        // is up must not flip the theme underneath it.
+        document.querySelector('[role="dialog"]') ||
         e.key.toLowerCase() !== "d"
       )
         return

@@ -156,13 +156,13 @@ export function mcpServersToYaml(servers: McpServerFormItem[]): string {
 export function formDataToYaml(form: AgentFormData): string {
   const lines: string[] = []
   if (form.id) {
-    lines.push(`id: ${form.id}`)
+    lines.push(`id: ${yamlScalar(form.id)}`)
   }
   lines.push(
-    `name: ${form.name}`,
+    `name: ${yamlScalar(form.name)}`,
     `version: 1`,
-    `provider: ${form.provider}`,
-    `model: ${form.model}`
+    `provider: ${yamlScalar(form.provider)}`,
+    `model: ${yamlScalar(form.model)}`
   )
 
   if (form.systemPrompt) {
@@ -172,7 +172,7 @@ export function formDataToYaml(form: AgentFormData): string {
 
   lines.push(`tools:`)
   for (const t of form.tools) {
-    lines.push(`  - ${t}`)
+    lines.push(`  - ${yamlScalar(t)}`)
   }
 
   lines.push(`max_turns: ${form.maxTurns}`)
@@ -210,7 +210,7 @@ export function formDataToYaml(form: AgentFormData): string {
     if (form.knowledgeBases.length > 0) {
       lines.push(`  bases:`)
       for (const b of form.knowledgeBases) {
-        lines.push(`    - ${b}`)
+        lines.push(`    - ${yamlScalar(b)}`)
       }
     }
     if (form.knowledgeTopK > 0) {

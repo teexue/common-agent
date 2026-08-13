@@ -29,12 +29,14 @@ type ToolInfo struct {
 
 // MCPServerInfo is the JSON DTO for MCP server listing.
 type MCPServerInfo struct {
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	Command   string `json:"command,omitempty"`
-	URL       string `json:"url,omitempty"`
-	Agent     string `json:"agent"`            // agent id/name for agent-scoped servers; "" for global
-	Scope     string `json:"scope"`            // "global" | "agent"
+	Name    string            `json:"name"`
+	Type    string            `json:"type"`
+	Command string            `json:"command,omitempty"`
+	Args    []string          `json:"args,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+	URL     string            `json:"url,omitempty"`
+	Agent   string            `json:"agent"` // agent id/name for agent-scoped servers; "" for global
+	Scope   string            `json:"scope"` // "global" | "agent"
 }
 
 // ApproveRequest is the HTTP DTO for POST /v1/agents/approve.
@@ -359,6 +361,8 @@ func (s *Server) handleMCPList(c *gin.Context) {
 				Name:    m.Name,
 				Type:    m.Type,
 				Command: m.Command,
+				Args:    m.Args,
+				Env:     m.Env,
 				URL:     m.URL,
 				Scope:   "global",
 			})
@@ -377,6 +381,8 @@ func (s *Server) handleMCPList(c *gin.Context) {
 				Name:    mcp.Name,
 				Type:    mcp.Type,
 				Command: mcp.Command,
+				Args:    mcp.Args,
+				Env:     mcp.Env,
 				URL:     mcp.URL,
 				Agent:   a.Name,
 				Scope:   "agent",

@@ -182,7 +182,7 @@ export function JsonViewer({ data, title }: JsonViewerProps) {
         )}
         <CopyButton text={formatted} />
       </div>
-      <pre className="overflow-auto rounded-xl border border-border bg-card p-3 font-mono text-xs leading-5">
+      <pre className="overflow-auto rounded-xl border border-border bg-card p-3 font-mono text-xs leading-5 break-all">
         <JsonNode value={data} depth={0} />
       </pre>
     </div>

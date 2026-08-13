@@ -208,6 +208,16 @@ export function useChat() {
       images?: { dataUrl: string; name: string }[]
     ) => {
       abortRef.current?.abort()
+      abortRef.current = null
+      // Close any previous streaming entry (e.g. the run this new send
+      // interrupts) so it doesn't stay stuck in the "generating" state.
+      dispatch({
+        type: "STREAM_DONE",
+        entryId: "",
+        status: "cancelled",
+        turns: 0,
+      })
+
       const controller = new AbortController()
       abortRef.current = controller
 

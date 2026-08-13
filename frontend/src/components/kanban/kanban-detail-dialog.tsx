@@ -73,7 +73,7 @@ export function KanbanDetailDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg rounded-2xl border-border bg-card">
+        <DialogContent className="sm:max-w-lg rounded-2xl border-border bg-card">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <span className="min-w-0 flex-1 truncate">{item.title}</span>
@@ -159,10 +159,14 @@ export function KanbanDetailDialog({
                 />
               )}
               {item.attempts > 0 && (
-                <MetaRow
-                  label={t("kanban.attempts", { count: item.attempts })}
-                  value=""
-                />
+                <div className="flex items-baseline justify-between gap-3 text-xs">
+                  <span className="shrink-0 text-muted-foreground">
+                    {t("kanban.attempts", { count: item.attempts })}
+                  </span>
+                  <span className="font-mono text-[11px] text-foreground">
+                    {item.attempts}
+                  </span>
+                </div>
               )}
             </div>
 
