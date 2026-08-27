@@ -61,6 +61,11 @@ type Request struct {
 	Messages  []Message
 	Tools     []ToolDefinition
 	MaxTokens int
+	// ContextWindow is the model's effective context window in tokens. It is
+	// informational; providers that control their own runtime context size
+	// (e.g. Ollama's num_ctx) should use it to size that context so the
+	// server's actual limit matches the value the loop uses for compaction.
+	ContextWindow int
 }
 
 // Chunk is a streaming response fragment.
@@ -138,6 +143,15 @@ type ModelLister interface {
 // Capabler exposes a provider's advertised capabilities.
 type Capabler interface {
 	Capabilities() Capabilities
+}
+
+// ContextResolver resolves the effective context window for a model. A
+// provider that knows the model's real runtime limit (e.g. Ollama reading
+// /api/show) implements this so the loop's compaction threshold and the
+// server's actual context size agree, instead of relying on a static default
+// that may exceed a small model's training context.
+type ContextResolver interface {
+	ResolveContextWindow(ctx context.Context, model string, configured int) int
 }
 
 // Provider streams LLM responses.

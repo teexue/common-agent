@@ -9,10 +9,14 @@ import {
 
 export type { ChatAction, ChatState } from "./chat-state-types"
 
-// Metadata keys written by the backend (core/session/session.go) that carry
-// cumulative token usage so it survives session reloads.
-const META_TOTAL_INPUT = "usage.total_input_tokens"
-const META_TOTAL_OUTPUT = "usage.total_output_tokens"
+// Metadata keys written by the backend (core/session/session.go). The
+// `usage.input_tokens` / `usage.output_tokens` keys hold the MOST RECENT
+// single request's usage (written by Session.SetLastUsage); the cache keys
+// are cumulative across the session. The token-usage indicator shows the
+// latest request's fill against the context window, so it reads the
+// per-request keys, not the cumulative totals.
+const META_LAST_INPUT = "usage.input_tokens"
+const META_LAST_OUTPUT = "usage.output_tokens"
 const META_CACHE_READ = "usage.cache_read_tokens"
 const META_CACHE_CREATION = "usage.cache_creation_tokens"
 const META_CONTEXT_WINDOW = "usage.context_window"
@@ -22,7 +26,7 @@ function parseMetaInt(v: string | undefined): number {
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 
-/** Extracts cumulative token usage from persisted session metadata. */
+/** Extracts the latest request's token usage from persisted session metadata. */
 export function usageFromMetadata(
   metadata?: Record<string, string>
 ): Pick<
@@ -30,8 +34,8 @@ export function usageFromMetadata(
   "inputTokens" | "outputTokens" | "cacheReadTokens" | "cacheCreationTokens" | "contextWindow"
 > {
   return {
-    inputTokens: parseMetaInt(metadata?.[META_TOTAL_INPUT]),
-    outputTokens: parseMetaInt(metadata?.[META_TOTAL_OUTPUT]),
+    inputTokens: parseMetaInt(metadata?.[META_LAST_INPUT]),
+    outputTokens: parseMetaInt(metadata?.[META_LAST_OUTPUT]),
     cacheReadTokens: parseMetaInt(metadata?.[META_CACHE_READ]),
     cacheCreationTokens: parseMetaInt(metadata?.[META_CACHE_CREATION]),
     contextWindow: parseMetaInt(metadata?.[META_CONTEXT_WINDOW]),
@@ -283,11 +287,24 @@ function reduceSessionAction(
       return {
         ...state,
         isStreaming: false,
-        inputTokens: state.inputTokens + (action.inputTokens ?? 0),
-        outputTokens: state.outputTokens + (action.outputTokens ?? 0),
-        cacheReadTokens: state.cacheReadTokens + (action.cacheReadTokens ?? 0),
+        // The indicator shows the LATEST request's fill against the context
+        // window, so overwrite (not accumulate) with the values carried by
+        // this done event. The "close previous streaming entry" dispatch
+        // omits token fields; leave the existing values untouched then.
+        inputTokens:
+          action.inputTokens != null ? action.inputTokens : state.inputTokens,
+        outputTokens:
+          action.outputTokens != null
+            ? action.outputTokens
+            : state.outputTokens,
+        cacheReadTokens:
+          action.cacheReadTokens != null
+            ? action.cacheReadTokens
+            : state.cacheReadTokens,
         cacheCreationTokens:
-          state.cacheCreationTokens + (action.cacheCreationTokens ?? 0),
+          action.cacheCreationTokens != null
+            ? action.cacheCreationTokens
+            : state.cacheCreationTokens,
         contextWindow: action.contextWindow ?? state.contextWindow,
         messages: state.messages.map((m) => {
           if (!m.isStreaming) return m

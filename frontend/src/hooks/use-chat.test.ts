@@ -232,8 +232,8 @@ function baseState(): ChatState {
   }
 }
 
-describe("chatReducer token accumulation", () => {
-  it("accumulates session token totals across runs", () => {
+describe("chatReducer token usage", () => {
+  it("tracks the latest request's token usage (overwrites, not accumulates)", () => {
     let state = chatReducer(baseState(), {
       type: "ADD_USER_MESSAGE",
       text: "hi",
@@ -252,7 +252,8 @@ describe("chatReducer token accumulation", () => {
     expect(state.outputTokens).toBe(200)
     expect(state.contextWindow).toBe(1_000_000)
 
-    // A second run adds on top; the context window persists when not resent.
+    // A second run overwrites with its own usage; the context window
+    // persists when the done event does not resend it.
     state = chatReducer(state, { type: "ADD_USER_MESSAGE", text: "hi again" })
     state = chatReducer(state, { type: "START_ASSISTANT", entryId: "a2" })
     state = chatReducer(state, {
@@ -263,8 +264,27 @@ describe("chatReducer token accumulation", () => {
       inputTokens: 300,
       outputTokens: 100,
     })
-    expect(state.inputTokens).toBe(800)
-    expect(state.outputTokens).toBe(300)
+    expect(state.inputTokens).toBe(300)
+    expect(state.outputTokens).toBe(100)
+    expect(state.contextWindow).toBe(1_000_000)
+  })
+
+  it("leaves usage untouched when a done event omits token fields", () => {
+    let state: ChatState = {
+      ...baseState(),
+      inputTokens: 900,
+      outputTokens: 400,
+      contextWindow: 1_000_000,
+    }
+    // The "close previous streaming entry" dispatch sends no token fields.
+    state = chatReducer(state, {
+      type: "STREAM_DONE",
+      entryId: "",
+      status: "cancelled",
+      turns: 0,
+    })
+    expect(state.inputTokens).toBe(900)
+    expect(state.outputTokens).toBe(400)
     expect(state.contextWindow).toBe(1_000_000)
   })
 
@@ -290,14 +310,14 @@ describe("chatReducer token accumulation", () => {
     expect(loaded.contextWindow).toBe(0)
   })
 
-  it("restores cumulative usage from persisted session metadata", () => {
+  it("restores latest-request usage from persisted session metadata", () => {
     const state = chatReducer(baseState(), {
       type: "LOAD_SESSION",
       sessionId: "s1",
       messages: [],
       metadata: {
-        "usage.total_input_tokens": "1302",
-        "usage.total_output_tokens": "1900",
+        "usage.input_tokens": "1302",
+        "usage.output_tokens": "1900",
         "usage.cache_read_tokens": "58300",
         "usage.cache_creation_tokens": "300",
         "usage.context_window": "200000",
@@ -316,7 +336,7 @@ describe("chatReducer token accumulation", () => {
       sessionId: "s1",
       messages: [],
       metadata: {
-        "usage.total_input_tokens": "abc",
+        "usage.input_tokens": "abc",
         "usage.context_window": "-5",
       },
     })

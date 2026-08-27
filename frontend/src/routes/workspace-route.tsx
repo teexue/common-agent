@@ -70,7 +70,7 @@ function useSessions(chat: ReturnType<typeof useChat>) {
 
 export function WorkspaceRoute() {
   const chat = useChat()
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, chatStyle, setChatStyle } = useTheme()
   const location = useLocation()
   const navigate = useNavigate()
   const sessMgr = useSessions(chat)
@@ -298,6 +298,8 @@ export function WorkspaceRoute() {
         }}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        chatStyle={chatStyle}
+        onSetChatStyle={setChatStyle}
         showInspector
         topBarActions={
           <ConversationActions

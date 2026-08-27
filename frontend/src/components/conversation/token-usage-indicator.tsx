@@ -25,7 +25,7 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
 
 /**
  * Compact token usage gauge: a small ring showing how much of the model's
- * context window the current session has consumed, with totals in the
+ * context window the most recent LLM request consumed, with totals in the
  * largest unit (M > K). Hover for the input/output breakdown.
  */
 export function TokenUsageIndicator({ usage }: TokenUsageIndicatorProps) {

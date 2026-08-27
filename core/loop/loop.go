@@ -118,7 +118,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 	maxTurns := cfg.Agent.MaxTurns // 0 = unlimited until model returns without tool calls
 	log := cfg.Logger
 	tel := cfg.Telemetry
-	window := effectiveContextWindow(cfg)
+	window := resolveContextWindow(ctx, cfg)
 
 	runStart := time.Now()
 	if tel != nil {
@@ -129,6 +129,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 	}
 
 	var totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation int
+	var lastTurn tokenDelta // most recent completed turn's usage, for done events
 	if log == nil {
 		log = slog.Default()
 	}
@@ -145,7 +146,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 	for turn := 1; maxTurns <= 0 || turn <= maxTurns; turn++ {
 		select {
 		case <-ctx.Done():
-			emitCancelled(out, cfg.Session.ID, turn, totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation, window)
+			emitCancelled(out, cfg.Session.ID, turn, lastTurn.input, lastTurn.output, lastTurn.cacheRead, lastTurn.cacheCreation, window)
 			cfg.Session.AddUsage(totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation, window)
 			return
 		default:
@@ -153,6 +154,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 
 		tc := TurnContext{Ctx: ctx, Config: cfg, ToolDefs: toolDefs, Out: out, Turn: turn, Log: log, Pol: pol, Hooks: hooks, Approver: approver, Tel: tel, ContextWindow: window}
 		tokens, done := executeTurn(tc)
+		lastTurn = tokens
 		totalInputTokens += tokens.input
 		totalOutputTokens += tokens.output
 		totalCacheRead += tokens.cacheRead
@@ -167,7 +169,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		tel.RecordRunDuration(ctx, time.Since(runStart), attribute.String("agent.name", cfg.Agent.Name))
 	}
 	forceEmit(out, event.Event{Type: event.TypeError, Code: "max_turns", Message: fmt.Sprintf("exceeded max turns %d", maxTurns)})
-	forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: maxTurns, InputTokens: totalInputTokens, OutputTokens: totalOutputTokens, ContextWindow: window, SessionID: cfg.Session.ID, CacheReadInputTokens: totalCacheRead, CacheCreationInputTokens: totalCacheCreation})
+	forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: maxTurns, InputTokens: lastTurn.input, OutputTokens: lastTurn.output, ContextWindow: window, SessionID: cfg.Session.ID, CacheReadInputTokens: lastTurn.cacheRead, CacheCreationInputTokens: lastTurn.cacheCreation})
 	cfg.Session.AddUsage(totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation, window)
 }
 
@@ -209,6 +211,7 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 	chunks, err := tc.Config.Provider.Stream(tc.Ctx, provider.Request{
 		Model: tc.Config.Agent.Model, Messages: tc.Config.Session.GetMessages(),
 		Tools: tc.ToolDefs, MaxTokens: tc.Config.Agent.MaxTokens,
+		ContextWindow: tc.ContextWindow,
 	})
 	if err != nil {
 		forceEmit(tc.Out, event.Event{Type: event.TypeError, Code: "provider_error", Message: err.Error()})
@@ -220,7 +223,7 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 	// Persist the real prompt token count reported by the provider. This is
 	// the authoritative usage of the request that just completed.
 	if tokens.input > 0 {
-		tc.Config.Session.SetLastUsage(tokens.input, reqMsgCount)
+		tc.Config.Session.SetLastUsage(tokens.input, tokens.output, reqMsgCount)
 	}
 	if cancelled {
 		emitCancelled(tc.Out, tc.Config.Session.ID, tc.Turn, tokens.input, tokens.output, tokens.cacheRead, tokens.cacheCreation, tc.ContextWindow)
@@ -235,7 +238,7 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 		forceEmit(tc.Out, event.Event{Type: event.TypeDone, Status: "completed", Turns: tc.Turn, InputTokens: tokens.input, OutputTokens: tokens.output, CacheReadInputTokens: tokens.cacheRead, CacheCreationInputTokens: tokens.cacheCreation, ContextWindow: tc.ContextWindow, SessionID: tc.Config.Session.ID})
 		// Compact even for plain text turns — otherwise pure chat sessions
 		// (no tool calls) never trigger context management.
-		compactIfNeeded(tc.Ctx, tc.Config, tc.Out, tc.Turn, tc.Log)
+		compactIfNeeded(tc.Ctx, tc.Config, tc.Out, tc.Turn, tc.Log, tc.ContextWindow)
 		return tokens, true
 	}
 
@@ -248,7 +251,7 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 	fireOnTurnEnd(tc.Hooks, turnCtx, tc.Turn, tc.Log)
 	endTurn(turnSpan, tc.Tel, turnCtx, tc.Turn)
 	recordToolResults(tc.Config, results)
-	compactIfNeeded(tc.Ctx, tc.Config, tc.Out, tc.Turn, tc.Log)
+	compactIfNeeded(tc.Ctx, tc.Config, tc.Out, tc.Turn, tc.Log, tc.ContextWindow)
 
 	return tokens, false
 }

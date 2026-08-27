@@ -9,22 +9,28 @@ import (
 	"github.com/teexue/common-agent/core/provider"
 )
 
-// effectiveContextWindow resolves the model context window exactly like
-// compactIfNeeded: an explicit agent value wins, then the model's official
-// spec, then a conservative default.
-func effectiveContextWindow(cfg Config) int {
-	window := cfg.ContextWindow
+// resolveContextWindow resolves the model context window. An explicit agent
+// value wins, then the model's official spec, then a conservative default.
+// When the provider knows the model's real runtime limit (e.g. Ollama via
+// /api/show), it overrides the static default so compaction and the server's
+// actual context size agree.
+func resolveContextWindow(ctx context.Context, cfg Config) int {
+	configured := cfg.ContextWindow
 	if cfg.Agent.Compaction != nil && cfg.Agent.Compaction.ContextWindow > 0 {
-		window = cfg.Agent.Compaction.ContextWindow
+		configured = cfg.Agent.Compaction.ContextWindow
 	}
-	return provider.EffectiveContextWindow(cfg.Agent.Model, window)
+	if r, ok := cfg.Provider.(provider.ContextResolver); ok {
+		return r.ResolveContextWindow(ctx, cfg.Agent.Model, configured)
+	}
+	return provider.EffectiveContextWindow(cfg.Agent.Model, configured)
 }
 
 // compactIfNeeded runs the configured compaction strategy after a turn when
-// the projected prompt usage exceeds the context window budget.
-func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, turn int, log *slog.Logger) {
+// the projected prompt usage exceeds the context window budget. window is the
+// already-resolved effective context window (passed in so /api/show is not
+// re-fetched per turn).
+func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, turn int, log *slog.Logger, window int) {
 	comp := cfg.Agent.Compaction
-	window := effectiveContextWindow(cfg)
 	ratio := 0.0
 	keepRecent := 0
 	keepHead := 0
@@ -52,7 +58,7 @@ func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, tu
 	// from the provider plus an estimate of messages appended since. This
 	// avoids relying on a raw estimate for the whole (often CJK-heavy)
 	// history and lets compaction fire before the context window fills.
-	lastInput, lastMsgCount := cfg.Session.LastUsage()
+	lastInput, _, lastMsgCount := cfg.Session.LastUsage()
 	msgs := cfg.Session.GetMessages()
 	currentTokens := compaction.EstimateTokens(msgs)
 	if lastInput > 0 && lastMsgCount > 0 && lastMsgCount < len(msgs) {

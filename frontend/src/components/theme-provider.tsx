@@ -3,14 +3,17 @@ import * as React from "react"
 
 export type ThemeMode = "dark" | "light" | "system"
 export type ThemePalette = "warm" | "slate"
+export type ChatStyle = "classic" | "agentic"
 type ResolvedMode = "dark" | "light"
 
 type ThemeProviderProps = {
   children: React.ReactNode
   defaultMode?: ThemeMode
   defaultPalette?: ThemePalette
+  defaultChatStyle?: ChatStyle
   modeKey?: string
   paletteKey?: string
+  chatStyleKey?: string
   disableTransitionOnChange?: boolean
 }
 
@@ -22,11 +25,14 @@ type ThemeProviderState = {
   setMode: (mode: ThemeMode) => void
   palette: ThemePalette
   setPalette: (palette: ThemePalette) => void
+  chatStyle: ChatStyle
+  setChatStyle: (style: ChatStyle) => void
 }
 
 const COLOR_SCHEME_QUERY = "(prefers-color-scheme: dark)"
 const MODE_VALUES: ThemeMode[] = ["dark", "light", "system"]
 const PALETTE_VALUES: ThemePalette[] = ["warm", "slate"]
+const CHAT_STYLE_VALUES: ChatStyle[] = ["classic", "agentic"]
 
 const ThemeProviderContext = React.createContext<
   ThemeProviderState | undefined
@@ -38,6 +44,10 @@ function isMode(value: string | null): value is ThemeMode {
 
 function isPalette(value: string | null): value is ThemePalette {
   return value !== null && PALETTE_VALUES.includes(value as ThemePalette)
+}
+
+function isChatStyle(value: string | null): value is ChatStyle {
+  return value !== null && CHAT_STYLE_VALUES.includes(value as ChatStyle)
 }
 
 function getSystemMode(): ResolvedMode {
@@ -78,8 +88,10 @@ export function ThemeProvider({
   children,
   defaultMode = "system",
   defaultPalette = "warm",
+  defaultChatStyle = "agentic",
   modeKey = "theme",
   paletteKey = "theme-palette",
+  chatStyleKey = "chat-style",
   disableTransitionOnChange = true,
   ...props
 }: ThemeProviderProps) {
@@ -97,6 +109,14 @@ export function ThemeProvider({
       return isPalette(stored) ? stored : defaultPalette
     } catch {
       return defaultPalette
+    }
+  })
+  const [chatStyle, setChatStyleState] = React.useState<ChatStyle>(() => {
+    try {
+      const stored = localStorage.getItem(chatStyleKey)
+      return isChatStyle(stored) ? stored : defaultChatStyle
+    } catch {
+      return defaultChatStyle
     }
   })
 
@@ -122,16 +142,33 @@ export function ThemeProvider({
     },
     [paletteKey]
   )
+  const setChatStyle = React.useCallback(
+    (next: ChatStyle) => {
+      try {
+        localStorage.setItem(chatStyleKey, next)
+      } catch {
+        // ignore quota / private mode errors
+      }
+      setChatStyleState(next)
+    },
+    [chatStyleKey]
+  )
 
   const applyTheme = React.useCallback(
-    (nextMode: ThemeMode, nextPalette: ThemePalette) => {
+    (nextMode: ThemeMode, nextPalette: ThemePalette, nextChatStyle: ChatStyle) => {
       const root = document.documentElement
       const resolved = resolveMode(nextMode)
       const restore = disableTransitionOnChange
         ? disableTransitionsTemporarily()
         : null
-      root.classList.remove("light", "dark", "theme-slate")
+      root.classList.remove(
+        "light",
+        "dark",
+        "theme-slate",
+        "chat-style-agentic"
+      )
       if (nextPalette === "slate") root.classList.add("theme-slate")
+      if (nextChatStyle === "agentic") root.classList.add("chat-style-agentic")
       root.classList.add(resolved)
       restore?.()
     },
@@ -139,13 +176,13 @@ export function ThemeProvider({
   )
 
   React.useEffect(() => {
-    applyTheme(mode, palette)
+    applyTheme(mode, palette, chatStyle)
     if (mode !== "system") return undefined
     const mq = window.matchMedia(COLOR_SCHEME_QUERY)
-    const handler = () => applyTheme("system", palette)
+    const handler = () => applyTheme("system", palette, chatStyle)
     mq.addEventListener("change", handler)
     return () => mq.removeEventListener("change", handler)
-  }, [mode, palette, applyTheme])
+  }, [mode, palette, chatStyle, applyTheme])
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -178,10 +215,14 @@ export function ThemeProvider({
         setModeState(isMode(e.newValue) ? e.newValue : defaultMode)
       if (e.key === paletteKey)
         setPaletteState(isPalette(e.newValue) ? e.newValue : defaultPalette)
+      if (e.key === chatStyleKey)
+        setChatStyleState(
+          isChatStyle(e.newValue) ? e.newValue : defaultChatStyle
+        )
     }
     window.addEventListener("storage", handler)
     return () => window.removeEventListener("storage", handler)
-  }, [defaultMode, defaultPalette, modeKey, paletteKey])
+  }, [defaultMode, defaultPalette, defaultChatStyle, modeKey, paletteKey, chatStyleKey])
 
   const value = React.useMemo<ThemeProviderState>(
     () => ({
@@ -191,8 +232,10 @@ export function ThemeProvider({
       setMode,
       palette,
       setPalette,
+      chatStyle,
+      setChatStyle,
     }),
-    [mode, setMode, palette, setPalette]
+    [mode, setMode, palette, setPalette, chatStyle, setChatStyle]
   )
 
   return (

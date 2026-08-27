@@ -4,6 +4,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { BackgroundLayer } from "@/components/background/background-layer"
+import { useTheme, type ChatStyle } from "@/components/theme-provider"
 import { TopBar } from "./top-bar"
 import { Sidebar } from "./sidebar"
 import type { AgentInfo, SessionMeta, StreamStatus } from "@/types/agent"
@@ -31,6 +32,10 @@ interface AppLayoutProps {
   onToggleInspector: () => void
   theme: string
   onToggleTheme: () => void
+  /** Optional; falls back to useTheme() when omitted. */
+  chatStyle?: ChatStyle
+  /** Optional; falls back to useTheme() when omitted. */
+  onSetChatStyle?: (style: ChatStyle) => void
   showInspector?: boolean
   leftPanel: React.ReactNode
   rightPanel?: React.ReactNode
@@ -52,8 +57,13 @@ export function AppLayout({
   onToggleInspector,
   theme,
   onToggleTheme,
+  chatStyle,
+  onSetChatStyle,
   ...sidebarProps
 }: AppLayoutProps) {
+  const themeCtx = useTheme()
+  const resolvedChatStyle = chatStyle ?? themeCtx.chatStyle
+  const resolvedSetChatStyle = onSetChatStyle ?? themeCtx.setChatStyle
   return (
     <div className="flex h-svh overflow-hidden bg-background">
       <BackgroundLayer />
@@ -76,6 +86,8 @@ export function AppLayout({
             onToggleArtifact={onToggleInspector}
             theme={theme}
             onToggleTheme={onToggleTheme}
+            chatStyle={resolvedChatStyle}
+            onSetChatStyle={resolvedSetChatStyle}
             actions={topBarActions}
           />
         )}

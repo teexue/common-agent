@@ -79,6 +79,97 @@ func TestOllamaBuildRequestOmitsOptionsWhenNoMaxTokens(t *testing.T) {
 	assert.Empty(t, body.KeepAlive)
 }
 
+func TestOllamaBuildRequestPassesNumCtx(t *testing.T) {
+	o, _ := NewOllama(OllamaConfig{})
+	// num_ctx is only sent once /api/show has confirmed the model supports it.
+	o.ctxCache.Store("qwen3", 40960)
+	body := o.buildRequest(Request{Model: "qwen3", ContextWindow: 32768})
+	require.NotNil(t, body.Options)
+	assert.Equal(t, 32768, body.Options.NumCtx)
+	// num_predict stays zero (omitted) when MaxTokens is unset.
+	assert.Equal(t, 0, body.Options.NumPredict)
+}
+
+func TestOllamaBuildRequestPassesNumCtxAndNumPredict(t *testing.T) {
+	o, _ := NewOllama(OllamaConfig{})
+	o.ctxCache.Store("qwen3", 40960)
+	body := o.buildRequest(Request{Model: "qwen3", MaxTokens: 256, ContextWindow: 32768})
+	require.NotNil(t, body.Options)
+	assert.Equal(t, 32768, body.Options.NumCtx)
+	assert.Equal(t, 256, body.Options.NumPredict)
+}
+
+// TestOllamaBuildRequestOmitsNumCtxWhenModelUnknown guards against the
+// "requested context size too large for model" warning: when /api/show has
+// not confirmed the model's real context length, num_ctx is left unset so
+// Ollama applies its own default rather than risking an oversized window.
+func TestOllamaBuildRequestOmitsNumCtxWhenModelUnknown(t *testing.T) {
+	o, _ := NewOllama(OllamaConfig{})
+	body := o.buildRequest(Request{Model: "qwen3", ContextWindow: 32768})
+	// Options may exist for other fields, but NumCtx must stay zero.
+	if body.Options != nil {
+		assert.Equal(t, 0, body.Options.NumCtx)
+	}
+}
+
+// TestOllamaBuildRequestOmitsNumCtxWhenExceedsModelMax ensures we never send a
+// num_ctx larger than the model's training context.
+func TestOllamaBuildRequestOmitsNumCtxWhenExceedsModelMax(t *testing.T) {
+	o, _ := NewOllama(OllamaConfig{})
+	o.ctxCache.Store("qwen3", 8192) // model trained on 8K
+	body := o.buildRequest(Request{Model: "qwen3", ContextWindow: 32768})
+	if body.Options != nil {
+		assert.Equal(t, 0, body.Options.NumCtx)
+	}
+}
+
+// TestOllamaResolveContextWindow covers the loop-facing resolution contract.
+func TestOllamaResolveContextWindow(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model_info":{"general.architecture":"qwen2","qwen2.context_length":40960}}`))
+	}))
+	defer srv.Close()
+	o, err := NewOllama(OllamaConfig{BaseURL: srv.URL})
+	require.NoError(t, err)
+
+	// Unconfigured: uses the model's real context length from /api/show.
+	assert.Equal(t, 40960, o.ResolveContextWindow(context.Background(), "qwen3", 0))
+	// Cached on first call; a second resolution does not hit the server.
+	srv.Close()
+	assert.Equal(t, 40960, o.ResolveContextWindow(context.Background(), "qwen3", 0))
+
+	// Configured within the model max is honored.
+	o2, _ := NewOllama(OllamaConfig{BaseURL: "http://127.0.0.1:1"})
+	o2.ctxCache.Store("qwen3", 40960)
+	assert.Equal(t, 8192, o2.ResolveContextWindow(context.Background(), "qwen3", 8192))
+
+	// Configured above the model max is capped to the model max.
+	assert.Equal(t, 40960, o2.ResolveContextWindow(context.Background(), "qwen3", 131072))
+}
+
+// TestOllamaResolveContextWindowFallback covers the case where /api/show is
+// unavailable: an unconfigured request falls back to the static default.
+func TestOllamaResolveContextWindowFallback(t *testing.T) {
+	o, _ := NewOllama(OllamaConfig{BaseURL: "http://127.0.0.1:1"}) // unreachable
+	// Unconfigured and /api/show fails -> static default (no model spec match).
+	assert.Equal(t, DefaultContextWindow, o.ResolveContextWindow(context.Background(), "unknown-model", 0))
+	// Configured is still honored when /api/show fails (user knows their model).
+	assert.Equal(t, 2048, o.ResolveContextWindow(context.Background(), "unknown-model", 2048))
+}
+
+// TestOllamaFetchContextLength verifies the /api/show scan finds the
+// architecture-qualified context_length key regardless of architecture.
+func TestOllamaFetchContextLength(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model_info":{"general.architecture":"llama","llama.context_length":8192,"llama.block_count":32}}`))
+	}))
+	defer srv.Close()
+	o, _ := NewOllama(OllamaConfig{BaseURL: srv.URL})
+	assert.Equal(t, 8192, o.fetchContextLength(context.Background(), "llama3.2"))
+}
+
 func TestOllamaDataURLToBase64(t *testing.T) {
 	b64, ok := dataURLToBase64("data:image/png;base64,QUJD")
 	require.True(t, ok)

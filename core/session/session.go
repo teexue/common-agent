@@ -42,6 +42,13 @@ const MetadataKeyUsageCacheReadTokens = "usage.cache_read_tokens"
 const MetadataKeyUsageCacheCreationTokens = "usage.cache_creation_tokens"
 const MetadataKeyUsageContextWindow = "usage.context_window"
 
+// MetadataKeyUsageOutputTokens stores the real output token count of the most
+// recent single LLM request, mirroring MetadataKeyUsageInputTokens. The UI
+// reads it (together with the input key) to restore the token-usage indicator
+// after reloading a session with the latest request's usage rather than the
+// cumulative session total.
+const MetadataKeyUsageOutputTokens = "usage.output_tokens"
+
 // SourceKanban marks sessions created by kanban task runs.
 const SourceKanban = "kanban"
 
@@ -165,19 +172,21 @@ func (s *Session) SetMetadata(key, value string) {
 // SetLastUsage records the real provider token usage of the most recent LLM
 // request. msgCount must be the number of messages in the session at request
 // time (before any messages added after the response).
-func (s *Session) SetLastUsage(inputTokens, msgCount int) {
+func (s *Session) SetLastUsage(inputTokens, outputTokens, msgCount int) {
 	s.SetMetadata(MetadataKeyUsageInputTokens, strconv.Itoa(inputTokens))
+	s.SetMetadata(MetadataKeyUsageOutputTokens, strconv.Itoa(outputTokens))
 	s.SetMetadata(MetadataKeyUsageMsgCount, strconv.Itoa(msgCount))
 }
 
 // LastUsage returns the recorded real usage of the most recent LLM request.
-// Returns (0, 0) when no usage has been recorded (e.g. new sessions).
-func (s *Session) LastUsage() (inputTokens, msgCount int) {
+// Returns (0, 0, 0) when no usage has been recorded (e.g. new sessions).
+func (s *Session) LastUsage() (inputTokens, outputTokens, msgCount int) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	inputTokens, _ = strconv.Atoi(s.Metadata[MetadataKeyUsageInputTokens])
+	outputTokens, _ = strconv.Atoi(s.Metadata[MetadataKeyUsageOutputTokens])
 	msgCount, _ = strconv.Atoi(s.Metadata[MetadataKeyUsageMsgCount])
-	return inputTokens, msgCount
+	return inputTokens, outputTokens, msgCount
 }
 
 // ClearUsage removes recorded usage. Called after compaction so the next
@@ -186,6 +195,7 @@ func (s *Session) ClearUsage() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.Metadata, MetadataKeyUsageInputTokens)
+	delete(s.Metadata, MetadataKeyUsageOutputTokens)
 	delete(s.Metadata, MetadataKeyUsageMsgCount)
 	s.touch()
 }

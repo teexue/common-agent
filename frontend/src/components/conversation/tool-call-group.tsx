@@ -113,7 +113,7 @@ export function ToolCallGroup({
   const selectedTc = toolCalls.find((tc) => tc.id === selectedToolCallId)
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card">
+    <div data-chat="tool-group" className="overflow-hidden rounded-xl border border-border bg-card">
       <button
         className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/50"
         onClick={() => setExpanded((v) => !v)}

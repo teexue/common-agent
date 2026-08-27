@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { ActivityEntry } from "./activity-entry"
 import { InputBar, type ImageAttachment } from "./input-bar"
 import { SearchBar } from "./search-bar"
+import { StreamProgress } from "./stream-progress"
 import type { SessionTokenUsage } from "./token-usage-indicator"
 import { useAutoScroll } from "@/hooks/use-auto-scroll"
 import type { MessageSearch } from "@/hooks/use-message-search"
@@ -148,7 +149,7 @@ export function WorkspacePanel({
             {isEmpty ? (
               <EmptyState noAgent={noAgent} onCreateAgent={onCreateAgent} />
             ) : (
-              <div className="flex flex-col gap-5 p-5">
+              <div data-chat="message-list" className="flex flex-col gap-5 p-5">
                 {searchOpen && (
                   <div className="sticky top-0 z-10 -mx-5 bg-background px-5 py-2">
                     <SearchBar
@@ -161,6 +162,7 @@ export function WorkspacePanel({
                     />
                   </div>
                 )}
+                <StreamProgress active={isStreaming} />
                 {messages.map((entry, msgIndex) => {
                   const isMatch = matchedIndices.has(msgIndex)
                   const matchIdx = searchResults.findIndex(

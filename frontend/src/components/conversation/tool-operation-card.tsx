@@ -258,6 +258,7 @@ export function ToolOperationCard({
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded}>
       <div
+        data-chat="tool-card"
         className={cn(
           "rounded-xl border transition-all",
           needsApproval
@@ -267,8 +268,9 @@ export function ToolOperationCard({
               : "border-border bg-card hover:border-primary/15"
         )}
       >
-        <div className="flex items-center gap-2 px-3 py-2">
+        <div data-chat="tool-row" className="flex items-center gap-2 px-3 py-2">
           <CollapsibleTrigger
+            data-chat="tool-chevron"
             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             onClick={(e) => e.stopPropagation()}
           >
@@ -279,6 +281,7 @@ export function ToolOperationCard({
             )}
           </CollapsibleTrigger>
           <div
+            data-chat="tool-icon-box"
             className={cn(
               "flex h-6 w-6 shrink-0 items-center justify-center rounded-md",
               config.bg
@@ -287,6 +290,7 @@ export function ToolOperationCard({
             <StatusIcon status={toolCall.status} config={config} />
           </div>
           <span
+            data-chat="tool-name"
             className="cursor-pointer text-sm font-medium text-foreground hover:text-primary hover:underline"
             onClick={onSelect}
             title={toolCall.name}
@@ -294,17 +298,24 @@ export function ToolOperationCard({
             {toolDisplayName(toolCall.name, t)}
           </span>
           {inputSummary && (
-            <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+            <span
+              data-chat="tool-arg"
+              className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground"
+            >
               {inputSummary}
             </span>
           )}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
             {duration && (
-              <span className="font-mono text-[10px] text-muted-foreground">
+              <span
+                data-chat="tool-duration"
+                className="font-mono text-[10px] text-muted-foreground"
+              >
                 {duration}
               </span>
             )}
             <Badge
+              data-chat="tool-badge"
               variant="secondary"
               className={cn(
                 "rounded-full px-1.5 py-0 text-[10px]",

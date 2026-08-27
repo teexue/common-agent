@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 )
 
@@ -16,6 +17,7 @@ const (
 	defaultOllamaBaseURL = "http://localhost:11434"
 	ollamaModelsPath     = "/api/tags"
 	ollamaChatPath       = "/api/chat"
+	ollamaShowPath       = "/api/show"
 )
 
 // OllamaConfig configures a native Ollama provider (local or cloud).
@@ -52,6 +54,9 @@ type Ollama struct {
 	modelsPath string
 	vision     bool
 	keepAlive  string
+	// ctxCache memoizes each model's training context length (from /api/show)
+	// so num_ctx is only set when it cannot exceed the model's real limit.
+	ctxCache sync.Map
 }
 
 // NewOllama creates a native Ollama provider. APIKey may be empty for local use.
@@ -96,6 +101,7 @@ type ollamaRequest struct {
 
 type ollamaOptions struct {
 	NumPredict  int     `json:"num_predict,omitempty"`
+	NumCtx      int     `json:"num_ctx,omitempty"`
 	Temperature float64 `json:"temperature,omitempty"`
 }
 
@@ -181,8 +187,24 @@ func (o *Ollama) buildRequest(req Request) ollamaRequest {
 		Stream:   true,
 		Think:    ollamaThinkValue(o.thinking),
 	}
-	if req.MaxTokens > 0 {
-		out.Options = &ollamaOptions{NumPredict: EffectiveMaxOutput(req.Model, req.MaxTokens)}
+	// Ollama's runtime context window (num_ctx) defaults to 4096, which is
+	// usually far smaller than the effective window the loop assumes. Size
+	// Ollama's context to match so it does not silently truncate the prompt
+	// before compaction triggers. Only set num_ctx when we have confirmed
+	// (via /api/show) that it does not exceed the model's training context;
+	// an oversized num_ctx triggers Ollama's "requested context size too
+	// large for model" warning and can crash MoE models.
+	if req.MaxTokens > 0 || req.ContextWindow > 0 {
+		opts := ollamaOptions{}
+		if req.MaxTokens > 0 {
+			opts.NumPredict = EffectiveMaxOutput(req.Model, req.MaxTokens)
+		}
+		if req.ContextWindow > 0 {
+			if mx := o.cachedContextLength(req.Model); mx > 0 && req.ContextWindow <= mx {
+				opts.NumCtx = req.ContextWindow
+			}
+		}
+		out.Options = &opts
 	}
 	if o.keepAlive != "" {
 		out.KeepAlive = o.keepAlive
@@ -354,6 +376,99 @@ func (o *Ollama) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
 	// Stream ended without an explicit done event; signal completion so the
 	// loop does not wait forever.
 	SendChunk(ctx, ch, Chunk{Done: true})
+}
+
+// ollamaShowResponse is the shape of POST /api/show. ModelInfo is a flat map
+// keyed by architecture-qualified names (e.g. "llama.context_length",
+// "qwen2.context_length"); we scan for any "*.context_length" entry to find
+// the model's training context length regardless of architecture.
+type ollamaShowResponse struct {
+	ModelInfo map[string]any `json:"model_info"`
+}
+
+// cachedContextLength returns the model's memoized training context length,
+// or 0 when unknown (no /api/show has resolved it yet).
+func (o *Ollama) cachedContextLength(model string) int {
+	if v, ok := o.ctxCache.Load(model); ok {
+		if n, _ := v.(int); n > 0 {
+			return n
+		}
+	}
+	return 0
+}
+
+// contextLength returns the model's training context length, fetching it from
+// /api/show once per model and memoizing the result. Returns 0 on any failure.
+func (o *Ollama) contextLength(ctx context.Context, model string) int {
+	if n := o.cachedContextLength(model); n > 0 {
+		return n
+	}
+	n := o.fetchContextLength(ctx, model)
+	if n > 0 {
+		o.ctxCache.Store(model, n)
+	}
+	return n
+}
+
+func (o *Ollama) fetchContextLength(ctx context.Context, model string) int {
+	body, err := json.Marshal(map[string]string{"model": model})
+	if err != nil {
+		return 0
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, o.baseURL+ollamaShowPath, bytes.NewReader(body))
+	if err != nil {
+		return 0
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
+	if o.apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+o.apiKey)
+	}
+	resp, err := o.client.Do(httpReq)
+	if err != nil {
+		return 0
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return 0
+	}
+	var out ollamaShowResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return 0
+	}
+	for k, v := range out.ModelInfo {
+		if !strings.HasSuffix(k, ".context_length") {
+			continue
+		}
+		switch n := v.(type) {
+		case float64:
+			return int(n)
+		case json.Number:
+			if i, err := n.Int64(); err == nil {
+				return int(i)
+			}
+		}
+	}
+	return 0
+}
+
+// ResolveContextWindow implements provider.ContextResolver. It reads the
+// model's real context length from /api/show so the loop's compaction
+// threshold and Ollama's num_ctx agree, instead of assuming the 128K default
+// which can exceed a small model's training context. A user-configured window
+// is honored but capped at the model's real maximum.
+func (o *Ollama) ResolveContextWindow(ctx context.Context, model string, configured int) int {
+	max := o.contextLength(ctx, model)
+	if configured > 0 {
+		if max > 0 && configured > max {
+			return max
+		}
+		return configured
+	}
+	if max > 0 {
+		return max
+	}
+	return EffectiveContextWindow(model, 0)
 }
 
 // ListModels fetches available models from GET /api/tags.

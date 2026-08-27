@@ -127,19 +127,19 @@ func TestConcurrentAccess(t *testing.T) {
 
 func TestLastUsage(t *testing.T) {
 	s := session.New("demo")
-	in, n := s.LastUsage()
-	if in != 0 || n != 0 {
-		t.Fatalf("initial usage = %d/%d, want 0/0", in, n)
+	in, out, n := s.LastUsage()
+	if in != 0 || out != 0 || n != 0 {
+		t.Fatalf("initial usage = %d/%d/%d, want 0/0/0", in, out, n)
 	}
-	s.SetLastUsage(12345, 42)
-	in, n = s.LastUsage()
-	if in != 12345 || n != 42 {
-		t.Fatalf("usage = %d/%d, want 12345/42", in, n)
+	s.SetLastUsage(12345, 678, 42)
+	in, out, n = s.LastUsage()
+	if in != 12345 || out != 678 || n != 42 {
+		t.Fatalf("usage = %d/%d/%d, want 12345/678/42", in, out, n)
 	}
 	s.ClearUsage()
-	in, n = s.LastUsage()
-	if in != 0 || n != 0 {
-		t.Fatalf("after clear usage = %d/%d, want 0/0", in, n)
+	in, out, n = s.LastUsage()
+	if in != 0 || out != 0 || n != 0 {
+		t.Fatalf("after clear usage = %d/%d/%d, want 0/0/0", in, out, n)
 	}
 }
 

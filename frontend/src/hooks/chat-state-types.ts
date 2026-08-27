@@ -7,7 +7,7 @@ export interface ChatState {
   isStreaming: boolean
   error: string | null
   sessionId: string | null
-  /** Cumulative token usage across every run in the current session. */
+  /** Token usage of the most recent LLM request (overwritten each run). */
   inputTokens: number
   outputTokens: number
   /** Cumulative prompt cache hits/writes across the session (0 until reported). */

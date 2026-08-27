@@ -21,19 +21,25 @@ function UserMessage({ entry }: { entry: ConversationEntry }) {
   const { t } = useTranslation()
   return (
     <div className="flex items-start gap-3 px-1">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+      <div
+        data-chat="avatar"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"
+      >
         <User className="h-3.5 w-3.5" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div data-chat="user-meta" className="flex items-center gap-2">
           <span className="text-xs font-medium text-foreground">
             {t("common.you")}
           </span>
-          <span className="text-[11px] text-muted-foreground">
+          <span data-chat="meta-time" className="text-[11px] text-muted-foreground">
             {formatTimestamp(entry.timestamp)}
           </span>
         </div>
-        <p className="mt-1 rounded-xl bg-muted/50 px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+        <p
+          data-chat="user-bubble"
+          className="mt-1 rounded-xl bg-muted/50 px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-foreground"
+        >
           {entry.content}
         </p>
       </div>
@@ -50,9 +56,9 @@ function AssistantHeader({
 }) {
   const { t } = useTranslation()
   return (
-    <div className="flex items-center gap-2">
+    <div data-chat="assistant-header" className="flex items-center gap-2">
       <span className="text-xs font-medium text-foreground">Agent</span>
-      <span className="text-[11px] text-muted-foreground">
+      <span data-chat="meta-time" className="text-[11px] text-muted-foreground">
         {formatTimestamp(entry.timestamp)}
       </span>
       {isActive && (
@@ -62,7 +68,7 @@ function AssistantHeader({
         </span>
       )}
       {entry.usage && !isActive && (
-        <span className="text-[11px] text-muted-foreground/70">
+        <span data-chat="meta-usage" className="text-[11px] text-muted-foreground/70">
           {entry.usage.inputTokens.toLocaleString()} in /{" "}
           {entry.usage.outputTokens.toLocaleString()} out
         </span>
@@ -88,13 +94,18 @@ export function ActivityEntry({
   const hasThinking = !!entry.reasoningContent
   const hasToolCalls = entry.toolCalls && entry.toolCalls.length > 0
   const hasContent = !!entry.content
+  const isWaiting =
+    !!isActive && !hasContent && !hasThinking && !hasToolCalls
 
   return (
     <div className="flex items-start gap-3 px-1">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <div
+        data-chat="avatar"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+      >
         <Bot className="h-3.5 w-3.5" />
       </div>
-      <div className="min-w-0 flex-1">
+      <div data-chat="assistant-body" className="min-w-0 flex-1">
         <AssistantHeader entry={entry} isActive={isActive} />
 
         {hasThinking && (
@@ -122,6 +133,7 @@ export function ActivityEntry({
 
         {hasContent && (
           <div
+            data-chat="assistant-content"
             className={cn(
               "mt-2.5 rounded-xl border border-border bg-card p-3.5 text-sm leading-relaxed",
               isActive && "border-primary/20"
@@ -131,6 +143,14 @@ export function ActivityEntry({
               content={entry.content}
               isStreaming={!!isActive && !hasToolCalls}
             />
+          </div>
+        )}
+
+        {isWaiting && (
+          <div className="mt-2.5 flex flex-col gap-1.5" aria-hidden>
+            <div className="shimmer-line" />
+            <div className="shimmer-line" />
+            <div className="shimmer-line" />
           </div>
         )}
       </div>
