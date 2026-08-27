@@ -1,8 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Bot, ChevronDown, ChevronRight, Minimize2, User } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { formatTimestamp } from "@/lib/format"
+import { ChevronDown, ChevronRight, Minimize2 } from "lucide-react"
 import { MarkdownRenderer } from "@/components/shared/markdown-renderer"
 import { ThinkingBlock } from "./thinking-block"
 import { ToolCallGroup } from "./tool-call-group"
@@ -18,62 +16,20 @@ interface ActivityEntryProps {
 }
 
 function UserMessage({ entry }: { entry: ConversationEntry }) {
-  const { t } = useTranslation()
   return (
-    <div className="flex items-start gap-3 px-1">
-      <div
-        data-chat="avatar"
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"
-      >
-        <User className="h-3.5 w-3.5" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div data-chat="user-meta" className="flex items-center gap-2">
-          <span className="text-xs font-medium text-foreground">
-            {t("common.you")}
-          </span>
-          <span data-chat="meta-time" className="text-[11px] text-muted-foreground">
-            {formatTimestamp(entry.timestamp)}
-          </span>
-        </div>
-        <p
-          data-chat="user-bubble"
-          className="mt-1 rounded-xl bg-muted/50 px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-foreground"
-        >
-          {entry.content}
-        </p>
-      </div>
-    </div>
+    <p className="border-l-2 border-primary/35 py-0.5 pl-3 text-[13px] leading-relaxed whitespace-pre-wrap text-foreground">
+      {entry.content}
+    </p>
   )
 }
 
-function AssistantHeader({
-  entry,
-  isActive,
-}: {
-  entry: ConversationEntry
-  isActive?: boolean
-}) {
+function GeneratingPulse() {
   const { t } = useTranslation()
   return (
-    <div data-chat="assistant-header" className="flex items-center gap-2">
-      <span className="text-xs font-medium text-foreground">Agent</span>
-      <span data-chat="meta-time" className="text-[11px] text-muted-foreground">
-        {formatTimestamp(entry.timestamp)}
-      </span>
-      {isActive && (
-        <span className="flex items-center gap-1 text-[11px] text-primary">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />{" "}
-          {t("status.generating")}
-        </span>
-      )}
-      {entry.usage && !isActive && (
-        <span data-chat="meta-usage" className="text-[11px] text-muted-foreground/70">
-          {entry.usage.inputTokens.toLocaleString()} in /{" "}
-          {entry.usage.outputTokens.toLocaleString()} out
-        </span>
-      )}
-    </div>
+    <span className="flex items-center gap-1 text-[11px] text-primary">
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+      {t("status.generating")}
+    </span>
   )
 }
 
@@ -98,62 +54,44 @@ export function ActivityEntry({
     !!isActive && !hasContent && !hasThinking && !hasToolCalls
 
   return (
-    <div className="flex items-start gap-3 px-1">
-      <div
-        data-chat="avatar"
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
-      >
-        <Bot className="h-3.5 w-3.5" />
-      </div>
-      <div data-chat="assistant-body" className="min-w-0 flex-1">
-        <AssistantHeader entry={entry} isActive={isActive} />
+    <div className="flex flex-col gap-1.5">
+      {isActive && <GeneratingPulse />}
 
-        {hasThinking && (
-          <div className="mt-2">
-            <ThinkingBlock
-              content={entry.reasoningContent!}
-              isStreaming={!!isActive}
-              isExpanded={thinkingExpanded}
-              onToggle={() => setThinkingExpanded((v) => !v)}
-            />
-          </div>
-        )}
+      {hasThinking && (
+        <ThinkingBlock
+          content={entry.reasoningContent!}
+          isStreaming={!!isActive}
+          isExpanded={thinkingExpanded}
+          onToggle={() => setThinkingExpanded((v) => !v)}
+        />
+      )}
 
-        {hasToolCalls && (
-          <div className={cn(hasThinking || hasContent ? "mt-2" : "")}>
-            <ToolCallGroup
-              toolCalls={entry.toolCalls!}
-              selectedToolCallId={selectedToolCallId}
-              onSelectToolCall={onSelectToolCall}
-              onApproveTool={onApproveTool}
-              onDenyTool={onDenyTool}
-            />
-          </div>
-        )}
+      {hasToolCalls && (
+        <ToolCallGroup
+          toolCalls={entry.toolCalls!}
+          selectedToolCallId={selectedToolCallId}
+          onSelectToolCall={onSelectToolCall}
+          onApproveTool={onApproveTool}
+          onDenyTool={onDenyTool}
+        />
+      )}
 
-        {hasContent && (
-          <div
-            data-chat="assistant-content"
-            className={cn(
-              "mt-2.5 rounded-xl border border-border bg-card p-3.5 text-sm leading-relaxed",
-              isActive && "border-primary/20"
-            )}
-          >
-            <MarkdownRenderer
-              content={entry.content}
-              isStreaming={!!isActive && !hasToolCalls}
-            />
-          </div>
-        )}
+      {hasContent && (
+        <div className="text-[13px] leading-relaxed">
+          <MarkdownRenderer
+            content={entry.content}
+            isStreaming={!!isActive && !hasToolCalls}
+          />
+        </div>
+      )}
 
-        {isWaiting && (
-          <div className="mt-2.5 flex flex-col gap-1.5" aria-hidden>
-            <div className="shimmer-line" />
-            <div className="shimmer-line" />
-            <div className="shimmer-line" />
-          </div>
-        )}
-      </div>
+      {isWaiting && (
+        <div className="flex flex-col gap-1.5" aria-hidden>
+          <div className="shimmer-line" />
+          <div className="shimmer-line" />
+          <div className="shimmer-line" />
+        </div>
+      )}
     </div>
   )
 }
@@ -162,7 +100,7 @@ function CompactionBanner({ summary }: { summary: string }) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   return (
-    <div className="mx-1 rounded-xl border border-warning/30 bg-warning/10">
+    <div className="rounded-lg border border-warning/30 bg-warning/10">
       <button
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-center gap-2 px-3 py-2 text-left"

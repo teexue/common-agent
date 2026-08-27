@@ -1,12 +1,8 @@
 import { useTranslation } from "react-i18next"
 import {
-  Check,
   ChevronDown,
-  LayoutTemplate,
   Lock,
   Moon,
-  PanelRightClose,
-  PanelRightOpen,
   Sun,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -14,10 +10,7 @@ import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -27,7 +20,6 @@ import {
 } from "@/components/ui/tooltip"
 import { StatusIndicator } from "@/components/shared/status-indicator"
 import { HealthIndicator } from "@/components/monitoring/health-indicator"
-import type { ChatStyle } from "@/components/theme-provider"
 import type { AgentInfo, StreamStatus } from "@/types/agent"
 
 interface TopBarProps {
@@ -36,12 +28,8 @@ interface TopBarProps {
   agentLocked?: boolean
   onSelectAgent?: (id: string) => void
   status: StreamStatus
-  artifactOpen: boolean
-  onToggleArtifact: () => void
   theme: string
   onToggleTheme: () => void
-  chatStyle: ChatStyle
-  onSetChatStyle: (style: ChatStyle) => void
   /** actions rendered in the right-side button group (e.g. conversation search/export) */
   actions?: React.ReactNode
 }
@@ -184,19 +172,11 @@ export function TopBar({
   agentLocked = false,
   onSelectAgent,
   status,
-  artifactOpen,
-  onToggleArtifact,
   theme,
   onToggleTheme,
-  chatStyle,
-  onSetChatStyle,
   actions,
 }: TopBarProps) {
   const { t } = useTranslation()
-  const styleOptions: Array<{ value: ChatStyle; label: string }> = [
-    { value: "agentic", label: t("layout.chatStyleAgentic") },
-    { value: "classic", label: t("layout.chatStyleClassic") },
-  ]
   return (
     <header className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-background px-4">
       <div className="flex items-center gap-2.5">
@@ -212,58 +192,11 @@ export function TopBar({
       <div className="flex items-center gap-0.5">
         {actions}
         <HealthIndicator />
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="h-7 w-7 rounded-lg"
-              />
-            }
-          >
-            <LayoutTemplate className="h-3.5 w-3.5 text-muted-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44 rounded-xl">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-[10px] tracking-wider text-muted-foreground uppercase">
-                {t("layout.chatStyle")}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {styleOptions.map((o) => (
-                <DropdownMenuItem
-                  key={o.value}
-                  onClick={() => onSetChatStyle(o.value)}
-                  className="gap-2 text-xs"
-                >
-                  <span className="flex-1">{o.label}</span>
-                  {chatStyle === o.value && (
-                    <Check className="h-3.5 w-3.5 text-primary" />
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
         <TopBarButton tooltip={t("layout.toggleTheme")} onClick={onToggleTheme}>
           {theme === "dark" ? (
             <Sun className="h-3.5 w-3.5 text-muted-foreground" />
           ) : (
             <Moon className="h-3.5 w-3.5 text-muted-foreground" />
-          )}
-        </TopBarButton>
-        <TopBarButton
-          tooltip={
-            artifactOpen
-              ? t("layout.closeInspector")
-              : t("layout.openInspector")
-          }
-          onClick={onToggleArtifact}
-        >
-          {artifactOpen ? (
-            <PanelRightClose className="h-3.5 w-3.5 text-muted-foreground" />
-          ) : (
-            <PanelRightOpen className="h-3.5 w-3.5 text-muted-foreground" />
           )}
         </TopBarButton>
       </div>

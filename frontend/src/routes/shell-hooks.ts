@@ -100,10 +100,7 @@ export function shellLayoutProps(
       maxTurns: 10,
     },
     status: "idle" as const,
-    inspectorOpen: false,
-    onToggleInspector: () => {},
     theme,
     onToggleTheme: () => setTheme(theme === "dark" ? "light" : "dark"),
-    showInspector: false as const,
   }
 }

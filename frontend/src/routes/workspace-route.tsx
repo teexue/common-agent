@@ -6,7 +6,6 @@ import { AppLayout } from "@/components/layout/app-layout"
 import { WorkspacePanel } from "@/components/conversation/workspace-panel"
 import { ConversationActions } from "@/components/conversation/conversation-actions"
 import { SessionWorkdir } from "@/components/conversation/session-workdir"
-import { InspectorPanel } from "@/components/inspector/inspector-panel"
 import { useChat } from "@/hooks/use-chat"
 import { useAgentManager } from "@/hooks/use-agent-manager"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
@@ -19,8 +18,6 @@ import {
   updateSessionWorkdir,
 } from "@/lib/api"
 import type {
-  ConversationEntry,
-  ToolCallEntry,
   StreamStatus,
   ProviderInfo,
 } from "@/types/agent"
@@ -70,7 +67,7 @@ function useSessions(chat: ReturnType<typeof useChat>) {
 
 export function WorkspaceRoute() {
   const chat = useChat()
-  const { theme, setTheme, chatStyle, setChatStyle } = useTheme()
+  const { theme, setTheme } = useTheme()
   const location = useLocation()
   const navigate = useNavigate()
   const sessMgr = useSessions(chat)
@@ -84,7 +81,6 @@ export function WorkspaceRoute() {
     null
   )
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [inspectorOpen, setInspectorOpen] = useState(true)
   const [replaySessionId, setReplaySessionId] = useState<string | null>(null)
   const [sessionWorkDir, setSessionWorkDir] = useState<string | null>(null)
   const globalWorkDir = localStorage.getItem("workDir") || ""
@@ -160,9 +156,8 @@ export function WorkspaceRoute() {
   const handleSelectToolCall = useCallback(
     (id: string) => {
       setSelectedToolCallId((p) => (p === id ? null : id))
-      if (!inspectorOpen) setInspectorOpen(true)
     },
-    [inspectorOpen]
+    []
   )
   const handleSelectAgent = useCallback(
     (id: string) => {
@@ -232,22 +227,8 @@ export function WorkspaceRoute() {
 
   useKeyboardShortcuts({
     onToggleSidebar: () => setSidebarCollapsed((v) => !v),
-    onClosePanel: () => {
-      if (inspectorOpen && selectedToolCallId) setSelectedToolCallId(null)
-      else if (inspectorOpen) setInspectorOpen(false)
-    },
+    onClosePanel: () => setSelectedToolCallId(null),
   })
-
-  const selectedToolCall: ToolCallEntry | null = selectedToolCallId
-    ? (chat.messages
-        .flatMap((m) => m.toolCalls ?? [])
-        .find((tc) => tc.id === selectedToolCallId) ?? null)
-    : null
-  const selectedEntry: ConversationEntry | null = selectedToolCallId
-    ? (chat.messages.find((m) =>
-        m.toolCalls?.some((tc) => tc.id === selectedToolCallId)
-      ) ?? null)
-    : null
 
   // Session-wide token totals (accumulated in chat state) against the current
   // agent's effective context window (from the agent list, with the streamed
@@ -289,18 +270,8 @@ export function WorkspaceRoute() {
         agentLocked={agentLocked}
         onSelectAgent={handleSelectAgent}
         status={status}
-        inspectorOpen={inspectorOpen}
-        onToggleInspector={() => {
-          setInspectorOpen((v) => {
-            if (v) setSelectedToolCallId(null)
-            return !v
-          })
-        }}
         theme={theme}
         onToggleTheme={handleToggleTheme}
-        chatStyle={chatStyle}
-        onSetChatStyle={setChatStyle}
-        showInspector
         topBarActions={
           <ConversationActions
             searchOpen={search.searchOpen}
@@ -335,9 +306,6 @@ export function WorkspaceRoute() {
             }
             tokenUsage={tokenUsage}
           />
-        }
-        rightPanel={
-          <InspectorPanel entry={selectedEntry} toolCall={selectedToolCall} />
         }
       />
       <AppDialogs

@@ -49,7 +49,7 @@ const MD_COMPONENTS = {
     children?: React.ReactNode
   }) => (
     <div className="my-2 overflow-x-auto rounded-xl border border-border">
-      <table className="w-full border-collapse text-sm" {...p}>
+      <table className="w-full border-collapse text-[13px]" {...p}>
         {children}
       </table>
     </div>
@@ -200,7 +200,7 @@ export function MarkdownRenderer({
   isStreaming?: boolean
 }) {
   return (
-    <div className="space-y-2 text-sm leading-relaxed">
+    <div className="space-y-2 text-[13px] leading-relaxed">
       <Markdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
         {content}
       </Markdown>

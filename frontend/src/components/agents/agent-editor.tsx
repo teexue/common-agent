@@ -52,7 +52,10 @@ function agentDetailToForm(d: AgentDetail): AgentFormData {
     maxTokens: d.max_tokens ?? 0,
     execMode: (d.tool_execution?.Mode as "parallel" | "serial") || "parallel",
     maxParallel: d.tool_execution?.MaxParallel || 4,
-    autoApprove: d.permissions?.auto_approve || [],
+    autoApprove:
+      d.permissions == null
+        ? d.tools || []
+        : d.permissions.auto_approve || [],
     alwaysDeny: d.permissions?.always_deny || [],
     mcpServers: (d.mcp_servers ?? []).map(mcpConfigToForm),
     knowledgeBases: d.knowledge?.bases ?? [],

@@ -48,10 +48,7 @@ export function ThinkingBlock({
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <div
-          data-chat="thinking"
-          className="mt-1 ml-3 border-l-2 border-primary/15 pl-3"
-        >
+        <div className="mt-1 ml-3 border-l-2 border-primary/15 pl-3">
           <p className="text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground">
             {content}
           </p>

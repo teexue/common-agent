@@ -1,10 +1,4 @@
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable"
 import { BackgroundLayer } from "@/components/background/background-layer"
-import { useTheme, type ChatStyle } from "@/components/theme-provider"
 import { TopBar } from "./top-bar"
 import { Sidebar } from "./sidebar"
 import type { AgentInfo, SessionMeta, StreamStatus } from "@/types/agent"
@@ -28,42 +22,25 @@ interface AppLayoutProps {
   agentLocked?: boolean
   onSelectAgent?: (id: string) => void
   status: StreamStatus
-  inspectorOpen: boolean
-  onToggleInspector: () => void
   theme: string
   onToggleTheme: () => void
-  /** Optional; falls back to useTheme() when omitted. */
-  chatStyle?: ChatStyle
-  /** Optional; falls back to useTheme() when omitted. */
-  onSetChatStyle?: (style: ChatStyle) => void
-  showInspector?: boolean
   leftPanel: React.ReactNode
-  rightPanel?: React.ReactNode
   /** actions rendered in the TopBar right-side button group */
   topBarActions?: React.ReactNode
 }
 
 export function AppLayout({
-  inspectorOpen,
-  showInspector = true,
   leftPanel,
-  rightPanel,
   topBarActions,
   agent,
   agents,
   agentLocked,
   onSelectAgent,
   status,
-  onToggleInspector,
   theme,
   onToggleTheme,
-  chatStyle,
-  onSetChatStyle,
   ...sidebarProps
 }: AppLayoutProps) {
-  const themeCtx = useTheme()
-  const resolvedChatStyle = chatStyle ?? themeCtx.chatStyle
-  const resolvedSetChatStyle = onSetChatStyle ?? themeCtx.setChatStyle
   return (
     <div className="flex h-svh overflow-hidden bg-background">
       <BackgroundLayer />
@@ -75,52 +52,17 @@ export function AppLayout({
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {showInspector && (
-          <TopBar
-            agent={agent}
-            agents={agents}
-            agentLocked={agentLocked}
-            onSelectAgent={onSelectAgent}
-            status={status}
-            artifactOpen={inspectorOpen}
-            onToggleArtifact={onToggleInspector}
-            theme={theme}
-            onToggleTheme={onToggleTheme}
-            chatStyle={resolvedChatStyle}
-            onSetChatStyle={resolvedSetChatStyle}
-            actions={topBarActions}
-          />
-        )}
-
-        {showInspector ? (
-          <ResizablePanelGroup
-            key={inspectorOpen ? "inspector-open" : "inspector-closed"}
-            orientation="horizontal"
-            className="flex-1"
-          >
-            <ResizablePanel
-              defaultSize={inspectorOpen ? 74 : 100}
-              minSize={35}
-              className="bg-background"
-            >
-              {leftPanel}
-            </ResizablePanel>
-            {inspectorOpen && rightPanel && (
-              <>
-                <ResizableHandle className="w-1 bg-border transition-colors hover:bg-primary/25" />
-                <ResizablePanel
-                  defaultSize={26}
-                  minSize={20}
-                  className="border-l border-border bg-background"
-                >
-                  {rightPanel}
-                </ResizablePanel>
-              </>
-            )}
-          </ResizablePanelGroup>
-        ) : (
-          <div className="flex-1 overflow-hidden">{leftPanel}</div>
-        )}
+        <TopBar
+          agent={agent}
+          agents={agents}
+          agentLocked={agentLocked}
+          onSelectAgent={onSelectAgent}
+          status={status}
+          theme={theme}
+          onToggleTheme={onToggleTheme}
+          actions={topBarActions}
+        />
+        <div className="flex-1 overflow-hidden">{leftPanel}</div>
       </div>
     </div>
   )

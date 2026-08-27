@@ -71,6 +71,33 @@ version: 1
 	}
 }
 
+// TestLoadEmptyPermissions verifies that a permissions block with empty
+// auto_approve/always_deny lists parses to a non-nil *Permissions, so the
+// backend uses AgentPolicy (confirm-by-default) rather than AllowAll.
+func TestLoadEmptyPermissions(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "perm.yaml")
+	content := `name: perm
+provider: test
+model: gpt-4
+system_prompt: hello
+tools: [echo, read_file]
+permissions:
+  auto_approve: []
+  always_deny: []
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a, err := agent.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if a.Permissions == nil {
+		t.Fatal("expected Permissions non-nil for empty permissions block, got nil (would fall back to AllowAll)")
+	}
+}
+
 func TestSerializeToolExecution(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "serial.yaml")

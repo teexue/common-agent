@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronRight,
   Check,
@@ -8,10 +9,17 @@ import {
   Loader2,
   Wrench,
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
 import { truncate } from "@/lib/format"
 import { toolDisplayName } from "@/lib/tool-i18n"
 import { ToolOperationCard } from "./tool-operation-card"
+import { businessFailed } from "./tool-summary"
 import type { ToolCallEntry } from "@/types/agent"
 import type { TFunction } from "i18next"
 
@@ -21,6 +29,26 @@ interface ToolCallGroupProps {
   onSelectToolCall: (id: string) => void
   onApproveTool?: (approvalId: string) => void
   onDenyTool?: (approvalId: string) => void
+}
+
+function isFailure(tc: ToolCallEntry): boolean {
+  return (
+    tc.status === "error" ||
+    tc.status === "denied" ||
+    (tc.status === "completed" && businessFailed(tc))
+  )
+}
+
+function isSuccess(tc: ToolCallEntry): boolean {
+  return tc.status === "completed" && !businessFailed(tc)
+}
+
+function isTerminal(tc: ToolCallEntry): boolean {
+  return (
+    tc.status === "completed" ||
+    tc.status === "error" ||
+    tc.status === "denied"
+  )
 }
 
 function getGroupStatus(
@@ -33,38 +61,22 @@ function getGroupStatus(
   const hasPendingApproval = toolCalls.some(
     (tc) => tc.status === "pending_approval"
   )
-  const hasError = toolCalls.some((tc) => tc.status === "error")
-  const allCompleted = toolCalls.every((tc) => tc.status === "completed")
+  const hasFailure = toolCalls.some(isFailure)
+  const hasSuccess = toolCalls.some(isSuccess)
+  const allTerminal = toolCalls.every(isTerminal)
 
   if (hasRunning)
-    return {
-      label: t("conversation.groupRunning"),
-      icon: Loader2,
-      color: "text-primary",
-    }
+    return { label: t("conversation.groupRunning"), icon: Loader2, color: "text-primary" }
   if (hasPendingApproval)
-    return {
-      label: t("conversation.groupPendingApproval"),
-      icon: Wrench,
-      color: "text-warning",
-    }
-  if (hasError)
-    return {
-      label: t("conversation.groupError"),
-      icon: X,
-      color: "text-destructive",
-    }
-  if (allCompleted)
-    return {
-      label: t("conversation.groupAllDone"),
-      icon: Check,
-      color: "text-success",
-    }
-  return {
-    label: t("conversation.groupWaiting"),
-    icon: Wrench,
-    color: "text-muted-foreground",
+    return { label: t("conversation.groupPendingApproval"), icon: Wrench, color: "text-warning" }
+  if (allTerminal) {
+    if (hasFailure && hasSuccess)
+      return { label: t("conversation.groupPartialFailure"), icon: AlertTriangle, color: "text-warning" }
+    if (hasFailure)
+      return { label: t("status.failed"), icon: X, color: "text-destructive" }
+    return { label: t("status.success"), icon: Check, color: "text-success" }
   }
+  return { label: t("conversation.groupWaiting"), icon: Wrench, color: "text-muted-foreground" }
 }
 
 function formatToolSummary(toolCalls: ToolCallEntry[], t: TFunction): string {
@@ -110,45 +122,42 @@ export function ToolCallGroup({
 
   const status = getGroupStatus(toolCalls, t)
   const StatusIcon = status.icon
-  const selectedTc = toolCalls.find((tc) => tc.id === selectedToolCallId)
 
   return (
-    <div data-chat="tool-group" className="overflow-hidden rounded-xl border border-border bg-card">
-      <button
-        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/50"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <div className="flex h-5 w-5 shrink-0 items-center justify-center">
-          {expanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-          )}
-        </div>
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10">
-          <StatusIcon
-            className={cn(
-              "h-3.5 w-3.5",
-              status.color,
-              status.icon === Loader2 && "animate-spin"
-            )}
+    <Collapsible open={expanded} onOpenChange={setExpanded}>
+      <CollapsibleTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto w-full justify-start gap-1.5 rounded-lg px-2 py-1 text-left font-mono text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
           />
-        </div>
-        <div className="min-w-0 flex-1">
-          <span className="text-sm font-medium text-foreground">
-            {t("conversation.toolCallsCount", { count: toolCalls.length })}
-          </span>
-          <span className="ml-2 truncate text-xs text-muted-foreground">
-            {formatToolSummary(toolCalls, t)}
-          </span>
-        </div>
-        <span className={cn("text-xs font-medium", status.color)}>
+        }
+      >
+        <StatusIcon
+          className={cn(
+            "h-3 w-3",
+            status.color,
+            status.icon === Loader2 && "animate-spin"
+          )}
+        />
+        {expanded ? (
+          <ChevronDown className="h-3 w-3" />
+        ) : (
+          <ChevronRight className="h-3 w-3" />
+        )}
+        <span className="shrink-0 text-foreground">
+          {t("conversation.toolCallsCount", { count: toolCalls.length })}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-left text-muted-foreground">
+          {formatToolSummary(toolCalls, t)}
+        </span>
+        <span className={cn("shrink-0 text-[10px]", status.color)}>
           {status.label}
         </span>
-      </button>
-
-      {expanded && (
-        <div className="flex flex-col gap-1.5 border-t border-border px-2 py-1.5">
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="ml-5 flex flex-col gap-0.5 border-l-2 border-primary/15 pl-3">
           {toolCalls.map((tc) => (
             <ToolOperationCard
               key={tc.id}
@@ -160,19 +169,7 @@ export function ToolCallGroup({
             />
           ))}
         </div>
-      )}
-
-      {!expanded && selectedTc && (
-        <div className="border-t border-primary/20 px-2 py-1.5">
-          <ToolOperationCard
-            toolCall={selectedTc}
-            isSelected={true}
-            onSelect={() => onSelectToolCall(selectedTc.id)}
-            onApprove={onApproveTool}
-            onDeny={onDenyTool}
-          />
-        </div>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }

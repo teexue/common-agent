@@ -57,7 +57,14 @@ export function ToolsTab({
           alwaysDeny: prev.alwaysDeny.filter((x) => x !== name),
         }
       }
-      return { ...prev, tools: [...prev.tools, name] }
+      // Newly selected tools default to auto-approve so fresh agents behave
+      // as AllowAll (matching the backend default for absent permissions).
+      // Users can switch a tool to "confirm" or "deny" explicitly.
+      return {
+        ...prev,
+        tools: [...prev.tools, name],
+        autoApprove: [...prev.autoApprove, name],
+      }
     })
   }
 
@@ -86,7 +93,13 @@ export function ToolsTab({
       // Select all filtered tools that aren't already selected.
       const have = new Set(prev.tools)
       const add = filteredNames.filter((n) => !have.has(n))
-      return { ...prev, tools: [...prev.tools, ...add] }
+      const haveAuto = new Set(prev.autoApprove)
+      const addAuto = add.filter((n) => !haveAuto.has(n))
+      return {
+        ...prev,
+        tools: [...prev.tools, ...add],
+        autoApprove: [...prev.autoApprove, ...addAuto],
+      }
     })
   }
 

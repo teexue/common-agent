@@ -186,19 +186,28 @@ export function formDataToYaml(form: AgentFormData): string {
   lines.push(`  mode: ${form.execMode}`)
   lines.push(`  max_parallel: ${form.maxParallel}`)
 
-  if (form.autoApprove.length > 0 || form.alwaysDeny.length > 0) {
+  // Emit the permissions block whenever the user wants any tool to require
+  // confirmation or be denied — i.e. whenever NOT every selected tool is
+  // auto-approved. An absent permissions block means AllowAll on the backend,
+  // so "all confirm" must persist as an explicit (possibly empty-list) block.
+  const hasConfirm = form.tools.some((t) => !form.autoApprove.includes(t))
+  if (form.alwaysDeny.length > 0 || hasConfirm) {
     lines.push(`permissions:`)
     if (form.autoApprove.length > 0) {
       lines.push(`  auto_approve:`)
       for (const t of form.autoApprove) {
         lines.push(`    - ${t}`)
       }
+    } else {
+      lines.push(`  auto_approve: []`)
     }
     if (form.alwaysDeny.length > 0) {
       lines.push(`  always_deny:`)
       for (const t of form.alwaysDeny) {
         lines.push(`    - ${t}`)
       }
+    } else {
+      lines.push(`  always_deny: []`)
     }
   }
 
