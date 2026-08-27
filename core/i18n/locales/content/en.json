@@ -1,5 +1,5 @@
 {
-  "cli.usage.main": "Usage:\n  agent-server config init              Interactive setup for ~/.common-agent\n  agent-server config set provider ...  Configure a provider from the CLI\n  agent-server config set-key ENV KEY   Save an API key\n  agent-server config show              Show current configuration\n\n  agent-server chat                     Interactive terminal chat\n  agent-server run --prompt \"hello\"     One-shot chat (human-readable by default)\n  agent-server run --prompt \"hello\" --format json  NDJSON event stream (for scripts)\n  agent-server serve                    Start the HTTP SSE server\n  agent-server sessions list            List all sessions\n  agent-server sessions resume --id ID  Resume a session\n  agent-server sessions delete --id ID  Delete a session\n  agent-server tools                    List registered tools\n\n  Default config dir: ~/.common-agent\n  Override with --home; use --mock for offline debugging\n\n  agent-server config --help  More config subcommands\n",
+  "cli.usage.main": "Usage:\n  agent-server                       Start the Web UI (default :8080)\n  agent-server web                   Same as above\n  agent-server web --addr :9090      Listen on a custom address\n\n  agent-server config init           Interactive setup for ~/.common-agent\n  agent-server config set provider ...  Configure a provider from the CLI\n  agent-server config set-key ENV KEY   Save an API key\n  agent-server config show           Show current configuration\n\n  agent-server tools                 List registered tools\n  agent-server version               Print version\n\n  Default config dir: ~/.common-agent\n  Override with --home; use --mock for offline debugging\n\n  agent-server config --help         More config subcommands\n",
   "cli.usage.config": "Usage:\n  agent-server config init\n  agent-server config show\n  agent-server config set default-agent NAME\n  agent-server config set provider NAME [flags]\n  agent-server config set-key ENV_NAME API_KEY\n",
   "cli.usage.config_set_key": "usage: agent-server config set-key ENV_NAME API_KEY",
   "cli.usage.config_set": "usage: agent-server config set default-agent NAME | provider NAME ...",
@@ -131,7 +131,7 @@
   "wizard.error.api_key_required": "API Key cannot be empty",
   "wizard.done": "\nSetup complete",
   "wizard.config_written": "Config written to {path}",
-  "wizard.run_chat_hint": "Run: agent-server chat",
+  "wizard.run_chat_hint": "Run: agent-server   then open http://localhost:8080",
   "wizard.option.custom": "Custom...",
   "wizard.option.no_keep": "Do not keep",
   "wizard.option.not_set": "Not set",

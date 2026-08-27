@@ -30,7 +30,7 @@ This is a Go agent runtime (`common-agent`).
 
 | Layer | Package | Purpose |
 |-------|---------|---------|
-| Entry | `cmd/` | CLI wiring only — subcommands: `chat`, `run`, `serve`, `config` |
+| Entry | `cmd/` | CLI wiring only — default command starts the Web UI (`web`; `serve` is an alias) |
 | Transport | `server/http/` | HTTP/SSE handler — parse request → call core `loop.Run` → stream events |
 | Core | `core/loop/` | The single agent loop — all paths (CLI/HTTP/gRPC) must call this `Run` |
 | Core | `core/event/` | Unified event types: `text_delta`, `reasoning_delta`, `tool_start`, `tool_result`, `error`, `done` |

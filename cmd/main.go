@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -47,35 +48,55 @@ func main() {
 	logger := slog.New(i18n.NewSlogHandler(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}), bundle))
 	slog.SetDefault(logger)
 
-	if len(os.Args) < 2 {
-		usage()
-		os.Exit(1)
-	}
-
-	switch os.Args[1] {
-	case "serve":
-		runServe(os.Args[2:], logger)
+	cmd, rest := parseCommand(os.Args[1:])
+	switch cmd {
+	case "web":
+		runWeb(rest, logger)
 	case "run":
-		runCLI(os.Args[2:], logger)
+		runCLI(rest, logger)
 	case "chat":
-		runChat(os.Args[2:], logger)
+		runChat(rest, logger)
 	case "sessions":
-		runSessions(os.Args[2:], logger)
+		runSessions(rest, logger)
 	case "tools":
-		runTools(os.Args[2:], logger)
+		runTools(rest, logger)
 	case "config":
-		runConfig(os.Args[2:])
+		runConfig(rest)
 	case "templates":
-		runTemplates(os.Args[2:])
+		runTemplates(rest)
 	case "validate":
-		runValidate(os.Args[2:])
+		runValidate(rest)
 	case "skills":
-		runSkills(os.Args[2:])
+		runSkills(rest)
 	case "version":
-		runVersion(os.Args[2:])
+		runVersion(rest)
+	case "help":
+		usage()
 	default:
 		usage()
 		os.Exit(1)
+	}
+}
+
+// parseCommand maps argv to a subcommand. No args, or a leading flag, starts Web.
+func parseCommand(args []string) (cmd string, rest []string) {
+	if len(args) == 0 {
+		return "web", nil
+	}
+	switch args[0] {
+	case "web", "serve":
+		return "web", args[1:]
+	case "help", "-h", "--help":
+		return "help", nil
+	case "version", "-v", "--version":
+		return "version", args[1:]
+	case "run", "chat", "sessions", "tools", "config", "templates", "validate", "skills":
+		return args[0], args[1:]
+	default:
+		if strings.HasPrefix(args[0], "-") {
+			return "web", args
+		}
+		return "", nil
 	}
 }
 
@@ -106,8 +127,8 @@ func (s *stringList) Set(v string) error {
 	return nil
 }
 
-func runServe(args []string, logger *slog.Logger) {
-	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+func runWeb(args []string, logger *slog.Logger) {
+	fs := flag.NewFlagSet("web", flag.ExitOnError)
 	addr := fs.String("addr", ":8080", i18n.T("cli.flag.addr"))
 	grpcAddr := fs.String("grpc-addr", "", i18n.T("cli.flag.grpc_addr"))
 	homeFlag := fs.String("home", "", i18n.T("cli.flag.home"))

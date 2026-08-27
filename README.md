@@ -10,9 +10,36 @@
 
 基于单一 Agent Loop 架构的自托管运行时。通过 YAML 配置定义 Agent，即可在终端、Web 界面或 API 中获得具备工具调用能力的 AI 助手。
 
+## 界面预览
+
+对话工作区：工具调用、思考过程与 Markdown 回复。
+
+<p align="center">
+  <img src="screenshots/chat.jpg" alt="对话工作区" width="920"/>
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="screenshots/manage.jpg" alt="资源管理"/></td>
+    <td width="50%"><img src="screenshots/kanban.jpg" alt="看板"/></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>资源管理 — Agent、工具、提供商、MCP</sub></td>
+    <td align="center"><sub>看板 — 任务流转与人工审核</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="screenshots/settings.jpg" alt="设置"/></td>
+    <td width="50%"><img src="screenshots/admin.jpg" alt="管理后台"/></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>设置 — 主题、语言、工作目录与背景</sub></td>
+    <td align="center"><sub>管理后台 — 用户、API Key、监控与审计</sub></td>
+  </tr>
+</table>
+
 ## 功能
 
-- **多种使用方式** — 交互式终端（chat）、单条命令（run）、HTTP SSE 接口、gRPC 流式接口、内置 Web 界面，以及 TypeScript / Python SDK
+- **多种使用方式** — 内置 Web 界面、HTTP SSE 接口、gRPC 流式接口，以及 TypeScript / Python SDK
 - **配置驱动 Agent** — 一份 YAML 定义一个 Agent：系统提示词、模型、可用工具、权限策略，零代码创建新场景
 - **多 LLM 提供商** — 支持 OpenAI 兼容接口（DeepSeek、Moonshot 等）与 Anthropic，可配置多家按 Agent 切换
 - **内置工具集** — 文件读写、目录浏览、内容搜索、Shell 命令、网页抓取等，开箱即用
@@ -31,7 +58,5 @@
 ```bash
 make                            # 构建（需要 Go 和 Node.js）
 ./bin/agent-server config init  # 初始化：配置 LLM 提供商与 API Key
-
-./bin/agent-server chat         # 交互式终端对话
-./bin/agent-server serve        # HTTP 服务 + Web 界面（默认 :8080）
+./bin/agent-server              # 启动 Web 界面（默认 :8080）
 ```

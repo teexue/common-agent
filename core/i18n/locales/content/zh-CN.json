@@ -1,5 +1,5 @@
 {
-  "cli.usage.main": "Usage:\n  agent-server config init              交互式初始化 ~/.common-agent\n  agent-server config set provider ...  命令行配置 provider\n  agent-server config set-key ENV KEY   保存 API Key\n  agent-server config show              查看当前配置\n\n  agent-server chat                     交互式终端对话\n  agent-server run --prompt \"hello\"     单次对话（默认终端可读输出）\n  agent-server run --prompt \"hello\" --format json  NDJSON 事件流（便于脚本解析）\n  agent-server serve                    启动 HTTP SSE 服务\n  agent-server sessions list            列出所有会话\n  agent-server sessions resume --id ID  恢复指定会话\n  agent-server sessions delete --id ID  删除指定会话\n  agent-server tools                    列出已注册工具\n\n  默认配置目录: ~/.common-agent\n  可用 --home 覆盖；可用 --mock 离线调试\n\n  agent-server config --help  查看更多 config 子命令\n",
+  "cli.usage.main": "Usage:\n  agent-server                       启动 Web 界面（默认 :8080）\n  agent-server web                   同上\n  agent-server web --addr :9090      指定监听地址\n\n  agent-server config init           交互式初始化 ~/.common-agent\n  agent-server config set provider ...  命令行配置 provider\n  agent-server config set-key ENV KEY   保存 API Key\n  agent-server config show           查看当前配置\n\n  agent-server tools                 列出已注册工具\n  agent-server version               显示版本\n\n  默认配置目录: ~/.common-agent\n  可用 --home 覆盖；可用 --mock 离线调试\n\n  agent-server config --help         查看更多 config 子命令\n",
   "cli.usage.config": "Usage:\n  agent-server config init\n  agent-server config show\n  agent-server config set default-agent NAME\n  agent-server config set provider NAME [flags]\n  agent-server config set-key ENV_NAME API_KEY\n",
   "cli.usage.config_set_key": "用法: agent-server config set-key ENV_NAME API_KEY",
   "cli.usage.config_set": "用法: agent-server config set default-agent NAME | provider NAME ...",
@@ -131,7 +131,7 @@
   "wizard.error.api_key_required": "API Key 不能为空",
   "wizard.done": "\n配置完成",
   "wizard.config_written": "配置已写入 {path}",
-  "wizard.run_chat_hint": "运行: agent-server chat",
+  "wizard.run_chat_hint": "运行: agent-server   然后在浏览器打开 http://localhost:8080",
   "wizard.option.custom": "自定义...",
   "wizard.option.no_keep": "不保留",
   "wizard.option.not_set": "不设置",
