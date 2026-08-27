@@ -119,7 +119,7 @@ func (s *Server) handleProviderModelsTest(c *gin.Context) {
 		return
 	}
 	style := provider.APIStyle(req.APIStyle)
-	if style != provider.StyleOpenAI && style != provider.StyleAnthropic {
+	if style != provider.StyleOpenAI && style != provider.StyleAnthropic && style != provider.StyleOllama {
 		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request")
 		return
 	}
@@ -130,7 +130,8 @@ func (s *Server) handleProviderModelsTest(c *gin.Context) {
 			apiKey = prof.APIKey
 		}
 	}
-	if apiKey == "" {
+	// Local Ollama needs no API key; only require a key for the other styles.
+	if apiKey == "" && style != provider.StyleOllama {
 		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request")
 		return
 	}
@@ -203,7 +204,7 @@ type ProviderUpsertRequest struct {
 	APIVersion   string `json:"api_version,omitempty"`
 	AuthStyle    string `json:"auth_style,omitempty"`
 	DefaultModel string `json:"default_model,omitempty"`
-	DisplayName string `json:"display_name,omitempty"`
+	DisplayName  string `json:"display_name,omitempty"`
 	ModelsPath   string `json:"models_path,omitempty"`
 	Vision       bool   `json:"vision,omitempty"`
 }
@@ -221,7 +222,13 @@ func (s *Server) handleProviderUpsert(c *gin.Context) {
 
 	home := filepath.Dir(s.agentsDir)
 	if req.APIKeyEnv == "" {
-		if existing, ok := existingProviderAPIKeyEnv(home, req.Name); ok {
+		// Prefer the built-in vendor's api_key_env when the provider name
+		// matches a preset. Local Ollama has an empty api_key_env (no auth),
+		// so we must not fall back to a derived OLLAMA_API_KEY that would then
+		// require a key at resolve time.
+		if v, ok := provider.LookupVendor(req.Name); ok {
+			req.APIKeyEnv = v.APIKeyEnv
+		} else if existing, ok := existingProviderAPIKeyEnv(home, req.Name); ok {
 			req.APIKeyEnv = existing
 		} else {
 			req.APIKeyEnv = defaultAPIKeyEnv(req.Name)
@@ -236,7 +243,7 @@ func (s *Server) handleProviderUpsert(c *gin.Context) {
 		APIVersion:   req.APIVersion,
 		AuthStyle:    provider.AuthStyle(req.AuthStyle),
 		DefaultModel: req.DefaultModel,
-		DisplayName: req.DisplayName,
+		DisplayName:  req.DisplayName,
 		ModelsPath:   req.ModelsPath,
 		Vision:       req.Vision,
 	}
@@ -245,7 +252,7 @@ func (s *Server) handleProviderUpsert(c *gin.Context) {
 		return
 	}
 
-	if req.APIKey != "" {
+	if req.APIKey != "" && req.APIKeyEnv != "" {
 		if s.creds == nil {
 			cs, err := config.NewCredentialStore(home)
 			if err != nil {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useNavigate, useSearchParams } from "react-router"
+import { useNavigate } from "react-router"
 import { useTranslation } from "react-i18next"
 import i18n from "@/i18n"
 import { useTheme } from "@/components/theme-provider"
@@ -11,63 +11,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Brain,
-  FolderOpen,
-  ImageIcon,
-  Keyboard,
-  KeyRound,
-  Monitor,
-  Plug,
-  Server,
-  Settings,
-  Users,
-} from "lucide-react"
+import { FolderOpen, ImageIcon, Keyboard, Settings } from "lucide-react"
 import { PageHeader } from "@/components/shared/page-header"
 import { PageMain, PageShell } from "@/components/shared/page-shell"
 import { Input } from "@/components/ui/input"
 import { fetchVersion } from "@/lib/api"
-import { MetricsPanel } from "@/components/monitoring/metrics-panel"
-import { ApiKeysPanel } from "@/components/settings/api-keys-panel"
-import { BackgroundPanel } from "@/components/settings/background-panel"
 import { DirPickerDialog } from "@/components/settings/dir-picker-dialog"
-import { EmbeddingPanel } from "@/components/settings/embedding-panel"
-import { McpPanel } from "@/components/settings/mcp-panel"
-import { ProviderPanel } from "@/components/settings/provider-panel"
-import { UsersPanel } from "@/components/settings/users-panel"
-import { useAuth } from "@/lib/auth"
+import { BackgroundPanel } from "@/components/settings/background-panel"
 
+/** Personal preference settings: appearance, language, workspace, background, shortcuts, about. */
 export function SettingsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const tabValues = ["general", "monitoring", "providers", "embedding", "mcp", "security"]
-  const rawTab = searchParams.get("tab") || "general"
-  const activeTab = tabValues.includes(rawTab) ? rawTab : "general"
-  const { user } = useAuth()
-  const isAdmin = user?.role === "admin"
-
-  const tabTriggers = [
-    { value: "general", icon: Settings, label: t("settings.tabGeneral") },
-    { value: "monitoring", icon: Monitor, label: t("settings.tabMonitoring") },
-    { value: "providers", icon: Server, label: t("settings.tabProviders") },
-    { value: "embedding", icon: Brain, label: t("settings.tabEmbedding") },
-    { value: "mcp", icon: Plug, label: t("settings.tabMcp") },
-    ...(isAdmin
-      ? [
-          {
-            value: "security",
-            icon: KeyRound,
-            label: t("settings.tabSecurity"),
-          },
-        ]
-      : []),
-  ]
-
-  const handleTabChange = (value: string) => {
-    setSearchParams(value === "general" ? {} : { tab: value })
-  }
 
   return (
     <PageShell>
@@ -77,70 +32,8 @@ export function SettingsPage() {
         onBack={() => navigate(-1)}
       />
 
-      <PageMain contentClassName="w-full">
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <TabsList className="mb-6 w-full rounded-xl bg-muted p-0.5">
-            {tabTriggers.map((tab) => (
-              <TabsTrigger
-                key={tab.value}
-                value={tab.value}
-                className="flex-1 gap-1.5 rounded-lg text-xs"
-              >
-                <tab.icon className="h-3 w-3" /> {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          <TabsContent value="general" className="mt-0 space-y-6">
-            <GeneralTab />
-          </TabsContent>
-          <TabsContent value="monitoring" className="mt-0 space-y-4">
-            <Section
-              title={t("settings.runtimeMetrics")}
-              icon={<Monitor className="h-3.5 w-3.5" />}
-            >
-              <MetricsPanel />
-            </Section>
-          </TabsContent>
-          <TabsContent value="providers" className="mt-0 space-y-4">
-            <Section
-              title={t("settings.providers")}
-              icon={<Server className="h-3.5 w-3.5" />}
-            >
-              <ProviderPanel />
-            </Section>
-          </TabsContent>
-          <TabsContent value="embedding" className="mt-0 space-y-4">
-            <Section
-              title={t("settings.embedding")}
-              icon={<Brain className="h-3.5 w-3.5" />}
-            >
-              <EmbeddingPanel />
-            </Section>
-          </TabsContent>
-          <TabsContent value="mcp" className="mt-0 space-y-4">
-            <Section
-              title={t("settings.mcpServers")}
-              icon={<Plug className="h-3.5 w-3.5" />}
-            >
-              <McpPanel />
-            </Section>
-          </TabsContent>
-          <TabsContent value="security" className="mt-0 space-y-6">
-            <Section
-              title={t("settings.users")}
-              icon={<Users className="h-3.5 w-3.5" />}
-            >
-              <UsersPanel />
-            </Section>
-            <Section
-              title={t("settings.apiKeys")}
-              icon={<KeyRound className="h-3.5 w-3.5" />}
-            >
-              <ApiKeysPanel />
-            </Section>
-          </TabsContent>
-        </Tabs>
+      <PageMain contentClassName="w-full space-y-6">
+        <GeneralTab />
       </PageMain>
     </PageShell>
   )

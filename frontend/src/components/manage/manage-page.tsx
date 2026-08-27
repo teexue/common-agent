@@ -4,12 +4,16 @@ import { useTranslation } from "react-i18next"
 import {
   BookOpen,
   Bot,
+  Brain,
+  Copy,
   Info,
   Layers,
   MoreHorizontal,
   Pencil,
   Plus,
+  Plug,
   Puzzle,
+  Server,
   Trash2,
   Wrench,
 } from "lucide-react"
@@ -32,6 +36,9 @@ import {
   KnowledgeListPanel,
 } from "@/components/manage/knowledge-panel"
 import { SkillsPanel } from "@/components/manage/skills-panel"
+import { EmbeddingPanel } from "@/components/settings/embedding-panel"
+import { McpPanel } from "@/components/settings/mcp-panel"
+import { ProviderPanel } from "@/components/settings/provider-panel"
 import { fetchAgents, fetchSkills, fetchTools } from "@/lib/api"
 import { toolDisplayDescription, toolDisplayName } from "@/lib/tool-i18n"
 import type { AgentInfo, SkillInfo, ToolInfo } from "@/types/agent"
@@ -40,6 +47,7 @@ interface ManagePageProps {
   onViewAgent?: (name: string) => void
   onEditAgent?: (name: string) => void
   onDeleteAgent?: (name: string) => void
+  onCopyAgent?: (name: string) => void
   onCreateAgent?: () => void
   onSelectTool?: (tool: ToolInfo) => void
   agentsRefreshKey?: number
@@ -49,11 +57,13 @@ function AgentCard({
   agent,
   onView,
   onEdit,
+  onCopy,
   onDelete,
 }: {
   agent: AgentInfo
   onView?: (id: string) => void
   onEdit?: (id: string) => void
+  onCopy?: (id: string) => void
   onDelete?: (id: string) => void
 }) {
   const { t } = useTranslation()
@@ -96,7 +106,7 @@ function AgentCard({
           </Badge>
         </div>
       </div>
-      {(onView || onEdit || onDelete) && (
+      {(onView || onEdit || onCopy || onDelete) && (
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -124,6 +134,14 @@ function AgentCard({
                 className="gap-2 text-xs"
               >
                 <Pencil className="h-3.5 w-3.5" /> {t("common.edit")}
+              </DropdownMenuItem>
+            )}
+            {onCopy && (
+              <DropdownMenuItem
+                onClick={() => onCopy(agentKey)}
+                className="gap-2 text-xs"
+              >
+                <Copy className="h-3.5 w-3.5" /> {t("common.copy")}
               </DropdownMenuItem>
             )}
             {onDelete && (
@@ -179,6 +197,7 @@ export function ManagePage({
   onViewAgent,
   onEditAgent,
   onDeleteAgent,
+  onCopyAgent,
   onCreateAgent,
   onSelectTool,
   agentsRefreshKey = 0,
@@ -239,6 +258,24 @@ export function ManagePage({
       value: "knowledge",
       icon: BookOpen,
       label: t("manage.tabKnowledge"),
+      count: null,
+    },
+    {
+      value: "providers",
+      icon: Server,
+      label: t("manage.tabProviders"),
+      count: null,
+    },
+    {
+      value: "embedding",
+      icon: Brain,
+      label: t("manage.tabEmbedding"),
+      count: null,
+    },
+    {
+      value: "mcp",
+      icon: Plug,
+      label: t("manage.tabMcp"),
       count: null,
     },
   ] as const
@@ -306,6 +343,7 @@ export function ManagePage({
                   agent={a}
                   onView={onViewAgent}
                   onEdit={onEditAgent}
+                  onCopy={onCopyAgent}
                   onDelete={onDeleteAgent}
                 />
               ))
@@ -343,8 +381,57 @@ export function ManagePage({
               <KnowledgeListPanel onOpen={setKbId} />
             )}
           </TabsContent>
+
+          <TabsContent value="providers" className="mt-0 space-y-4">
+            <Section
+              title={t("settings.providers")}
+              icon={<Server className="h-3.5 w-3.5" />}
+            >
+              <ProviderPanel />
+            </Section>
+          </TabsContent>
+
+          <TabsContent value="embedding" className="mt-0 space-y-4">
+            <Section
+              title={t("settings.embedding")}
+              icon={<Brain className="h-3.5 w-3.5" />}
+            >
+              <EmbeddingPanel />
+            </Section>
+          </TabsContent>
+
+          <TabsContent value="mcp" className="mt-0 space-y-4">
+            <Section
+              title={t("settings.mcpServers")}
+              icon={<Plug className="h-3.5 w-3.5" />}
+            >
+              <McpPanel />
+            </Section>
+          </TabsContent>
         </Tabs>
       </PageMain>
     </PageShell>
+  )
+}
+
+function Section({
+  title,
+  icon,
+  children,
+}: {
+  title: string
+  icon?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <div className="mb-2.5 flex items-center gap-1.5">
+        {icon && <span className="text-muted-foreground">{icon}</span>}
+        <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+          {title}
+        </span>
+      </div>
+      {children}
+    </div>
   )
 }

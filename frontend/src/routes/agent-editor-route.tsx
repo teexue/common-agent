@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "react-router"
+import { useNavigate, useParams, useSearchParams } from "react-router"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useTheme } from "@/components/theme-provider"
 import { AppLayout } from "@/components/layout/app-layout"
@@ -11,7 +11,11 @@ export function AgentEditorRoute({ mode }: { mode: "create" | "edit" }) {
   const shell = useShellNav()
   const navigate = useNavigate()
   const { agentId } = useParams<{ agentId: string }>()
+  const [searchParams] = useSearchParams()
   const id = mode === "edit" ? decodeURIComponent(agentId || "") : null
+  // When creating, an optional `copy` param seeds the form from an existing agent.
+  const copyFrom =
+    mode === "create" ? searchParams.get("copy") ?? null : null
 
   return (
     <TooltipProvider delay={300}>
@@ -20,6 +24,7 @@ export function AgentEditorRoute({ mode }: { mode: "create" | "edit" }) {
         leftPanel={
           <AgentEditorPage
             agentId={id}
+            copyFrom={copyFrom}
             onBack={() => navigate("/manage")}
             onSaved={() => navigate("/manage")}
           />

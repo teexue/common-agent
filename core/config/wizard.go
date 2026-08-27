@@ -21,7 +21,7 @@ type ProviderSpec struct {
 	APIVersion   string
 	AuthStyle    provider.AuthStyle
 	DefaultModel string
-	DisplayName string
+	DisplayName  string
 	ModelsPath   string
 	Vision       bool
 	ThinkingType string
@@ -48,22 +48,26 @@ func InitInteractive(home string) error {
 		return err
 	}
 
-	apiKey, err := InputSecret(i18n.T("wizard.input.api_key"))
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(apiKey) == "" {
-		return fmt.Errorf("%s", i18n.T("wizard.error.api_key_required"))
+	// Local Ollama needs no API key (apiKeyEnv is empty for the preset); skip
+	// the credential prompt and storage in that case.
+	if apiKeyEnv != "" {
+		apiKey, err := InputSecret(i18n.T("wizard.input.api_key"))
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(apiKey) == "" {
+			return fmt.Errorf("%s", i18n.T("wizard.error.api_key_required"))
+		}
+		creds, err := NewCredentialStore(home)
+		if err != nil {
+			return err
+		}
+		if err := creds.Set(apiKeyEnv, apiKey); err != nil {
+			return err
+		}
 	}
 
 	if err := UpsertProvider(home, spec); err != nil {
-		return err
-	}
-	creds, err := NewCredentialStore(home)
-	if err != nil {
-		return err
-	}
-	if err := creds.Set(apiKeyEnv, apiKey); err != nil {
 		return err
 	}
 
@@ -157,7 +161,7 @@ func presetProviderWizard(v provider.Vendor) (ProviderSpec, string, error) {
 		DefaultModel: model,
 		APIVersion:   v.APIVersion,
 		AuthStyle:    v.AuthForStyle(v.APIStyle),
-		DisplayName: v.DisplayName,
+		DisplayName:  v.DisplayName,
 		ModelsPath:   provider.DefaultModelsPathFor(v.APIStyle),
 		Vision:       v.Vision,
 	}
@@ -376,10 +380,11 @@ func (s ProviderSpec) validate() error {
 	if s.Name == "" {
 		return fmt.Errorf("%s", i18n.T("wizard.error.provider_name_required"))
 	}
-	if s.APIStyle != provider.StyleAnthropic && s.APIStyle != provider.StyleOpenAI {
+	if s.APIStyle != provider.StyleAnthropic && s.APIStyle != provider.StyleOpenAI && s.APIStyle != provider.StyleOllama {
 		return fmt.Errorf("%s", i18n.T("wizard.error.type_invalid"))
 	}
-	if s.APIKeyEnv == "" {
+	// Local Ollama needs no API key, so api_key_env is optional for that style.
+	if s.APIKeyEnv == "" && s.APIStyle != provider.StyleOllama {
 		return fmt.Errorf("%s", i18n.T("wizard.error.api_key_env_required"))
 	}
 	if s.DefaultModel == "" {

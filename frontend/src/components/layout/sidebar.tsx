@@ -8,8 +8,8 @@ import {
   Layers,
   LogOut,
   Plus,
-  ScrollText,
   Settings,
+  ShieldCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -29,8 +29,8 @@ interface SidebarProps {
   onOpenSettings: () => void
   onOpenManage?: () => void
   onOpenKanban?: () => void
-  onOpenRequestLogs?: () => void
   onOpenApiDocs?: () => void
+  onOpenAdmin?: () => void
   onNewSession?: () => void
   sessions?: SessionMeta[]
   agents?: AgentInfo[]
@@ -45,8 +45,8 @@ function CollapsedSidebar({
   onOpenSettings,
   onOpenManage,
   onOpenKanban,
-  onOpenRequestLogs,
   onOpenApiDocs,
+  onOpenAdmin,
   onNewSession,
 }: Pick<
   SidebarProps,
@@ -54,8 +54,8 @@ function CollapsedSidebar({
   | "onOpenSettings"
   | "onOpenManage"
   | "onOpenKanban"
-  | "onOpenRequestLogs"
   | "onOpenApiDocs"
+  | "onOpenAdmin"
   | "onNewSession"
 >) {
   const { t } = useTranslation()
@@ -131,25 +131,6 @@ function CollapsedSidebar({
           <TooltipContent side="right">{t("layout.kanban")}</TooltipContent>
         </Tooltip>
       )}
-      {onOpenRequestLogs && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={onOpenRequestLogs}
-                className="rounded-lg"
-              />
-            }
-          >
-            <ScrollText className="h-3.5 w-3.5" />
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            {t("layout.requestLogs")}
-          </TooltipContent>
-        </Tooltip>
-      )}
       {onOpenApiDocs && (
         <Tooltip>
           <TooltipTrigger
@@ -165,6 +146,23 @@ function CollapsedSidebar({
             <BookOpen className="h-3.5 w-3.5" />
           </TooltipTrigger>
           <TooltipContent side="right">{t("layout.apiDocs")}</TooltipContent>
+        </Tooltip>
+      )}
+      {onOpenAdmin && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={onOpenAdmin}
+                className="rounded-lg"
+              />
+            }
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+          </TooltipTrigger>
+          <TooltipContent side="right">{t("layout.admin")}</TooltipContent>
         </Tooltip>
       )}
       <Tooltip>
@@ -192,8 +190,8 @@ export function Sidebar({
   onOpenSettings,
   onOpenManage,
   onOpenKanban,
-  onOpenRequestLogs,
   onOpenApiDocs,
+  onOpenAdmin,
   onNewSession,
   sessions = [],
   agents = [],
@@ -205,6 +203,7 @@ export function Sidebar({
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const isAdmin = user?.role === "admin"
   if (collapsed) {
     return (
       <CollapsedSidebar
@@ -213,8 +212,8 @@ export function Sidebar({
           onOpenSettings,
           onOpenManage,
           onOpenKanban,
-          onOpenRequestLogs,
           onOpenApiDocs,
+          onOpenAdmin: isAdmin ? onOpenAdmin : undefined,
           onNewSession,
         }}
       />
@@ -283,16 +282,6 @@ export function Sidebar({
             {user.name || user.username}
           </div>
         )}
-        {onOpenManage && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start gap-2 rounded-xl text-xs text-muted-foreground"
-            onClick={onOpenManage}
-          >
-            <Layers className="h-3.5 w-3.5" /> {t("layout.manage")}
-          </Button>
-        )}
         {onOpenKanban && (
           <Button
             variant="ghost"
@@ -301,16 +290,6 @@ export function Sidebar({
             onClick={onOpenKanban}
           >
             <KanbanSquare className="h-3.5 w-3.5" /> {t("layout.kanban")}
-          </Button>
-        )}
-        {onOpenRequestLogs && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start gap-2 rounded-xl text-xs text-muted-foreground"
-            onClick={onOpenRequestLogs}
-          >
-            <ScrollText className="h-3.5 w-3.5" /> {t("layout.requestLogs")}
           </Button>
         )}
         {onOpenApiDocs && (
@@ -323,6 +302,17 @@ export function Sidebar({
             <BookOpen className="h-3.5 w-3.5" /> {t("layout.apiDocs")}
           </Button>
         )}
+        <Separator className="my-1.5" />
+        {onOpenManage && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 rounded-xl text-xs text-muted-foreground"
+            onClick={onOpenManage}
+          >
+            <Layers className="h-3.5 w-3.5" /> {t("layout.manage")}
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -331,6 +321,17 @@ export function Sidebar({
         >
           <Settings className="h-3.5 w-3.5" /> {t("common.settings")}
         </Button>
+        {isAdmin && onOpenAdmin && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 rounded-xl text-xs text-muted-foreground"
+            onClick={onOpenAdmin}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" /> {t("layout.admin")}
+          </Button>
+        )}
+        <Separator className="my-1.5" />
         <Button
           variant="ghost"
           size="sm"

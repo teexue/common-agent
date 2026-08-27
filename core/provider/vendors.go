@@ -11,10 +11,15 @@ func DefaultModelsPathFor(style APIStyle) string {
 	switch style {
 	case StyleAnthropic:
 		return APIStyleAnthropicModelsPath
+	case StyleOllama:
+		return APIStyleOllamaModelsPath
 	default:
 		return APIStyleOpenAIModelsPath
 	}
 }
+
+// APIStyleOllamaModelsPath is the default model-list path for Ollama-style vendors.
+const APIStyleOllamaModelsPath = "/api/tags"
 
 // Vendor is a built-in provider preset with sensible defaults.
 // Dual-protocol vendors set both OpenAIBaseURL and AnthropicBaseURL; the
@@ -30,10 +35,10 @@ type Vendor struct {
 	SupportedStyles []APIStyle // protocols the vendor speaks; len>=1
 
 	OpenAIBaseURL    string    // base URL for the OpenAI-compatible endpoint
-	AnthropicBaseURL  string    // base URL for the Anthropic-compatible endpoint; "" => none
-	AnthropicAuth     AuthStyle // auth header for the Anthropic endpoint; default x-api-key
+	AnthropicBaseURL string    // base URL for the Anthropic-compatible endpoint; "" => none
+	AnthropicAuth    AuthStyle // auth header for the Anthropic endpoint; default x-api-key
 
-	Vision          bool
+	Vision           bool
 	SupportsThinking bool
 }
 
@@ -69,34 +74,34 @@ var builtInVendors = []Vendor{
 		Name: "moonshot", DisplayName: "Moonshot (Kimi)",
 		DefaultModel: "kimi-k2.6", APIKeyEnv: "MOONSHOT_API_KEY",
 		APIStyle: StyleAnthropic, SupportedStyles: []APIStyle{StyleAnthropic, StyleOpenAI},
-		OpenAIBaseURL:   "https://api.moonshot.cn/v1",
+		OpenAIBaseURL:    "https://api.moonshot.cn/v1",
 		AnthropicBaseURL: "https://api.moonshot.cn/anthropic",
-		AnthropicAuth:   AuthBearer,
-		Vision: true, SupportsThinking: true,
+		AnthropicAuth:    AuthBearer,
+		Vision:           true, SupportsThinking: true,
 	},
 	{
 		Name: "deepseek", DisplayName: "DeepSeek",
 		DefaultModel: "deepseek-chat", APIKeyEnv: "DEEPSEEK_API_KEY",
 		APIStyle: StyleAnthropic, SupportedStyles: []APIStyle{StyleAnthropic, StyleOpenAI},
-		OpenAIBaseURL:   "https://api.deepseek.com",
+		OpenAIBaseURL:    "https://api.deepseek.com",
 		AnthropicBaseURL: "https://api.deepseek.com/anthropic",
-		AnthropicAuth:   AuthXAPIKey,
+		AnthropicAuth:    AuthXAPIKey,
 	},
 	{
 		Name: "zhipu", DisplayName: "Zhipu (GLM)",
 		DefaultModel: "glm-4-plus", APIKeyEnv: "ZHIPU_API_KEY",
 		APIStyle: StyleAnthropic, SupportedStyles: []APIStyle{StyleAnthropic, StyleOpenAI},
-		OpenAIBaseURL:   "https://open.bigmodel.cn/api/paas/v4",
+		OpenAIBaseURL:    "https://open.bigmodel.cn/api/paas/v4",
 		AnthropicBaseURL: "https://open.bigmodel.cn/api/anthropic",
-		AnthropicAuth:   AuthXAPIKey,
-		Vision: true,
+		AnthropicAuth:    AuthXAPIKey,
+		Vision:           true,
 	},
 	{
 		Name: "qwen", DisplayName: "Qwen (DashScope)",
 		DefaultModel: "qwen-plus", APIKeyEnv: "DASHSCOPE_API_KEY",
 		APIStyle: StyleOpenAI, SupportedStyles: []APIStyle{StyleOpenAI},
 		OpenAIBaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-		Vision: true,
+		Vision:        true,
 	},
 	{
 		Name: "groq", DisplayName: "Groq",
@@ -118,26 +123,33 @@ var builtInVendors = []Vendor{
 	},
 	{
 		Name: "ollama", DisplayName: "Ollama (local)",
-		DefaultModel: "llama3.1", APIKeyEnv: "OLLAMA_API_KEY",
-		APIStyle: StyleOpenAI, SupportedStyles: []APIStyle{StyleOpenAI},
-		OpenAIBaseURL: "http://localhost:11434/v1",
-		Vision: true,
+		DefaultModel: "llama3.1", APIKeyEnv: "",
+		APIStyle: StyleOllama, SupportedStyles: []APIStyle{StyleOllama},
+		OpenAIBaseURL: "http://localhost:11434",
+		Vision:        true,
+	},
+	{
+		Name: "ollama_cloud", DisplayName: "Ollama Cloud",
+		DefaultModel: "gpt-oss:120b", APIKeyEnv: "OLLAMA_API_KEY",
+		APIStyle: StyleOllama, SupportedStyles: []APIStyle{StyleOllama},
+		OpenAIBaseURL: "https://ollama.com",
+		Vision:        true,
 	},
 	{
 		Name: "openai", DisplayName: "OpenAI",
 		DefaultModel: "gpt-4o-mini", APIKeyEnv: "OPENAI_API_KEY",
 		APIStyle: StyleOpenAI, SupportedStyles: []APIStyle{StyleOpenAI},
 		OpenAIBaseURL: "https://api.openai.com/v1",
-		Vision: true,
+		Vision:        true,
 	},
 	{
 		Name: "anthropic", DisplayName: "Anthropic",
 		DefaultModel: "claude-sonnet-4-20250514", APIKeyEnv: "ANTHROPIC_API_KEY",
 		APIVersion: "2023-06-01",
-		APIStyle: StyleAnthropic, SupportedStyles: []APIStyle{StyleAnthropic},
+		APIStyle:   StyleAnthropic, SupportedStyles: []APIStyle{StyleAnthropic},
 		AnthropicBaseURL: "https://api.anthropic.com",
-		AnthropicAuth:   AuthXAPIKey,
-		Vision: true,
+		AnthropicAuth:    AuthXAPIKey,
+		Vision:           true,
 	},
 }
 
@@ -156,18 +168,18 @@ func LookupVendor(name string) (Vendor, bool) {
 
 // VendorInfo is a secret-free summary of a built-in vendor, for API listing.
 type VendorInfo struct {
-	Name             string    `json:"name"`
-	DisplayName      string    `json:"display_name"`
-	DefaultModel     string    `json:"default_model"`
-	APIKeyEnv        string    `json:"api_key_env"`
-	APIVersion       string    `json:"api_version,omitempty"`
-	APIStyle         APIStyle  `json:"api_style"`
+	Name             string     `json:"name"`
+	DisplayName      string     `json:"display_name"`
+	DefaultModel     string     `json:"default_model"`
+	APIKeyEnv        string     `json:"api_key_env"`
+	APIVersion       string     `json:"api_version,omitempty"`
+	APIStyle         APIStyle   `json:"api_style"`
 	SupportedStyles  []APIStyle `json:"supported_styles"`
-	OpenAIBaseURL    string    `json:"openai_base_url"`
-	AnthropicBaseURL string    `json:"anthropic_base_url,omitempty"`
-	AnthropicAuth    AuthStyle `json:"anthropic_auth,omitempty"`
-	Vision           bool      `json:"vision"`
-	SupportsThinking bool     `json:"supports_thinking"`
+	OpenAIBaseURL    string     `json:"openai_base_url"`
+	AnthropicBaseURL string     `json:"anthropic_base_url,omitempty"`
+	AnthropicAuth    AuthStyle  `json:"anthropic_auth,omitempty"`
+	Vision           bool       `json:"vision"`
+	SupportsThinking bool       `json:"supports_thinking"`
 }
 
 // VendorInfos returns secret-free summaries of all built-in vendors.

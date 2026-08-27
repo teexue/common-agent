@@ -9,6 +9,7 @@ import { ManageRoute } from "./routes/manage-route"
 import { KanbanRoute } from "./routes/kanban-route"
 import { RequestLogsRoute } from "./routes/request-logs-route"
 import { AgentEditorRoute } from "./routes/agent-editor-route"
+import { AdminRoute } from "./routes/admin-route"
 import { SettingsRoute } from "./routes/settings-route"
 import { ApiDocsRoute } from "./routes/api-docs-route"
 
@@ -30,6 +31,7 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route element={<AuthenticatedShell />}>
             <Route path="/settings" element={<SettingsRoute />} />
+            <Route path="/admin" element={<AdminRoute />} />
             <Route path="/api-docs" element={<ApiDocsRoute />} />
             <Route path="/manage" element={<ManageRoute />} />
             <Route path="/kanban" element={<KanbanRoute />} />

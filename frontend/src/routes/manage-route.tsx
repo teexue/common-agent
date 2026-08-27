@@ -30,6 +30,11 @@ export function ManageRoute() {
             onEditAgent={(id) =>
               navigate(`/manage/agents/${encodeURIComponent(id)}/edit`)
             }
+            onCopyAgent={(id) =>
+              navigate(
+                `/manage/agents/new?copy=${encodeURIComponent(id)}`
+              )
+            }
             onDeleteAgent={agentMgr.handleDeleteAgent}
             onCreateAgent={() => navigate("/manage/agents/new")}
             onSelectTool={setSelectedTool}
@@ -45,6 +50,9 @@ export function ManageRoute() {
         setReplaySessionId={shell.setReplaySessionId}
         onEditAgent={(id) =>
           navigate(`/manage/agents/${encodeURIComponent(id)}/edit`)
+        }
+        onCopyAgent={(id) =>
+          navigate(`/manage/agents/new?copy=${encodeURIComponent(id)}`)
         }
       />
     </TooltipProvider>

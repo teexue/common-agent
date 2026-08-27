@@ -99,6 +99,10 @@ const (
 	StyleOpenAI APIStyle = "openai"
 	// StyleAnthropic selects the Anthropic Messages API protocol.
 	StyleAnthropic APIStyle = "anthropic"
+	// StyleOllama selects the native Ollama /api/chat protocol (NDJSON streaming).
+	// Use this for both local Ollama (http://localhost:11434) and Ollama Cloud
+	// (https://ollama.com); the latter sends a Bearer API key.
+	StyleOllama APIStyle = "ollama"
 )
 
 // AuthStyle identifies how the API key is sent on the wire.

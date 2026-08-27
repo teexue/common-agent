@@ -12,6 +12,7 @@ export function AppDialogs({
   replaySessionId,
   setReplaySessionId,
   onEditAgent,
+  onCopyAgent,
 }: {
   agentMgr: ReturnType<typeof useAgentManager>
   selectedTool: ToolInfo | null
@@ -19,6 +20,7 @@ export function AppDialogs({
   replaySessionId: string | null
   setReplaySessionId: (v: string | null) => void
   onEditAgent?: (id: string) => void
+  onCopyAgent?: (id: string) => void
 }) {
   return (
     <>
@@ -38,6 +40,10 @@ export function AppDialogs({
         onEdit={(id) => {
           agentMgr.setAgentDetailName(null)
           onEditAgent?.(id)
+        }}
+        onCopy={(id) => {
+          agentMgr.setAgentDetailName(null)
+          onCopyAgent?.(id)
         }}
         onDelete={(id) => {
           agentMgr.setAgentDetailName(null)

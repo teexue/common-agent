@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Bot, Edit3, Loader2, Settings, Shield, Wrench } from "lucide-react"
+import { Bot, Copy, Edit3, Loader2, Settings, Shield, Wrench } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,6 +20,7 @@ interface AgentDetailDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onEdit?: (id: string) => void
+  onCopy?: (id: string) => void
   onDelete?: (id: string) => void
 }
 
@@ -37,10 +38,12 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 function AgentHeader({
   detail,
   onEdit,
+  onCopy,
   onDelete,
 }: {
   detail: AgentDetail
   onEdit?: (n: string) => void
+  onCopy?: (n: string) => void
   onDelete?: (n: string) => void
 }) {
   const { t } = useTranslation()
@@ -83,6 +86,16 @@ function AgentHeader({
             onClick={() => onEdit(key)}
           >
             <Edit3 className="h-3 w-3" /> {t("common.edit")}
+          </Button>
+        )}
+        {onCopy && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 rounded-lg text-xs"
+            onClick={() => onCopy(key)}
+          >
+            <Copy className="h-3 w-3" /> {t("common.copy")}
           </Button>
         )}
         {onDelete && (
@@ -158,6 +171,7 @@ export function AgentDetailDialog({
   open,
   onOpenChange,
   onEdit,
+  onCopy,
   onDelete,
 }: AgentDetailDialogProps) {
   const { t } = useTranslation()
@@ -204,6 +218,7 @@ export function AgentDetailDialog({
               <AgentHeader
                 detail={detail}
                 onEdit={onEdit}
+                onCopy={onCopy}
                 onDelete={onDelete}
               />
               <Separator />

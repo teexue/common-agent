@@ -267,8 +267,8 @@ export function WorkspaceRoute() {
         onOpenSettings={() => navigate("/settings")}
         onOpenManage={() => navigate("/manage")}
         onOpenKanban={() => navigate("/kanban")}
-        onOpenRequestLogs={() => navigate("/request-logs")}
         onOpenApiDocs={() => navigate("/api-docs")}
+        onOpenAdmin={() => navigate("/admin")}
         onNewSession={handleNewSession}
         sessions={sessMgr.sessions}
         activeSessionId={chat.sessionId}

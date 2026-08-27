@@ -15,6 +15,7 @@ import {
   defaultModelsPath,
   vendorAuth,
   vendorBaseURL,
+  vendorRequiresKey,
   type StyleOption,
 } from "./provider-form-utils"
 
@@ -69,6 +70,9 @@ export function ProviderForm({
     "anthropic",
   ]
 
+  // Local Ollama (empty api_key_env on the vendor preset) needs no API key.
+  const requiresKey = vendorRequiresKey(selectedVendor)
+
   const applyVendor = (v: VendorInfo) => {
     setVendorName(v.name)
     setName((prev) => prev || v.name)
@@ -93,9 +97,11 @@ export function ProviderForm({
     }
   }
 
-  const canFetch = isEdit || !!apiKey.trim()
+  const canFetch = isEdit || !requiresKey || !!apiKey.trim()
   const canSave =
-    !!name.trim() && !!defaultModel.trim() && (isEdit || !!apiKey.trim())
+    !!name.trim() &&
+    !!defaultModel.trim() &&
+    (isEdit || !requiresKey || !!apiKey.trim())
 
   const handleFetchModels = async () => {
     if (!canFetch) return
@@ -129,6 +135,7 @@ export function ProviderForm({
         api_style: apiStyle,
         base_url: baseURL.trim() || undefined,
         api_key: apiKey.trim() || undefined,
+        api_key_env: selectedVendor?.api_key_env || undefined,
         default_model: defaultModel.trim() || undefined,
         display_name: displayName.trim() || undefined,
         models_path: modelsPath.trim() || undefined,
@@ -181,7 +188,12 @@ export function ProviderForm({
         />
       )}
 
-      <ApiKeyField isEdit={isEdit} apiKey={apiKey} onApiKeyChange={setApiKey} />
+      <ApiKeyField
+        isEdit={isEdit}
+        apiKey={apiKey}
+        onApiKeyChange={setApiKey}
+        optional={!requiresKey}
+      />
 
       <ModelFields
         defaultModel={defaultModel}
@@ -201,6 +213,7 @@ export function ProviderForm({
           !!selectedVendor?.supported_styles?.includes("openai") &&
           !fetchErr
         }
+        apiKeyOptional={!requiresKey}
         onFetchModels={handleFetchModels}
       />
 

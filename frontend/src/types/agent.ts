@@ -211,7 +211,7 @@ export interface SessionMeta {
 
 export interface ProviderInfo {
   name: string
-  api_style: "openai" | "anthropic"
+  api_style: "openai" | "anthropic" | "ollama"
   auth_style?: "x-api-key" | "bearer"
   display_name: string
   base_url: string
@@ -230,8 +230,8 @@ export interface VendorInfo {
   default_model: string
   api_key_env: string
   api_version?: string
-  api_style: "openai" | "anthropic"
-  supported_styles: ("openai" | "anthropic")[]
+  api_style: "openai" | "anthropic" | "ollama"
+  supported_styles: ("openai" | "anthropic" | "ollama")[]
   vision: boolean
   supports_thinking: boolean
 }

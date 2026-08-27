@@ -61,6 +61,35 @@ export function ToolsTab({
     })
   }
 
+  // Select-all operates on the currently filtered tool list.
+  const filteredNames = useMemo(() => filtered.map((t) => t.name), [filtered])
+  const selectedFiltered = useMemo(
+    () => filteredNames.filter((n) => form.tools.includes(n)),
+    [filteredNames, form.tools]
+  )
+  const allSelected =
+    filteredNames.length > 0 && selectedFiltered.length === filteredNames.length
+  const someSelected = selectedFiltered.length > 0
+
+  const toggleSelectAll = () => {
+    setForm((prev) => {
+      if (allSelected) {
+        // Deselect all filtered tools (and their permission entries).
+        const drop = new Set(filteredNames)
+        return {
+          ...prev,
+          tools: prev.tools.filter((x) => !drop.has(x)),
+          autoApprove: prev.autoApprove.filter((x) => !drop.has(x)),
+          alwaysDeny: prev.alwaysDeny.filter((x) => !drop.has(x)),
+        }
+      }
+      // Select all filtered tools that aren't already selected.
+      const have = new Set(prev.tools)
+      const add = filteredNames.filter((n) => !have.has(n))
+      return { ...prev, tools: [...prev.tools, ...add] }
+    })
+  }
+
   return (
     <div className="space-y-4">
       <SectionCard
@@ -68,6 +97,21 @@ export function ToolsTab({
         description={t("agent.sectionToolsDesc")}
       >
         <div className="flex items-center gap-2">
+          <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted/40">
+            <input
+              type="checkbox"
+              ref={(el) => {
+                if (el) el.indeterminate = someSelected && !allSelected
+              }}
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              disabled={filtered.length === 0}
+              className="h-3.5 w-3.5 rounded border-border accent-primary"
+            />
+            {allSelected
+              ? t("agent.deselectAll")
+              : t("agent.selectAll")}
+          </label>
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input

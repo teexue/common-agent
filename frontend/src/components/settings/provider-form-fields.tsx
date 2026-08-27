@@ -213,16 +213,23 @@ export function ApiKeyField({
   isEdit,
   apiKey,
   onApiKeyChange,
+  optional,
 }: {
   isEdit: boolean
   apiKey: string
   onApiKeyChange: (v: string) => void
+  optional?: boolean
 }) {
   const { t } = useTranslation()
   return (
     <div className="space-y-1.5">
       <Label className="text-xs text-muted-foreground">
         {t("settings.providerApiKey")}
+        {optional && (
+          <span className="ml-1 text-[10px] font-normal text-muted-foreground/70">
+            ({t("settings.optional")})
+          </span>
+        )}
       </Label>
       <Input
         type="password"
@@ -230,15 +237,23 @@ export function ApiKeyField({
         onChange={(e) => onApiKeyChange(e.target.value)}
         className="h-9 rounded-lg font-mono text-sm"
         placeholder={
-          isEdit ? t("settings.keepExisting") : t("settings.apiKeyPlaceholder")
+          isEdit
+            ? t("settings.keepExisting")
+            : optional
+              ? t("settings.apiKeyOptionalPlaceholder")
+              : t("settings.apiKeyPlaceholder")
         }
         autoComplete="off"
       />
-      {isEdit && (
+      {isEdit ? (
         <p className="text-[11px] text-muted-foreground">
           {t("settings.apiKeyHint")}
         </p>
-      )}
+      ) : optional ? (
+        <p className="text-[11px] text-muted-foreground">
+          {t("settings.apiKeyOptionalHint")}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -254,6 +269,7 @@ export function ModelFields({
   canFetch,
   fetchErr,
   showOpenAIHint,
+  apiKeyOptional,
   onFetchModels,
 }: {
   defaultModel: string
@@ -266,9 +282,15 @@ export function ModelFields({
   canFetch: boolean
   fetchErr: string | null
   showOpenAIHint: boolean
+  apiKeyOptional?: boolean
   onFetchModels: () => void
 }) {
   const { t } = useTranslation()
+  const fetchTitle = canFetch
+    ? apiKeyOptional
+      ? t("settings.fetchModelsLocalHint")
+      : t("settings.fetchModelsHint")
+    : t("settings.fetchModelsNoKey")
   return (
     <div className="grid grid-cols-2 gap-4">
       <div className="space-y-1.5">
@@ -288,11 +310,7 @@ export function ModelFields({
             className="h-9 shrink-0 gap-1.5 px-3 text-xs"
             onClick={onFetchModels}
             disabled={fetching || !canFetch}
-            title={
-              canFetch
-                ? t("settings.fetchModelsHint")
-                : t("settings.fetchModelsNoKey")
-            }
+            title={fetchTitle}
           >
             <RefreshCw
               className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`}

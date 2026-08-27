@@ -23,20 +23,24 @@ type Profile struct {
 	ModelsPath   string
 	Vision       bool
 	Thinking     *ThinkingConfig
+	// KeepAlive is the Ollama model keep-alive duration (e.g. "5m", "0").
+	// Only meaningful for StyleOllama; ignored by other styles.
+	KeepAlive string
 }
 
 // ProfileEntry is a provider definition in providers.yaml.
 type ProfileEntry struct {
-	APIStyle     APIStyle       `yaml:"api_style"`
-	BaseURL      string         `yaml:"base_url"`
-	APIKeyEnv    string         `yaml:"api_key_env"`
-	APIVersion   string         `yaml:"api_version"`
-	AuthStyle    AuthStyle      `yaml:"auth_style,omitempty"`
-	DefaultModel string         `yaml:"default_model"`
-	DisplayName string         `yaml:"display_name,omitempty"`
-	ModelsPath   string         `yaml:"models_path,omitempty"`
-	Vision       bool           `yaml:"vision,omitempty"`
+	APIStyle     APIStyle        `yaml:"api_style"`
+	BaseURL      string          `yaml:"base_url"`
+	APIKeyEnv    string          `yaml:"api_key_env"`
+	APIVersion   string          `yaml:"api_version"`
+	AuthStyle    AuthStyle       `yaml:"auth_style,omitempty"`
+	DefaultModel string          `yaml:"default_model"`
+	DisplayName  string          `yaml:"display_name,omitempty"`
+	ModelsPath   string          `yaml:"models_path,omitempty"`
+	Vision       bool            `yaml:"vision,omitempty"`
 	Thinking     *ThinkingConfig `yaml:"thinking"`
+	KeepAlive    string          `yaml:"keep_alive,omitempty" json:"keep_alive,omitempty"`
 }
 
 // Catalog holds named provider profiles loaded from providers.yaml.
@@ -106,13 +110,15 @@ func (e ProfileEntry) validate() error {
 	if e.APIStyle == "" {
 		return fmt.Errorf("api_style is required")
 	}
-	if e.APIStyle != StyleAnthropic && e.APIStyle != StyleOpenAI {
+	if e.APIStyle != StyleAnthropic && e.APIStyle != StyleOpenAI && e.APIStyle != StyleOllama {
 		return fmt.Errorf("unsupported api_style %q", e.APIStyle)
 	}
-	if e.APIKeyEnv == "" {
+	// Local Ollama needs no API key, so api_key_env is optional for that style.
+	// When set (e.g. ollama_cloud), it must be a variable name, not the key itself.
+	if e.APIKeyEnv == "" && e.APIStyle != StyleOllama {
 		return fmt.Errorf("api_key_env is required")
 	}
-	if looksLikeAPIKey(e.APIKeyEnv) {
+	if e.APIKeyEnv != "" && looksLikeAPIKey(e.APIKeyEnv) {
 		return fmt.Errorf("api_key_env must be an environment variable name (e.g. ANTHROPIC_API_KEY), not the key value itself")
 	}
 	return nil
@@ -134,7 +140,9 @@ func looksLikeAPIKey(s string) bool {
 
 func (e ProfileEntry) resolve(name string, credLookup func(string) string) (Profile, error) {
 	apiKey := lookupAPIKey(e.APIKeyEnv, credLookup)
-	if apiKey == "" {
+	// A configured api_key_env means a key is required (e.g. ollama_cloud).
+	// An empty api_key_env (local Ollama) means no key is needed.
+	if e.APIKeyEnv != "" && apiKey == "" {
 		return Profile{}, fmt.Errorf("API key for %q not found; run: agent-server config set-key %s <key>", e.APIKeyEnv, e.APIKeyEnv)
 	}
 
@@ -191,6 +199,7 @@ func (e ProfileEntry) resolve(name string, credLookup func(string) string) (Prof
 		ModelsPath:   modelsPath,
 		Vision:       e.Vision,
 		Thinking:     e.Thinking,
+		KeepAlive:    e.KeepAlive,
 	}, nil
 }
 
@@ -203,6 +212,8 @@ func DefaultBaseURLFor(style APIStyle) string {
 	switch style {
 	case StyleAnthropic:
 		return defaultAnthropicBaseURL
+	case StyleOllama:
+		return defaultOllamaBaseURL
 	default:
 		return defaultOpenAIBaseURL
 	}
@@ -304,6 +315,15 @@ func NewProvider(profile Profile) (Provider, error) {
 			ModelsPath: profile.ModelsPath,
 			Vision:     profile.Vision,
 		})
+	case StyleOllama:
+		return NewOllama(OllamaConfig{
+			APIKey:     profile.APIKey,
+			BaseURL:    profile.BaseURL,
+			Thinking:   profile.Thinking,
+			ModelsPath: profile.ModelsPath,
+			Vision:     profile.Vision,
+			KeepAlive:  profile.KeepAlive,
+		})
 	default:
 		return nil, fmt.Errorf("unsupported provider api_style %q", profile.APIStyle)
 	}
@@ -355,12 +375,12 @@ func ListingProfile(profile Profile) Profile {
 		return profile
 	}
 	return Profile{
-		Name:         profile.Name,
-		APIStyle:     StyleOpenAI,
-		BaseURL:      v.OpenAIBaseURL,
-		APIKey:       profile.APIKey,
-		AuthStyle:    AuthBearer,
-		ModelsPath:   DefaultModelsPathFor(StyleOpenAI),
-		Vision:       profile.Vision,
+		Name:       profile.Name,
+		APIStyle:   StyleOpenAI,
+		BaseURL:    v.OpenAIBaseURL,
+		APIKey:     profile.APIKey,
+		AuthStyle:  AuthBearer,
+		ModelsPath: DefaultModelsPathFor(StyleOpenAI),
+		Vision:     profile.Vision,
 	}
 }

@@ -25,7 +25,7 @@ import {
 } from "@/lib/api"
 import { EMPTY_FORM, formDataToYaml, mcpConfigToForm } from "@/lib/agent-yaml"
 import type { AgentFormData } from "@/lib/agent-yaml"
-import type { ProviderInfo, ToolInfo } from "@/types/agent"
+import type { AgentDetail, ProviderInfo, ToolInfo } from "@/types/agent"
 import { BasicTab } from "./tabs/basic-tab"
 import { McpTab } from "./tabs/mcp-tab"
 import { RuntimeTab } from "./tabs/runtime-tab"
@@ -33,12 +33,41 @@ import { ToolsTab } from "./tabs/tools-tab"
 
 interface AgentEditorPageProps {
   agentId?: string | null
+  copyFrom?: string | null
   onBack: () => void
   onSaved?: (id: string) => void
 }
 
+// agentDetailToForm maps a backend AgentDetail into the editable form shape.
+// Shared by edit mode and copy-seed mode.
+function agentDetailToForm(d: AgentDetail): AgentFormData {
+  return {
+    id: d.id,
+    name: d.name,
+    provider: d.provider,
+    model: d.model,
+    systemPrompt: d.system_prompt || "",
+    tools: d.tools || [],
+    maxTurns: d.max_turns ?? 0,
+    maxTokens: d.max_tokens ?? 0,
+    execMode: (d.tool_execution?.Mode as "parallel" | "serial") || "parallel",
+    maxParallel: d.tool_execution?.MaxParallel || 4,
+    autoApprove: d.permissions?.auto_approve || [],
+    alwaysDeny: d.permissions?.always_deny || [],
+    mcpServers: (d.mcp_servers ?? []).map(mcpConfigToForm),
+    knowledgeBases: d.knowledge?.bases ?? [],
+    knowledgeTopK: d.knowledge?.top_k || 5,
+    optimizeUserPrompt: d.optimize?.user_prompt ?? false,
+    contextWindow: d.compaction?.context_window ?? 0,
+    compactionStrategy:
+      (d.compaction?.strategy as AgentFormData["compactionStrategy"]) ??
+      "truncation",
+  }
+}
+
 export function AgentEditorPage({
   agentId = null,
+  copyFrom = null,
   onBack,
   onSaved,
 }: AgentEditorPageProps) {
@@ -71,41 +100,32 @@ export function AgentEditorPage({
 
   useEffect(() => {
     if (isCreate) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setForm(EMPTY_FORM)
-      setError(null)
+      if (copyFrom) {
+        // Seed a new agent from an existing one's settings.
+        setLoading(true)
+        fetchAgentDetail(copyFrom)
+          .then((d) =>
+            setForm({
+              ...agentDetailToForm(d),
+              id: "",
+              name: `${d.name}-copy`,
+            })
+          )
+          .catch((err) => setError(err.message))
+          .finally(() => setLoading(false))
+      } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setForm(EMPTY_FORM)
+        setError(null)
+      }
       return
     }
     setLoading(true)
     fetchAgentDetail(agentId!)
-      .then((d) =>
-        setForm({
-          id: d.id,
-          name: d.name,
-          provider: d.provider,
-          model: d.model,
-          systemPrompt: d.system_prompt || "",
-          tools: d.tools || [],
-          maxTurns: d.max_turns ?? 0,
-          maxTokens: d.max_tokens ?? 0,
-          execMode:
-            (d.tool_execution?.Mode as "parallel" | "serial") || "parallel",
-          maxParallel: d.tool_execution?.MaxParallel || 4,
-          autoApprove: d.permissions?.auto_approve || [],
-          alwaysDeny: d.permissions?.always_deny || [],
-          mcpServers: (d.mcp_servers ?? []).map(mcpConfigToForm),
-          knowledgeBases: d.knowledge?.bases ?? [],
-          knowledgeTopK: d.knowledge?.top_k || 5,
-          optimizeUserPrompt: d.optimize?.user_prompt ?? false,
-          contextWindow: d.compaction?.context_window ?? 0,
-          compactionStrategy:
-            (d.compaction?.strategy as AgentFormData["compactionStrategy"]) ??
-            "truncation",
-        })
-      )
+      .then((d) => setForm(agentDetailToForm(d)))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [agentId, isCreate])
+  }, [agentId, isCreate, copyFrom])
 
   const handleSave = useCallback(async () => {
     setError(null)
@@ -160,7 +180,9 @@ export function AgentEditorPage({
         icon={Bot}
         title={
           isCreate
-            ? t("agent.createTitle")
+            ? copyFrom
+              ? t("agent.copyTitle", { name: copyFrom })
+              : t("agent.createTitle")
             : t("agent.editTitle", { name: form.name || agentId })
         }
         description={t("agent.editorSubtitle")}
