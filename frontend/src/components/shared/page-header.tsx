@@ -1,35 +1,22 @@
-import { ArrowLeft, type LucideIcon } from "lucide-react"
-
-import { Button } from "@/components/ui/button"
+import { type LucideIcon } from "lucide-react"
 
 interface PageHeaderProps {
   icon?: LucideIcon
   title: string
   description?: string
-  onBack?: () => void
   actions?: React.ReactNode
 }
 
-/** Standard page header: optional back button, icon + title, right-side actions. */
+/** Standard page header: icon + title, right-side actions. Page-level
+ * navigation relies on the sidebar/router, so no back button is rendered. */
 export function PageHeader({
   icon: Icon,
   title,
   description,
-  onBack,
   actions,
 }: PageHeaderProps) {
   return (
     <header className="flex items-center gap-3 border-b border-border px-6 py-4">
-      {onBack && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
-          onClick={onBack}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-      )}
       <div className="flex items-center gap-2">
         {Icon && <Icon className="h-4 w-4 text-primary" />}
         <div>

@@ -34,6 +34,7 @@ type CompactionConfig struct {
 	Strategy      string  `yaml:"strategy"`                 // "truncation" (default) | "sliding_window" | "summarize"
 	ContextWindow int     `yaml:"context_window,omitempty"` // model context size in tokens; 0 = use runtime/provider
 	TriggerRatio  float64 `yaml:"trigger_ratio,omitempty"`  // compact when usage exceeds window*ratio (default 0.85)
+	TargetRatio   float64 `yaml:"target_ratio,omitempty"`   // compress down to window*ratio (default 0.6); must be below trigger
 	KeepRecent    int     `yaml:"keep_recent"`              // recent conversation messages to preserve when truncating
 	KeepHead      int     `yaml:"keep_head,omitempty"`      // oldest conversation messages preserved verbatim (stable cache prefix); default 2
 	MaxMessages   int     `yaml:"max_messages,omitempty"`   // optional legacy secondary trigger; 0 = disabled
@@ -235,11 +236,11 @@ func (a *Agent) validate() error {
 	}
 	if a.Compaction != nil {
 		switch a.Compaction.Strategy {
-		case "", "truncation":
-			a.Compaction.Strategy = "truncation"
-		case "sliding_window", "summarize":
+		case "", "cascade":
+			a.Compaction.Strategy = "cascade"
+		case "truncation", "sliding_window", "summarize":
 		default:
-			return fmt.Errorf("compaction.strategy must be 'truncation', 'sliding_window' or 'summarize', got %q", a.Compaction.Strategy)
+			return fmt.Errorf("compaction.strategy must be 'cascade', 'truncation', 'sliding_window' or 'summarize', got %q", a.Compaction.Strategy)
 		}
 		if a.Compaction.KeepRecent <= 0 {
 			a.Compaction.KeepRecent = 20
@@ -247,8 +248,15 @@ func (a *Agent) validate() error {
 		if a.Compaction.KeepHead < 0 {
 			return fmt.Errorf("compaction.keep_head must be >= 0")
 		}
-		if a.Compaction.TriggerRatio != 0 && (a.Compaction.TriggerRatio < 0 || a.Compaction.TriggerRatio >= 1) {
-			return fmt.Errorf("compaction.trigger_ratio must be in (0, 1)")
+		if a.Compaction.TriggerRatio != 0 && (a.Compaction.TriggerRatio < 0 || a.Compaction.TriggerRatio > 1) {
+			return fmt.Errorf("compaction.trigger_ratio must be in (0, 1]")
+		}
+		if a.Compaction.TargetRatio != 0 && (a.Compaction.TargetRatio < 0 || a.Compaction.TargetRatio >= 1) {
+			return fmt.Errorf("compaction.target_ratio must be in (0, 1)")
+		}
+		if a.Compaction.TargetRatio != 0 && a.Compaction.TriggerRatio != 0 &&
+			a.Compaction.TargetRatio >= a.Compaction.TriggerRatio {
+			return fmt.Errorf("compaction.target_ratio must be below trigger_ratio")
 		}
 	}
 	if a.Knowledge != nil {

@@ -2,12 +2,6 @@ import { CheckCircle, ShieldQuestion, XCircle } from "lucide-react"
 import type { AgentFormData } from "@/lib/agent-yaml"
 import type { TFunction } from "i18next"
 
-export function formatTokens(v: number): string {
-  if (v >= 1048576 && v % 1048576 === 0) return `${v / 1048576}M`
-  if (v >= 1024 && v % 1024 === 0) return `${v / 1024}K`
-  return String(v)
-}
-
 export type ToolPermission = "auto_approve" | "confirm" | "deny"
 
 export function getToolPermission(

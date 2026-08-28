@@ -26,6 +26,9 @@ type Profile struct {
 	// KeepAlive is the Ollama model keep-alive duration (e.g. "5m", "0").
 	// Only meaningful for StyleOllama; ignored by other styles.
 	KeepAlive string
+	// ModelWindows maps model id → context window in tokens, captured when
+	// the provider is configured (e.g. Ollama /api/show).
+	ModelWindows map[string]int
 }
 
 // ProfileEntry is a provider definition in providers.yaml.
@@ -41,6 +44,9 @@ type ProfileEntry struct {
 	Vision       bool            `yaml:"vision,omitempty"`
 	Thinking     *ThinkingConfig `yaml:"thinking"`
 	KeepAlive    string          `yaml:"keep_alive,omitempty" json:"keep_alive,omitempty"`
+	// ModelWindows maps model id → context window in tokens, captured when
+	// the provider is saved so agents can use the real window instead of 128K.
+	ModelWindows map[string]int `yaml:"model_windows,omitempty" json:"model_windows,omitempty"`
 }
 
 // Catalog holds named provider profiles loaded from providers.yaml.
@@ -200,6 +206,7 @@ func (e ProfileEntry) resolve(name string, credLookup func(string) string) (Prof
 		Vision:       e.Vision,
 		Thinking:     e.Thinking,
 		KeepAlive:    e.KeepAlive,
+		ModelWindows: e.ModelWindows,
 	}, nil
 }
 
@@ -237,16 +244,55 @@ func (c *Catalog) Names() []string {
 	return names
 }
 
+// ModelContextWindow returns the context window saved on the provider for
+// model. 0 means the provider has no recorded window for that model.
+func (c *Catalog) ModelContextWindow(providerName, model string) int {
+	if c == nil || providerName == "" || model == "" {
+		return 0
+	}
+	e, ok := c.entries[providerName]
+	if !ok {
+		return 0
+	}
+	return e.ModelWindows[model]
+}
+
+// MergeModelWindows copies src over dst. Zero or empty keys are ignored.
+// The result is nil when empty so YAML/JSON omitempty stays quiet.
+func MergeModelWindows(dst, src map[string]int) map[string]int {
+	if len(dst) == 0 && len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(dst)+len(src))
+	for k, v := range dst {
+		if v > 0 {
+			out[k] = v
+		}
+	}
+	for k, v := range src {
+		if v > 0 {
+			out[k] = v
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // ProviderInfo returns summary information about a provider (without secrets).
 type ProviderInfo struct {
-	Name         string    `json:"name"`
-	APIStyle     APIStyle  `json:"api_style"`
-	AuthStyle    AuthStyle `json:"auth_style,omitempty"`
-	DisplayName  string    `json:"display_name"`
-	BaseURL      string    `json:"base_url"`
-	DefaultModel string    `json:"default_model"`
-	ModelsPath   string    `json:"models_path"`
-	Vision       bool      `json:"vision"`
+	Name          string         `json:"name"`
+	APIStyle      APIStyle       `json:"api_style"`
+	AuthStyle     AuthStyle      `json:"auth_style,omitempty"`
+	DisplayName   string         `json:"display_name"`
+	BaseURL       string         `json:"base_url"`
+	DefaultModel  string         `json:"default_model"`
+	ModelsPath    string         `json:"models_path"`
+	Vision        bool           `json:"vision"`
+	APIKeyEnv     string         `json:"api_key_env,omitempty"`
+	ModelWindows  map[string]int `json:"model_windows,omitempty"`
+	ContextWindow int            `json:"context_window,omitempty"` // default_model's saved window
 }
 
 // Entries returns all configured providers as ProviderInfo (without API keys).
@@ -282,14 +328,17 @@ func (c *Catalog) Entries() []ProviderInfo {
 			}
 		}
 		infos = append(infos, ProviderInfo{
-			Name:         name,
-			APIStyle:     entry.APIStyle,
-			AuthStyle:    authStyle,
-			DisplayName:  displayName,
-			BaseURL:      baseURL,
-			DefaultModel: entry.DefaultModel,
-			ModelsPath:   modelsPath,
-			Vision:       entry.Vision,
+			Name:          name,
+			APIStyle:      entry.APIStyle,
+			AuthStyle:     authStyle,
+			DisplayName:   displayName,
+			BaseURL:       baseURL,
+			DefaultModel:  entry.DefaultModel,
+			ModelsPath:    modelsPath,
+			Vision:        entry.Vision,
+			APIKeyEnv:     entry.APIKeyEnv,
+			ModelWindows:  entry.ModelWindows,
+			ContextWindow: entry.ModelWindows[entry.DefaultModel],
 		})
 	}
 	return infos
@@ -316,7 +365,7 @@ func NewProvider(profile Profile) (Provider, error) {
 			Vision:     profile.Vision,
 		})
 	case StyleOllama:
-		return NewOllama(OllamaConfig{
+		o, err := NewOllama(OllamaConfig{
 			APIKey:     profile.APIKey,
 			BaseURL:    profile.BaseURL,
 			Thinking:   profile.Thinking,
@@ -324,6 +373,11 @@ func NewProvider(profile Profile) (Provider, error) {
 			Vision:     profile.Vision,
 			KeepAlive:  profile.KeepAlive,
 		})
+		if err != nil {
+			return nil, err
+		}
+		o.seedContextWindows(profile.ModelWindows)
+		return o, nil
 	default:
 		return nil, fmt.Errorf("unsupported provider api_style %q", profile.APIStyle)
 	}
@@ -355,6 +409,24 @@ func (c *Catalog) ListModels(ctx context.Context, name string) ([]ModelInfo, err
 		return nil, fmt.Errorf("provider %q does not support model listing", name)
 	}
 	return lister.ListModels(ctx)
+}
+
+// ShowModel returns structured metadata for a single model from a configured
+// provider. Providers that do not implement ModelDetailer return an error.
+func (c *Catalog) ShowModel(ctx context.Context, name, model string) (ModelDetail, error) {
+	profile, err := c.Get(name)
+	if err != nil {
+		return ModelDetail{}, err
+	}
+	p, err := NewProvider(ListingProfile(profile))
+	if err != nil {
+		return ModelDetail{}, err
+	}
+	detailer, ok := p.(ModelDetailer)
+	if !ok {
+		return ModelDetail{}, fmt.Errorf("provider %q does not support model detail", name)
+	}
+	return detailer.ShowModel(ctx, model)
 }
 
 // ListingProfile returns a Profile tuned for model listing.

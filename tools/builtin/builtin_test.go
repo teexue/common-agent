@@ -78,8 +78,31 @@ func TestReadFileMaxBytes(t *testing.T) {
 	if err := json.Unmarshal(res.Output, &out); err != nil {
 		t.Fatal(err)
 	}
-	if out["content"] != "01234" {
-		t.Fatalf("expected '01234', got %q", out["content"])
+	if got := out["content"]; got != "01234\n...[truncated, call read_file again with offset=5]" {
+		t.Fatalf("unexpected content %q", got)
+	}
+	if out["total_size"].(float64) != 10 {
+		t.Fatalf("expected total_size 10, got %v", out["total_size"])
+	}
+	if out["truncated"].(bool) != true {
+		t.Fatalf("expected truncated true")
+	}
+
+	// Pagination: reading from offset 5 returns the remainder.
+	input2, _ := json.Marshal(map[string]any{"path": "big.txt", "max_bytes": 5, "offset": 5})
+	res2, err := rf.Execute(context.Background(), input2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out2 map[string]any
+	if err := json.Unmarshal(res2.Output, &out2); err != nil {
+		t.Fatal(err)
+	}
+	if out2["content"] != "56789" {
+		t.Fatalf("expected '56789', got %v", out2["content"])
+	}
+	if out2["truncated"].(bool) != false {
+		t.Fatalf("expected truncated false for tail read")
 	}
 }
 

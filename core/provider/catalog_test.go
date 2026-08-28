@@ -207,6 +207,46 @@ func TestListingProfileDualVendor(t *testing.T) {
 	}
 }
 
+func TestModelContextWindow(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "providers.yaml")
+	content := `providers:
+  ollama:
+    api_style: ollama
+    default_model: glm5
+    model_windows:
+      glm5: 1000000
+      other: 8192
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := provider.LoadCatalog(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := catalog.ModelContextWindow("ollama", "glm5"); got != 1_000_000 {
+		t.Fatalf("glm5 window = %d", got)
+	}
+	if got := catalog.ModelContextWindow("ollama", "missing"); got != 0 {
+		t.Fatalf("missing model = %d", got)
+	}
+	infos := catalog.Entries()
+	if len(infos) != 1 || infos[0].ContextWindow != 1_000_000 {
+		t.Fatalf("provider info window = %+v", infos)
+	}
+}
+
+func TestMergeModelWindows(t *testing.T) {
+	got := provider.MergeModelWindows(map[string]int{"a": 1000}, map[string]int{"b": 2000, "a": 0})
+	if got["a"] != 1000 || got["b"] != 2000 {
+		t.Fatalf("merge = %v", got)
+	}
+	if provider.MergeModelWindows(nil, nil) != nil {
+		t.Fatal("empty merge should be nil")
+	}
+}
+
 func TestMissingCatalog(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "providers.yaml")

@@ -51,6 +51,39 @@ func TestUpsertProvider(t *testing.T) {
 	}
 }
 
+func TestMergeProviderModelWindow(t *testing.T) {
+	dir := t.TempDir()
+	spec := config.ProviderSpec{
+		Name:         "ollama",
+		APIStyle:     provider.StyleOllama,
+		DefaultModel: "glm5",
+	}
+	if err := config.UpsertProvider(dir, spec); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := config.MergeProviderModelWindow(dir, "ollama", "glm5", 1_000_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("expected first merge to change")
+	}
+	changed, err = config.MergeProviderModelWindow(dir, "ollama", "glm5", 1_000_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Fatal("same window should not change")
+	}
+	catalog, err := provider.LoadCatalog(config.ProvidersFile(dir), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := catalog.ModelContextWindow("ollama", "glm5"); got != 1_000_000 {
+		t.Fatalf("saved window = %d", got)
+	}
+}
+
 func TestEnsureDirs(t *testing.T) {
 	dir := t.TempDir()
 	if err := config.EnsureDirs(dir); err != nil {

@@ -47,12 +47,21 @@ func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, tu
 			summaryModel = comp.SummaryModel
 		}
 	}
-	// Reserve the model's max output so the next completion always fits.
-	reserve := provider.EffectiveMaxOutput(cfg.Agent.Model, cfg.Agent.MaxTokens)
+	// Reserve tokens for the compaction summary output and the next
+	// completion: min(maxOutput, 20K), aligning with Claude Code's budget.
+	maxOut := provider.EffectiveMaxOutput(cfg.Agent.Model, cfg.Agent.MaxTokens)
+	reserve := compaction.SummaryBudget(maxOut)
 	tokenLimit := compaction.ResolveTokenLimit(window, reserve, ratio)
 	if tokenLimit <= 0 && maxMessages <= 0 {
 		return // no context window and no legacy message trigger
 	}
+	// Compress down to a target below the trigger line so several new turns
+	// can accrue before compaction fires again (avoids re-firing every turn).
+	targetRatio := 0.0
+	if comp != nil {
+		targetRatio = comp.TargetRatio
+	}
+	targetLimit := compaction.ResolveTargetLimit(window, reserve, targetRatio)
 
 	// Project the usage the next request would hit: last real input_tokens
 	// from the provider plus an estimate of messages appended since. This
@@ -72,9 +81,11 @@ func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, tu
 		KeepRecent:    keepRecent,
 		KeepHead:      keepHead,
 		CurrentTokens: currentTokens,
+		TargetTokens:  targetLimit,
+		ContextWindow: window,
 		Provider:      cfg.Provider,
 		Model:         summaryModel,
-		MaxOutput:     0,
+		MaxOutput:     reserve,
 	})
 	result, err := cmp.Compact(ctx, msgs)
 	if err != nil {

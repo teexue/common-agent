@@ -2,12 +2,31 @@
 
 通用 Agent 基座（Go 核心 + React 前端）。本文档为各 AI 代理提供编码指引。
 
+## 构建与测试
+
+```bash
+go build -o bin/agent-server ./cmd                  # 构建
+go vet ./...                                        # vet
+golangci-lint run                                   # lint（配置见 .golangci.yml）
+go test ./...                                       # 全部测试
+go test ./core/loop/                                # 单包
+go test -run TestRunWithMockProvider ./core/loop/    # 单测
+
+cd frontend && pnpm test                            # 前端测试
+```
+
+当前阶段没有 `go generate`、`go install` 或 Docker 步骤。
+
+- **Go**：用 `go mod` 管理依赖，禁止手改 `go.mod` 版本号
+- **前端**：用 `pnpm add` / `pnpm add -D` 加依赖，禁止手改 `package.json` 版本号
+
 ## 架构约束（最高优先级）
 
-- **单入口 Agent Loop**：CLI / HTTP / gRPC 等所有路径必须调用同一个 `loop.Run` 函数
+- **单入口 Agent Loop**：CLI / HTTP / gRPC 等所有路径必须调用同一个 `loop.Run` 函数，禁止在 handler 里复制 loop 逻辑
 - **Tool 统一抽象**：一切能力通过 `Tool` 接口暴露，禁止在 loop 内 hardcode 业务逻辑
 - **Agent 驱动差异**：提示词、工具白名单、权限、模型配置来自 Agent YAML，禁止在 core 写 `switch agent` 分支
 - **事件流输出**：对外统一 `event.Event`（`text_delta` / `reasoning_delta` / `tool_start` / `tool_result` / `error` / `done`）
+- **事件是契约**：新增 event 类型须同步所有消费方：`core/event` 的 `PrintEvents`、`server/http` 的 SSE 编码器、以及未来的 gRPC handler
 - **依赖方向**：`cmd → server → core ← tools`；core 不得依赖 server / cmd
 
 ## 目录与包布局
@@ -21,9 +40,61 @@ frontend/             # React SPA（Vite + Tailwind + shadcn）
 sdk/{ts,python}
 ```
 
+| 层 | 包 | 职责 |
+|----|----|------|
+| 入口 | `cmd/` | CLI wiring；默认命令启动 Web UI（`web`；`serve` 为别名） |
+| 传输 | `server/http/` | HTTP/SSE：解析请求 → 调用 `loop.Run` → 流式事件 |
+| 核心 | `core/loop/` | 唯一 Agent Loop；所有路径必须走 `Run` |
+| 核心 | `core/event/` | 统一事件类型 |
+| 核心 | `core/provider/` | LLM `Stream` 接口 + OpenAI/Anthropic + mock + catalog |
+| 核心 | `core/tool/` | Tool 接口（`Name/Description/InputSchema/Execute`）；`Result.Output` 为 `json.RawMessage` |
+| 核心 | `core/agent/` | YAML 加载（prompt、tools、model、max turns、max tokens、tool_execution） |
+| 核心 | `core/session/` | 线程安全会话：`AddMessages` / `GetMessages` / `Clear` |
+| 核心 | `core/config/` | 用户配置 `~/.common-agent/`（settings、providers、`CredentialStore`、wizard） |
+| 扩展 | `tools/registry/` | 按名注册工具，解析给 LLM 的 definitions |
+| 内置 | `tools/builtin/` | `get_time`、`read_file`、`write_file` 等 |
+
 - 包名小写、短、无下划线（`loop` 而非 `agent_loop`）
 - 每个目录一个包；禁止 `util`、`common`、`helper` 包
 - 跨包共享类型放语义明确的包（如 `core/event`、`core/agent`）
+
+## 关键约定
+
+- **工具执行**：Agent `tool_execution.mode` 控制并行（流式，默认）或串行；`tool_execution.max_parallel` 限制并发（默认 4）
+- **测试 Mock**：用 `provider.MockProvider`（每步可设 `Text` / `Reasoning` / `ToolCalls`）和 `provider.EchoThenReply()`，无需真实 LLM
+- **配置目录**：`~/.common-agent/` — `config.yaml`（设置）、`providers.yaml`（供应商）、`credentials.yaml`（API Key）、`agents/*.yaml`（Agent 定义）。禁止提交 credentials 或 `.env`
+- **凭证**：`config.NewCredentialStore(home)` 创建线程安全 store，将其 `Lookup` 传给 `provider.LoadCatalog`；包级旧函数已废弃
+- **工具命名**：snake_case，全局唯一（如 `read_file`）。通过 `registry.Register()` 显式注册，禁止 `init()` 魔法注册
+- **Provider 解析**：`cmd` 层按名从 catalog 解析并创建具体 `provider.Provider`；core 只依赖接口
+- **HTTP 客户端**：Provider 使用 `provider.DefaultHTTPClient()`（120s 超时），禁止 `http.DefaultClient`
+- **思考/推理**：OpenAI 兼容的 `ThinkingConfig` 控制 Kimi 风格 reasoning；`ReasoningDelta` 写入事件流
+
+## Agent YAML 参考
+
+```yaml
+id: agt_demo01          # 稳定主键；文件名 agents/{id}.yaml
+name: demo              # 显示名，可改
+version: 1
+provider: anthropic
+model: claude-sonnet-4-20250514
+system_prompt: |
+  You are a helpful assistant.
+tools:
+  - read_file
+  - get_time
+max_turns: 10
+max_tokens: 4096
+tool_execution:
+  mode: parallel       # parallel | serial
+  max_parallel: 4      # max concurrent tools
+compaction:
+  strategy: cascade    # cascade（默认）| truncation | sliding_window | summarize
+  trigger_ratio: 1.0   # 用量超过 window*ratio 时压缩（默认 1.0 = window − summary budget）
+  target_ratio: 0.6    # 压到 window*ratio（必须低于 trigger）
+  keep_recent: 20      # 最近对话原文保留
+  keep_head: 2         # 最旧消息作为稳定 cache 前缀保留
+  summary_model: ""    # summarize 策略用的模型；空 = Agent 模型
+```
 
 ## 可维护性约束
 

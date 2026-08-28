@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react"
-import { useNavigate } from "react-router"
 import { useTranslation } from "react-i18next"
 import { KanbanSquare, Plus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -32,7 +31,6 @@ const COLUMNS: { status: KanbanStatus; labelKey: string }[] = [
 /** Five-column kanban board with polling refresh. */
 export function KanbanPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const [items, setItems] = useState<KanbanItem[]>([])
   const [now, setNow] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -119,7 +117,6 @@ export function KanbanPage() {
       <PageHeader
         icon={KanbanSquare}
         title={t("kanban.title")}
-        onBack={() => navigate(-1)}
         actions={
           <Button
             variant="outline"

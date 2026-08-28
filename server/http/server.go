@@ -28,28 +28,28 @@ import (
 
 // Server exposes agent HTTP endpoints via Gin.
 type Server struct {
-	agentsDir   string
-	home        string // ~/.common-agent root; skills dirs derive from it
-	registry    *registry.Registry
-	newProvider func(a *agent.Agent) (provider.Provider, error)
-	staticFS    fs.FS // optional embedded frontend; nil disables static serving
-	logger      *slog.Logger
-	store       session.Store      // optional session persistence; nil disables session endpoints
-	svc         *service.Service   // shared business logic
-	approver    *HTTPApprover      // handles tool approval flow
-	eventLogger *audit.EventLogger // optional event logging; nil disables replay
-	requestLogger *audit.RequestLogger // optional LLM request audit; nil disables request logs
-	catalog     *provider.Catalog          // optional provider catalog; nil disables provider listing
-	creds       *config.CredentialStore    // optional credentials for provider upsert/reload
-	auditStore  *audit.AuditStore          // optional audit store; nil disables audit export
-	health      *telemetry.HealthServer
-	watcher     *agent.Watcher  // watches agents dir for changes
-	shutdownCtx context.Context // cancelled on server shutdown; nil = no shutdown propagation
-	stateDB     *store.DB
-	tokens      *auth.TokenService
-	cliAPIKeys  []string // raw keys from --api-key (ephemeral, hashed in-memory)
-	cliKeyMu    sync.RWMutex
-	cliKeyHash  map[string]string // hash -> synthetic key id
+	agentsDir     string
+	home          string // ~/.common-agent root; skills dirs derive from it
+	registry      *registry.Registry
+	newProvider   func(a *agent.Agent) (provider.Provider, error)
+	staticFS      fs.FS // optional embedded frontend; nil disables static serving
+	logger        *slog.Logger
+	store         session.Store           // optional session persistence; nil disables session endpoints
+	svc           *service.Service        // shared business logic
+	approver      *HTTPApprover           // handles tool approval flow
+	eventLogger   *audit.EventLogger      // optional event logging; nil disables replay
+	requestLogger *audit.RequestLogger    // optional LLM request audit; nil disables request logs
+	catalog       *provider.Catalog       // optional provider catalog; nil disables provider listing
+	creds         *config.CredentialStore // optional credentials for provider upsert/reload
+	auditStore    *audit.AuditStore       // optional audit store; nil disables audit export
+	health        *telemetry.HealthServer
+	watcher       *agent.Watcher  // watches agents dir for changes
+	shutdownCtx   context.Context // cancelled on server shutdown; nil = no shutdown propagation
+	stateDB       *store.DB
+	tokens        *auth.TokenService
+	cliAPIKeys    []string // raw keys from --api-key (ephemeral, hashed in-memory)
+	cliKeyMu      sync.RWMutex
+	cliKeyHash    map[string]string // hash -> synthetic key id
 
 	// changeCh broadcasts agent file change events to SSE subscribers.
 	changeCh chan agentChange
@@ -57,17 +57,17 @@ type Server struct {
 
 // ServerConfig holds configuration for creating a new HTTP server.
 type ServerConfig struct {
-	AgentsDir   string
-	HomeDir     string
-	Registry    *registry.Registry
-	NewProvider func(a *agent.Agent) (provider.Provider, error)
-	StaticFS    fs.FS
-	Logger      *slog.Logger
-	Store       session.Store
-	Knowledge   *knowledge.Manager
-	Ingester    *knowledge.Ingester
-	Retriever   *knowledge.Retriever
-	Embedder    embedding.Embedder
+	AgentsDir        string
+	HomeDir          string
+	Registry         *registry.Registry
+	NewProvider      func(a *agent.Agent) (provider.Provider, error)
+	StaticFS         fs.FS
+	Logger           *slog.Logger
+	Store            session.Store
+	Knowledge        *knowledge.Manager
+	Ingester         *knowledge.Ingester
+	Retriever        *knowledge.Retriever
+	Embedder         embedding.Embedder
 	KnowledgeRuntime *knowledge.Runtime
 }
 
@@ -80,16 +80,16 @@ func NewServer(cfg ServerConfig) *Server {
 		logger = slog.Default()
 	}
 	svc := service.New(service.ServiceConfig{
-		AgentsDir:   cfg.AgentsDir,
-		HomeDir:     cfg.HomeDir,
-		Registry:    cfg.Registry,
-		NewProvider: cfg.NewProvider,
-		Logger:      logger,
-		Store:       cfg.Store,
-		Knowledge:   cfg.Knowledge,
-		Ingester:    cfg.Ingester,
-		Retriever:   cfg.Retriever,
-		Embedder:    cfg.Embedder,
+		AgentsDir:        cfg.AgentsDir,
+		HomeDir:          cfg.HomeDir,
+		Registry:         cfg.Registry,
+		NewProvider:      cfg.NewProvider,
+		Logger:           logger,
+		Store:            cfg.Store,
+		Knowledge:        cfg.Knowledge,
+		Ingester:         cfg.Ingester,
+		Retriever:        cfg.Retriever,
+		Embedder:         cfg.Embedder,
 		KnowledgeRuntime: cfg.KnowledgeRuntime,
 	})
 	return &Server{
@@ -300,9 +300,14 @@ func (s *Server) resolveCLIKey(raw string) (auth.Identity, bool) {
 // Also rewires Service.NewProvider so subsequent runs use the latest catalog.
 func (s *Server) SetCatalog(c *provider.Catalog) {
 	s.catalog = c
-	if c != nil && s.svc != nil {
-		s.svc.NewProvider = func(a *agent.Agent) (provider.Provider, error) {
-			return c.ResolveForAgent(a.Provider)
+	if s.svc != nil {
+		if c != nil {
+			s.svc.NewProvider = func(a *agent.Agent) (provider.Provider, error) {
+				return c.ResolveForAgent(a.Provider)
+			}
+			s.svc.ModelWindow = c.ModelContextWindow
+		} else {
+			s.svc.ModelWindow = nil
 		}
 	}
 }

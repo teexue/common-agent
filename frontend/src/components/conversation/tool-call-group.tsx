@@ -16,10 +16,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
-import { truncate } from "@/lib/format"
-import { toolDisplayName } from "@/lib/tool-i18n"
 import { ToolOperationCard } from "./tool-operation-card"
-import { businessFailed } from "./tool-summary"
+import { businessFailed, formatToolGroupSummary } from "./tool-summary"
 import type { ToolCallEntry } from "@/types/agent"
 import type { TFunction } from "i18next"
 
@@ -45,9 +43,7 @@ function isSuccess(tc: ToolCallEntry): boolean {
 
 function isTerminal(tc: ToolCallEntry): boolean {
   return (
-    tc.status === "completed" ||
-    tc.status === "error" ||
-    tc.status === "denied"
+    tc.status === "completed" || tc.status === "error" || tc.status === "denied"
   )
 }
 
@@ -66,36 +62,33 @@ function getGroupStatus(
   const allTerminal = toolCalls.every(isTerminal)
 
   if (hasRunning)
-    return { label: t("conversation.groupRunning"), icon: Loader2, color: "text-primary" }
+    return {
+      label: t("conversation.groupRunning"),
+      icon: Loader2,
+      color: "text-primary",
+    }
   if (hasPendingApproval)
-    return { label: t("conversation.groupPendingApproval"), icon: Wrench, color: "text-warning" }
+    return {
+      label: t("conversation.groupPendingApproval"),
+      icon: Wrench,
+      color: "text-warning",
+    }
   if (allTerminal) {
     if (hasFailure && hasSuccess)
-      return { label: t("conversation.groupPartialFailure"), icon: AlertTriangle, color: "text-warning" }
+      return {
+        label: t("conversation.groupPartialFailure"),
+        icon: AlertTriangle,
+        color: "text-warning",
+      }
     if (hasFailure)
       return { label: t("status.failed"), icon: X, color: "text-destructive" }
     return { label: t("status.success"), icon: Check, color: "text-success" }
   }
-  return { label: t("conversation.groupWaiting"), icon: Wrench, color: "text-muted-foreground" }
-}
-
-function formatToolSummary(toolCalls: ToolCallEntry[], t: TFunction): string {
-  const summaries = toolCalls.map((tc) => {
-    const input = tc.input as Record<string, unknown> | undefined
-    switch (tc.name) {
-      case "read_file":
-      case "list_directory":
-        return input?.path ? String(input.path) : toolDisplayName(tc.name, t)
-      case "run_command":
-        return input?.command
-          ? truncate(String(input.command), 30)
-          : toolDisplayName(tc.name, t)
-      default:
-        return toolDisplayName(tc.name, t)
-    }
-  })
-  if (summaries.length <= 3) return summaries.join(", ")
-  return `${summaries.slice(0, 3).join(", ")} +${summaries.length - 3}`
+  return {
+    label: t("conversation.groupWaiting"),
+    icon: Wrench,
+    color: "text-muted-foreground",
+  }
 }
 
 export function ToolCallGroup({
@@ -146,11 +139,11 @@ export function ToolCallGroup({
         ) : (
           <ChevronRight className="h-3 w-3" />
         )}
-        <span className="shrink-0 text-foreground">
-          {t("conversation.toolCallsCount", { count: toolCalls.length })}
+        <span className="line-clamp-2 min-w-0 flex-1 text-left text-[10px] leading-snug text-foreground">
+          {formatToolGroupSummary(toolCalls, t)}
         </span>
-        <span className="min-w-0 flex-1 truncate text-left text-muted-foreground">
-          {formatToolSummary(toolCalls, t)}
+        <span className="shrink-0 text-muted-foreground">
+          {t("conversation.toolCallsCount", { count: toolCalls.length })}
         </span>
         <span className={cn("shrink-0 text-[10px]", status.color)}>
           {status.label}

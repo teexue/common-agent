@@ -331,7 +331,8 @@ export function WorkspacePanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-hidden">
+      <div className="mx-auto flex h-full w-full max-w-3xl flex-col">
+        <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
           <div
             ref={containerRef}
@@ -412,6 +413,7 @@ export function WorkspacePanel({
         accessory={inputAccessory}
         tokenUsage={tokenUsage}
       />
+      </div>
     </div>
   )
 }

@@ -79,6 +79,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "CLEAR":
     case "SET_SESSION_ID":
     case "LOAD_SESSION":
+    case "LOAD_LIVE":
       return reduceSessionAction(state, action)
     default:
       return state
@@ -279,7 +280,7 @@ function reduceSubAgentAction(
 function reduceSessionAction(
   state: ChatState,
   action: ChatAction & {
-    type: `STREAM_${string}` | "CLEAR" | "SET_SESSION_ID" | "LOAD_SESSION"
+    type: `STREAM_${string}` | "CLEAR" | "SET_SESSION_ID" | "LOAD_SESSION" | "LOAD_LIVE"
   }
 ): ChatState {
   switch (action.type) {
@@ -355,6 +356,15 @@ function reduceSessionAction(
         sessionId: action.sessionId,
         messages: action.messages,
         isStreaming: false,
+        error: null,
+        ...usageFromMetadata(action.metadata),
+      }
+    case "LOAD_LIVE":
+      return {
+        ...state,
+        sessionId: action.sessionId,
+        messages: action.messages,
+        isStreaming: true,
         error: null,
         ...usageFromMetadata(action.metadata),
       }

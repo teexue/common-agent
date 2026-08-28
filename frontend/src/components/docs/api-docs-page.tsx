@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react"
-import { useNavigate } from "react-router"
 import { useTranslation } from "react-i18next"
 import { FileCode2 } from "lucide-react"
 import { PageHeader } from "@/components/shared/page-header"
@@ -29,7 +28,6 @@ import { cn } from "@/lib/utils"
 /** Interactive API integration guide (not Markdown). */
 export function ApiDocsPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const base = useBaseURL()
   const [active, setActive] = useState<SectionId>("overview")
   const runSamples = useMemo(() => buildRunSamples(base), [base])
@@ -73,7 +71,6 @@ export function ApiDocsPage() {
       <PageHeader
         icon={FileCode2}
         title={t("apiDocs.title")}
-        onBack={() => navigate(-1)}
         actions={<BaseURLChip url={base} />}
       />
 

@@ -11,7 +11,6 @@ import { useAgentManager } from "@/hooks/use-agent-manager"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
 import { useMessageSearch } from "@/hooks/use-message-search"
 import {
-  fetchSession,
   deleteSession,
   resolveApproval,
   fetchProviders,
@@ -26,30 +25,6 @@ import { useSessionList } from "./shell-hooks"
 
 function useSessions(chat: ReturnType<typeof useChat>) {
   const list = useSessionList()
-  const resume = useCallback(
-    async (id: string) => {
-      try {
-        const sess = await fetchSession(id)
-        await chat.loadSession(
-          id,
-          sess.messages as Array<{
-            role: string
-            content?: string
-            reasoning_content?: string
-            tool_calls?: Array<{ id: string; name: string; arguments: unknown }>
-            tool_call_id?: string
-            name?: string
-          }>,
-          sess.metadata
-        )
-        return { agent: sess.agent, workdir: sess.metadata?.workdir || null }
-      } catch (err) {
-        console.error("Failed to resume session:", err)
-        return null
-      }
-    },
-    [chat.loadSession]
-  )
   const remove = useCallback(
     async (id: string) => {
       try {
@@ -62,7 +37,7 @@ function useSessions(chat: ReturnType<typeof useChat>) {
     },
     [chat, list.refresh]
   )
-  return { sessions: list.sessions, refresh: list.refresh, resume, remove }
+  return { sessions: list.sessions, refresh: list.refresh, remove }
 }
 
 export function WorkspaceRoute() {
@@ -99,6 +74,17 @@ export function WorkspaceRoute() {
   useEffect(() => {
     if (chat.sessionId) sessMgr.refresh()
   }, [chat.sessionId, sessMgr.refresh])
+  // Mirror the active session id into the URL (?session=) so a page refresh
+  // can recover the conversation — including an in-progress run.
+  useEffect(() => {
+    if (!chat.sessionId) return
+    const params = new URLSearchParams(location.search)
+    if (params.get("session") === chat.sessionId) return
+    params.set("session", chat.sessionId)
+    params.delete("resume")
+    navigate(`${location.pathname}?${params.toString()}`, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.sessionId])
   useEffect(() => {
     if (agents.length === 0) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -111,24 +97,37 @@ export function WorkspaceRoute() {
     })
   }, [agents])
 
-  // Resume session when navigated from manage/settings with ?resume=
+  // Resume a session from the URL (?session=, legacy ?resume=). Handles both
+  // finished sessions and in-progress runs (via replay polling).
   useEffect(() => {
     const params = new URLSearchParams(location.search)
-    const resumeId = params.get("resume")
-    if (!resumeId) return
+    const id = params.get("session") || params.get("resume")
+    if (!id) return
+    if (chat.sessionId === id) {
+      // Already loaded; just normalize a legacy ?resume= to ?session=.
+      if (params.get("resume")) {
+        params.set("session", id)
+        params.delete("resume")
+        navigate(`${location.pathname}?${params.toString()}`, { replace: true })
+      }
+      return
+    }
     let cancelled = false
     ;(async () => {
-      const r = await sessMgr.resume(resumeId)
+      const r = await chat.resumeSession(id)
       if (cancelled || !r) return
       setAgent(r.agent)
       setSessionWorkDir(r.workdir)
       setSelectedToolCallId(null)
-      navigate(`/agents/${encodeURIComponent(r.agent)}`, { replace: true })
+      params.set("session", id)
+      params.delete("resume")
+      navigate(`${location.pathname}?${params.toString()}`, { replace: true })
     })()
     return () => {
       cancelled = true
     }
-  }, [location.search]) // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search])
 
   const agentInfo =
     agents.find((a) => a.id === agent || a.name === agent) ?? agents[0] ?? null
@@ -180,15 +179,19 @@ export function WorkspaceRoute() {
   }, [chat.clear, sessMgr.refresh])
   const handleResumeSession = useCallback(
     async (id: string) => {
-      const r = await sessMgr.resume(id)
-      if (r) {
-        setAgent(r.agent)
-        setSessionWorkDir(r.workdir)
-        setSelectedToolCallId(null)
-        navigate(`/agents/${encodeURIComponent(r.agent)}`, { replace: true })
-      }
+      const r = await chat.resumeSession(id)
+      if (!r) return
+      setAgent(r.agent)
+      setSessionWorkDir(r.workdir)
+      setSelectedToolCallId(null)
+      const params = new URLSearchParams()
+      params.set("session", id)
+      navigate(
+        `/agents/${encodeURIComponent(r.agent)}?${params.toString()}`,
+        { replace: true }
+      )
     },
-    [sessMgr.resume, navigate]
+    [chat.resumeSession, navigate]
   )
   const handleWorkdirChange = useCallback(
     async (dir: string) => {
@@ -230,13 +233,15 @@ export function WorkspaceRoute() {
     onClosePanel: () => setSelectedToolCallId(null),
   })
 
-  // Session-wide token totals (accumulated in chat state) against the current
-  // agent's effective context window (from the agent list, with the streamed
-  // value as a fallback).
+  // Prefer the window from the last done event (Ollama /api/show, model spec,
+  // or an explicit agent setting). The agent list only knows specs/config, so
+  // it is a fallback for the first message before any run has completed.
+  const listWindow =
+    agentInfo?.context_window ?? agentInfo?.contextWindow ?? 0
   const tokenUsage = {
     inputTokens: chat.inputTokens,
     outputTokens: chat.outputTokens,
-    contextWindow: agentInfo?.contextWindow ?? chat.contextWindow,
+    contextWindow: chat.contextWindow > 0 ? chat.contextWindow : listWindow,
     cacheReadTokens: chat.cacheReadTokens,
   }
 

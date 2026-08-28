@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react"
-import { fetchProviderModels, fetchVendors, upsertProvider } from "@/lib/api"
-import type { ModelInfo, ProviderInfo, VendorInfo } from "@/types/agent"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { fetchProviderModelDetail, fetchProviderModels, fetchVendors, upsertProvider } from "@/lib/api"
+import type { ModelDetail, ModelInfo, ProviderInfo, VendorInfo } from "@/types/agent"
 import {
   ApiKeyField,
   AuthStyleField,
@@ -11,6 +11,7 @@ import {
   VendorSelect,
   VisionToggle,
 } from "./provider-form-fields"
+import { ModelDetailCard } from "./model-detail-card"
 import {
   defaultModelsPath,
   vendorAuth,
@@ -51,6 +52,10 @@ export function ProviderForm({
   const [models, setModels] = useState<ModelInfo[] | null>(null)
   const [fetching, setFetching] = useState(false)
   const [fetchErr, setFetchErr] = useState<string | null>(null)
+  const [detail, setDetail] = useState<ModelDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailErr, setDetailErr] = useState<string | null>(null)
+  const detailReqId = useRef(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -126,6 +131,53 @@ export function ProviderForm({
     }
   }
 
+  // Only Ollama exposes model detail via /api/show; other styles have no
+  // introspection endpoint, so the card is hidden for them.
+  const detailSupported = apiStyle === "ollama"
+  const detailEmpty = !defaultModel.trim()
+
+  const loadDetail = async () => {
+    if (!detailSupported || !defaultModel.trim()) return
+    const reqId = ++detailReqId.current
+    setDetailLoading(true)
+    setDetailErr(null)
+    try {
+      const d = await fetchProviderModelDetail({
+        name: name.trim() || undefined,
+        api_style: apiStyle,
+        base_url: baseURL.trim() || undefined,
+        models_path: modelsPath.trim() || undefined,
+        auth_style: authStyle || undefined,
+        api_key: apiKey.trim() || undefined,
+        model: defaultModel.trim(),
+      })
+      if (reqId === detailReqId.current) setDetail(d)
+    } catch (e: unknown) {
+      if (reqId === detailReqId.current) {
+        setDetailErr(e instanceof Error ? e.message : String(e))
+        setDetail(null)
+      }
+    } finally {
+      if (reqId === detailReqId.current) setDetailLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!detailSupported) {
+      setDetail(null)
+      setDetailErr(null)
+      return
+    }
+    if (!defaultModel.trim()) {
+      setDetail(null)
+      setDetailErr(null)
+      return
+    }
+    const id = setTimeout(loadDetail, 400)
+    return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailSupported, defaultModel, baseURL, modelsPath, apiKey])
+
   const handleSave = async () => {
     setSaving(true)
     setError(null)
@@ -135,12 +187,14 @@ export function ProviderForm({
         api_style: apiStyle,
         base_url: baseURL.trim() || undefined,
         api_key: apiKey.trim() || undefined,
-        api_key_env: selectedVendor?.api_key_env || undefined,
+        api_key_env:
+          selectedVendor?.api_key_env || provider?.api_key_env || undefined,
         default_model: defaultModel.trim() || undefined,
         display_name: displayName.trim() || undefined,
         models_path: modelsPath.trim() || undefined,
         auth_style: authStyle || undefined,
         vision,
+        context_window: detail?.context_window || undefined,
       })
       onSaved()
     } catch (e: unknown) {
@@ -216,6 +270,16 @@ export function ProviderForm({
         apiKeyOptional={!requiresKey}
         onFetchModels={handleFetchModels}
       />
+
+      {detailSupported && (
+        <ModelDetailCard
+          detail={detail}
+          loading={detailLoading}
+          err={detailErr}
+          empty={detailEmpty}
+          onRefresh={loadDetail}
+        />
+      )}
 
       <VisionToggle vision={vision} onToggle={() => setVision(!vision)} />
 

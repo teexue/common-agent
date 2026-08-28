@@ -10,51 +10,9 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ActivityEntry } from "@/components/conversation/activity-entry"
 import { useAutoScroll } from "@/hooks/use-auto-scroll"
-import { chatReducer, type ChatState } from "@/hooks/use-chat-state"
-import { dispatchSSEEvent } from "@/hooks/use-chat"
+import { eventsToEntries } from "@/hooks/chat-replay"
 import { fetchSessionReplay } from "@/lib/api"
-import type { ConversationEntry, ReplayEvent } from "@/types/agent"
-
-/** Folds recorded run events into chat-style conversation entries, reusing
- * the same reducer as the live chat view so both render identically. */
-function eventsToEntries(
-  records: ReplayEvent[],
-  prompt?: string
-): ConversationEntry[] {
-  let state: ChatState = {
-    messages: [],
-    isStreaming: false,
-    error: null,
-    sessionId: null,
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadTokens: 0,
-    cacheCreationTokens: 0,
-    contextWindow: 0,
-  }
-  if (prompt) {
-    state = chatReducer(state, { type: "ADD_USER_MESSAGE", text: prompt })
-  }
-  const entryId = "assistant-replay"
-  state = chatReducer(state, { type: "START_ASSISTANT", entryId })
-  for (const rec of records) {
-    dispatchSSEEvent(rec.event, entryId, (action) => {
-      state = chatReducer(state, action)
-    })
-  }
-  // Reassign deterministic ids: the reducer mints Date.now()-based ids, which
-  // change on every poll rebuild and remount the components (collapsing any
-  // user-expanded thinking/tool blocks). Positional ids stay stable as long
-  // as events are append-only.
-  return state.messages.map((m, i) => ({
-    ...m,
-    id: `replay-entry-${i}`,
-    toolCalls: m.toolCalls?.map((tc, j) => ({
-      ...tc,
-      id: `replay-tc-${i}-${j}`,
-    })),
-  }))
-}
+import type { ReplayEvent } from "@/types/agent"
 
 /** Cheap change detection for polling: same length + same tail event means
  * nothing new arrived. */

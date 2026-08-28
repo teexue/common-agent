@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { useNavigate, useSearchParams } from "react-router"
+import { useSearchParams } from "react-router"
 import { useTranslation } from "react-i18next"
 import {
   BookOpen,
@@ -203,7 +203,6 @@ export function ManagePage({
   agentsRefreshKey = 0,
 }: ManagePageProps) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get("tab") || "agents"
 
@@ -287,27 +286,34 @@ export function ManagePage({
 
   return (
     <PageShell>
-      <PageHeader
-        icon={Layers}
-        title={t("manage.title")}
-        onBack={() => navigate(-1)}
-      />
+      <PageHeader icon={Layers} title={t("manage.title")} />
 
-      <PageMain contentClassName="w-full">
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <TabsList className="mb-6 w-full rounded-xl bg-muted p-0.5">
+      <PageMain
+        className="overflow-hidden"
+        contentClassName="flex h-full min-h-0 w-full p-0"
+      >
+        <Tabs
+          orientation="vertical"
+          value={activeTab}
+          onValueChange={handleTabChange}
+          className="h-full min-h-0 w-full gap-0"
+        >
+          <TabsList
+            variant="line"
+            className="h-full w-48 shrink-0 flex-col items-stretch justify-start gap-0.5 rounded-none border-r border-border bg-transparent p-3"
+          >
             {tabTriggers.map((tab) => (
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
-                className="flex-1 gap-1.5 rounded-lg text-xs"
+                className="h-9 w-full flex-none justify-start gap-2 rounded-lg px-2.5 text-xs after:hidden data-active:bg-primary/10 data-active:text-primary data-active:shadow-none"
               >
-                <tab.icon className="h-3 w-3" />
+                <tab.icon className="h-3.5 w-3.5" />
                 {tab.label}
                 {tab.count != null && (
                   <Badge
                     variant="secondary"
-                    className="rounded-md px-1.5 py-0 text-[10px]"
+                    className="ml-auto rounded-md px-1.5 py-0 text-[10px]"
                   >
                     {tab.count}
                   </Badge>
@@ -316,98 +322,107 @@ export function ManagePage({
             ))}
           </TabsList>
 
-          <TabsContent value="agents" className="mt-0 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] text-muted-foreground">
-                {t("manage.agentsHint")}
-              </p>
-              {onCreateAgent && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1.5 text-xs"
-                  onClick={onCreateAgent}
-                >
-                  <Plus className="h-3.5 w-3.5" /> {t("common.createAgent")}
-                </Button>
+          <div className="min-h-0 min-w-0 flex-1 overflow-auto px-6 py-6">
+            <TabsContent value="agents" className="mt-0 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] text-muted-foreground">
+                  {t("manage.agentsHint")}
+                </p>
+                {onCreateAgent && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs"
+                    onClick={onCreateAgent}
+                  >
+                    <Plus className="h-3.5 w-3.5" /> {t("common.createAgent")}
+                  </Button>
+                )}
+              </div>
+              {loading ? (
+                <EmptyState title={t("manage.loading")} />
+              ) : agents.length === 0 ? (
+                <EmptyState title={t("manage.agentsEmpty")} />
+              ) : (
+                agents.map((a) => (
+                  <AgentCard
+                    key={a.id || a.name}
+                    agent={a}
+                    onView={onViewAgent}
+                    onEdit={onEditAgent}
+                    onCopy={onCopyAgent}
+                    onDelete={onDeleteAgent}
+                  />
+                ))
               )}
-            </div>
-            {loading ? (
-              <EmptyState title={t("manage.loading")} />
-            ) : agents.length === 0 ? (
-              <EmptyState title={t("manage.agentsEmpty")} />
-            ) : (
-              agents.map((a) => (
-                <AgentCard
-                  key={a.id || a.name}
-                  agent={a}
-                  onView={onViewAgent}
-                  onEdit={onEditAgent}
-                  onCopy={onCopyAgent}
-                  onDelete={onDeleteAgent}
+            </TabsContent>
+
+            <TabsContent value="tools" className="mt-0 space-y-3">
+              <p className="text-[11px] text-muted-foreground">
+                {t("manage.toolsHint")}
+              </p>
+              {loading ? (
+                <EmptyState title={t("manage.loading")} />
+              ) : tools.length === 0 ? (
+                <EmptyState title={t("manage.toolsEmpty")} />
+              ) : (
+                tools.map((tool) => (
+                  <ToolCard
+                    key={tool.name}
+                    tool={tool}
+                    onSelect={onSelectTool}
+                  />
+                ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="skills" className="mt-0">
+              <SkillsPanel
+                skills={skills}
+                loading={loading}
+                agents={agents}
+                onRefresh={reloadSkills}
+              />
+            </TabsContent>
+
+            <TabsContent value="knowledge" className="mt-0">
+              {kbId ? (
+                <KnowledgeDetailPanel
+                  kbId={kbId}
+                  onBack={() => setKbId(null)}
                 />
-              ))
-            )}
-          </TabsContent>
+              ) : (
+                <KnowledgeListPanel onOpen={setKbId} />
+              )}
+            </TabsContent>
 
-          <TabsContent value="tools" className="mt-0 space-y-3">
-            <p className="text-[11px] text-muted-foreground">
-              {t("manage.toolsHint")}
-            </p>
-            {loading ? (
-              <EmptyState title={t("manage.loading")} />
-            ) : tools.length === 0 ? (
-              <EmptyState title={t("manage.toolsEmpty")} />
-            ) : (
-              tools.map((tool) => (
-                <ToolCard key={tool.name} tool={tool} onSelect={onSelectTool} />
-              ))
-            )}
-          </TabsContent>
+            <TabsContent value="providers" className="mt-0 space-y-4">
+              <Section
+                title={t("settings.providers")}
+                icon={<Server className="h-3.5 w-3.5" />}
+              >
+                <ProviderPanel />
+              </Section>
+            </TabsContent>
 
-          <TabsContent value="skills" className="mt-0">
-            <SkillsPanel
-              skills={skills}
-              loading={loading}
-              agents={agents}
-              onRefresh={reloadSkills}
-            />
-          </TabsContent>
+            <TabsContent value="embedding" className="mt-0 space-y-4">
+              <Section
+                title={t("settings.embedding")}
+                icon={<Brain className="h-3.5 w-3.5" />}
+              >
+                <EmbeddingPanel />
+              </Section>
+            </TabsContent>
 
-          <TabsContent value="knowledge" className="mt-0">
-            {kbId ? (
-              <KnowledgeDetailPanel kbId={kbId} onBack={() => setKbId(null)} />
-            ) : (
-              <KnowledgeListPanel onOpen={setKbId} />
-            )}
-          </TabsContent>
-
-          <TabsContent value="providers" className="mt-0 space-y-4">
-            <Section
-              title={t("settings.providers")}
-              icon={<Server className="h-3.5 w-3.5" />}
-            >
-              <ProviderPanel />
-            </Section>
-          </TabsContent>
-
-          <TabsContent value="embedding" className="mt-0 space-y-4">
-            <Section
-              title={t("settings.embedding")}
-              icon={<Brain className="h-3.5 w-3.5" />}
-            >
-              <EmbeddingPanel />
-            </Section>
-          </TabsContent>
-
-          <TabsContent value="mcp" className="mt-0 space-y-4">
-            <Section
-              title={t("settings.mcpServers")}
-              icon={<Plug className="h-3.5 w-3.5" />}
-            >
-              <McpPanel />
-            </Section>
-          </TabsContent>
+            <TabsContent value="mcp" className="mt-0 space-y-4">
+              <Section
+                title={t("settings.mcpServers")}
+                icon={<Plug className="h-3.5 w-3.5" />}
+              >
+                <McpPanel />
+              </Section>
+            </TabsContent>
+          </div>
         </Tabs>
       </PageMain>
     </PageShell>

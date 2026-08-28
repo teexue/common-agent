@@ -132,19 +132,20 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 	}
 
 	cfg := loop.Config{
-		Provider:  p,
-		Registry:  s.Registry,
-		Agent:     a,
-		Session:   sess,
-		Prompt:    prompt,
-		Logger:    s.Logger,
-		Store:     s.Store,
-		SessionID: req.SessionID,
-		Policy:    pol,
-		Approver:  approver,
-		WorkDir:   workDir,
-		Images:    req.Images,
-		Source:    req.Source,
+		Provider:      p,
+		Registry:      s.Registry,
+		Agent:         a,
+		Session:       sess,
+		Prompt:        prompt,
+		Logger:        s.Logger,
+		Store:         s.Store,
+		SessionID:     req.SessionID,
+		Policy:        pol,
+		Approver:      approver,
+		WorkDir:       workDir,
+		Images:        req.Images,
+		Source:        req.Source,
+		ContextWindow: s.savedContextWindow(a),
 	}
 
 	return &RunResult{

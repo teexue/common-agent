@@ -46,6 +46,8 @@ export interface AgentInfo {
   model: string
   tools: string[]
   maxTurns: number
+  max_turns?: number
+  context_window?: number
   contextWindow?: number
   systemPrompt?: string
 }
@@ -218,6 +220,9 @@ export interface ProviderInfo {
   default_model: string
   models_path: string
   vision: boolean
+  api_key_env?: string
+  model_windows?: Record<string, number>
+  context_window?: number
 }
 
 // Built-in vendor preset (mirrors Go provider.VendorInfo)
@@ -241,6 +246,20 @@ export interface ModelInfo {
   id: string
   vision?: boolean
   context_window?: number
+}
+
+// Model detail (mirrors Go provider.ModelDetail). Returned by providers that
+// can introspect a model (e.g. Ollama /api/show).
+export interface ModelDetail {
+  id: string
+  context_window?: number
+  runtime_context_window?: number
+  architecture?: string
+  family?: string
+  families?: string[]
+  parameter_size?: string
+  quantization?: string
+  capabilities?: string[]
 }
 
 // Skill info (mirrors Go SkillInfo)

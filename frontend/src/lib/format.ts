@@ -31,8 +31,8 @@ export function estimateTokens(text: string): number {
 }
 
 /**
- * Formats a token count with the largest suitable unit (M > K).
- * e.g. 1234567 → "1.2M", 12345 → "12.3K", 123 → "123".
+ * Formats a token count for display. Units are decimal (1000 / 1_000_000):
+ * 128000 → "128K", 1234567 → "1.2M", 123 → "123".
  */
 export function formatTokenCount(n: number): string {
   if (n >= 1_000_000) {
@@ -44,6 +44,33 @@ export function formatTokenCount(n: number): string {
     return `${v >= 100 ? Math.round(v) : v.toFixed(1)}K`
   }
   return String(n)
+}
+
+/**
+ * Formats a model parameter-count string. Raw integers from Ollama
+ * (`321323031390`) become `321B`; already-human values (`3B`, `8x7B`) pass through.
+ */
+export function formatParameterSize(raw: string): string {
+  const s = raw.trim()
+  if (!s) return s
+  const digits = s.replace(/,/g, "")
+  if (!/^\d+$/.test(digits)) return s
+  const n = Number(digits)
+  if (!Number.isFinite(n) || n < 1_000_000) return s
+  if (n >= 1e12) {
+    const v = n / 1e12
+    return `${v >= 100 ? Math.round(v) : trimDecimal(v)}T`
+  }
+  if (n >= 1e9) {
+    const v = n / 1e9
+    return `${v >= 100 ? Math.round(v) : trimDecimal(v)}B`
+  }
+  const v = n / 1e6
+  return `${v >= 100 ? Math.round(v) : trimDecimal(v)}M`
+}
+
+function trimDecimal(v: number): string {
+  return v.toFixed(1).replace(/\.0$/, "")
 }
 
 /**

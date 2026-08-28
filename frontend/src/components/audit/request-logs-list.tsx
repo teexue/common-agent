@@ -1,8 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { fetchRequestLogDetail } from "@/lib/api"
 import type { RequestLogRecord } from "@/types/agent"
 
 export function formatLogTime(ts: string): string {
@@ -25,15 +26,41 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
 }
 
 /** One expandable request log record row, shared by the audit page and the
- * session-scoped dialog. */
+ * session-scoped dialog. The list view carries only a summary; the full
+ * request/response payloads are fetched on demand when first expanded. */
 export function RequestLogRow({ rec }: { rec: RequestLogRecord }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const [detail, setDetail] = useState<RequestLogRecord | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const toggle = () => {
+    const next = !open
+    setOpen(next)
+    if (next && !detail && !loading && !err) {
+      void loadDetail()
+    }
+  }
+
+  const loadDetail = async () => {
+    setLoading(true)
+    setErr(null)
+    try {
+      const d = await fetchRequestLogDetail(rec.ts, rec.session_id)
+      setDetail(d)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="rounded-xl border border-border">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted/40"
       >
         <ChevronDown
@@ -85,8 +112,23 @@ export function RequestLogRow({ rec }: { rec: RequestLogRecord }) {
               {rec.error}
             </p>
           )}
-          <JsonBlock label={t("audit.request")} value={rec.request} />
-          <JsonBlock label={t("audit.response")} value={rec.response} />
+          {loading && (
+            <div className="flex items-center gap-2 py-2 text-[11px] text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {t("common.loading")}
+            </div>
+          )}
+          {err && (
+            <p className="rounded-lg bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
+              {err}
+            </p>
+          )}
+          {detail && (
+            <>
+              <JsonBlock label={t("audit.request")} value={detail.request} />
+              <JsonBlock label={t("audit.response")} value={detail.response} />
+            </>
+          )}
         </div>
       )}
     </div>

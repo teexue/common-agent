@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/teexue/common-agent/core/compaction"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/hook"
 	"github.com/teexue/common-agent/core/knowledge"
@@ -148,6 +149,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		case <-ctx.Done():
 			emitCancelled(out, cfg.Session.ID, turn, lastTurn.input, lastTurn.output, lastTurn.cacheRead, lastTurn.cacheCreation, window)
 			cfg.Session.AddUsage(totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation, window)
+			persistSession(cfg)
 			return
 		default:
 		}
@@ -159,8 +161,13 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		totalOutputTokens += tokens.output
 		totalCacheRead += tokens.cacheRead
 		totalCacheCreation += tokens.cacheCreation
+		// Persist after each completed turn so a page refresh mid-run can
+		// recover the conversation up to the last finished turn via
+		// GET /sessions/:id, while the in-progress turn is followed via replay.
+		persistSession(cfg)
 		if done {
 			cfg.Session.AddUsage(totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation, window)
+			persistSession(cfg)
 			return
 		}
 	}
@@ -171,6 +178,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 	forceEmit(out, event.Event{Type: event.TypeError, Code: "max_turns", Message: fmt.Sprintf("exceeded max turns %d", maxTurns)})
 	forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: maxTurns, InputTokens: lastTurn.input, OutputTokens: lastTurn.output, ContextWindow: window, SessionID: cfg.Session.ID, CacheReadInputTokens: lastTurn.cacheRead, CacheCreationInputTokens: lastTurn.cacheCreation})
 	cfg.Session.AddUsage(totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation, window)
+	persistSession(cfg)
 }
 
 type tokenDelta struct {
@@ -250,7 +258,7 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 	results := collectToolResults(tcc)
 	fireOnTurnEnd(tc.Hooks, turnCtx, tc.Turn, tc.Log)
 	endTurn(turnSpan, tc.Tel, turnCtx, tc.Turn)
-	recordToolResults(tc.Config, results)
+	recordToolResults(tc.Config, results, tc.ContextWindow)
 	compactIfNeeded(tc.Ctx, tc.Config, tc.Out, tc.Turn, tc.Log, tc.ContextWindow)
 
 	return tokens, false
@@ -361,12 +369,32 @@ func collectSerialResults(tc ToolCollectContext) []pendingResult {
 	return results
 }
 
-func recordToolResults(cfg Config, results []pendingResult) {
+func recordToolResults(cfg Config, results []pendingResult, window int) {
+	budget := maxToolResultBytes
+	if window > 0 {
+		budget = toolResultBudget(currentPressure(cfg, window))
+	}
 	for _, tr := range results {
 		cfg.Session.AddMessages(provider.Message{
-			Role: provider.RoleTool, ToolCallID: tr.callID, Name: tr.toolName, Content: truncateToolOutput(string(tr.output)),
+			Role: provider.RoleTool, ToolCallID: tr.callID, Name: tr.toolName, Content: truncateToolOutputBudget(string(tr.output), budget),
 		})
 	}
+}
+
+// currentPressure estimates current context usage as a fraction of the
+// effective context window, preferring the provider's last real input_tokens
+// over a raw estimate (more accurate for CJK-heavy history).
+func currentPressure(cfg Config, window int) float64 {
+	if window <= 0 {
+		return 0
+	}
+	lastInput, _, lastMsgCount := cfg.Session.LastUsage()
+	msgs := cfg.Session.GetMessages()
+	used := compaction.EstimateTokens(msgs)
+	if lastInput > 0 && lastMsgCount > 0 && lastMsgCount < len(msgs) {
+		used = lastInput + compaction.EstimateTokens(msgs[lastMsgCount:])
+	}
+	return float64(used) / float64(window)
 }
 
 func fireOnTurnStart(hooks *hook.Chain, turn int, log *slog.Logger) {
@@ -391,6 +419,17 @@ func endTurn(span trace.Span, tel *telemetry.Telemetry, ctx context.Context, tur
 	}
 	if tel != nil {
 		tel.RecordTurn(ctx, attribute.Int("turn", turn))
+	}
+}
+
+// persistSession saves the current session state to the store, if configured.
+// Failures are non-fatal: a stale on-disk copy is better than aborting a run.
+func persistSession(cfg Config) {
+	if cfg.Store == nil {
+		return
+	}
+	if err := cfg.Store.Save(cfg.Session); err != nil {
+		slog.Warn("log.session.persist_failed", "session_id", cfg.Session.ID, "error", err)
 	}
 }
 

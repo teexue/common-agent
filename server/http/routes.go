@@ -31,12 +31,14 @@ func (s *Server) mountAPIRoutes(r *gin.Engine) {
 	admin.POST("/providers", s.handleProviderUpsert)
 	admin.DELETE("/providers/:name", s.handleProviderDelete)
 	admin.POST("/providers/models", s.handleProviderModelsTest)
+	admin.POST("/providers/models/detail", s.handleProviderModelDetailTest)
 	admin.PUT("/embedding", s.handleEmbeddingPut)
 	if s.auditStore != nil {
 		admin.GET("/audit/export", s.handleAuditExport)
 	}
 	if s.requestLogger != nil {
 		admin.GET("/audit/requests", s.handleAuditRequests)
+		admin.GET("/audit/requests/detail", s.handleAuditRequestDetail)
 	}
 
 	// Agents scope: runs, agent CRUD, tools, events, background assets.
@@ -78,6 +80,7 @@ func (s *Server) mountAPIRoutes(r *gin.Engine) {
 	providers.GET("/vendors", s.handleVendors)
 	providers.GET("/providers", s.handleProvidersList)
 	providers.GET("/providers/:name/models", s.handleProviderModels)
+	providers.GET("/providers/:name/models/:model/detail", s.handleProviderModelDetail)
 	providers.GET("/embedding", s.handleEmbeddingGet)
 	providers.GET("/embedding/vendors", s.handleEmbeddingVendors)
 

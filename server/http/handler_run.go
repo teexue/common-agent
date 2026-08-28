@@ -97,6 +97,12 @@ func (s *Server) streamEvents(c *gin.Context, events <-chan event.Event, agentNa
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
+	// Expose the session id before the first data frame so the client can
+	// update its URL and reconnect via replay immediately on a refresh,
+	// without waiting for the trailing `done` event.
+	c.Header("X-Session-Id", sessionID)
+	// Disable proxy buffering (e.g. nginx) so SSE frames flush immediately.
+	c.Header("X-Accel-Buffering", "no")
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {

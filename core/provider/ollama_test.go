@@ -90,6 +90,14 @@ func TestOllamaBuildRequestPassesNumCtx(t *testing.T) {
 	assert.Equal(t, 0, body.Options.NumPredict)
 }
 
+func TestOllamaSeedContextWindows(t *testing.T) {
+	o, _ := NewOllama(OllamaConfig{})
+	o.seedContextWindows(map[string]int{"glm5": 1_000_000, "skip": 0})
+	body := o.buildRequest(Request{Model: "glm5", ContextWindow: 1_000_000})
+	require.NotNil(t, body.Options)
+	assert.Equal(t, 1_000_000, body.Options.NumCtx)
+}
+
 func TestOllamaBuildRequestPassesNumCtxAndNumPredict(t *testing.T) {
 	o, _ := NewOllama(OllamaConfig{})
 	o.ctxCache.Store("qwen3", 40960)
@@ -142,10 +150,10 @@ func TestOllamaResolveContextWindow(t *testing.T) {
 	// Configured within the model max is honored.
 	o2, _ := NewOllama(OllamaConfig{BaseURL: "http://127.0.0.1:1"})
 	o2.ctxCache.Store("qwen3", 40960)
-	assert.Equal(t, 8192, o2.ResolveContextWindow(context.Background(), "qwen3", 8192))
+	assert.Equal(t, 8000, o2.ResolveContextWindow(context.Background(), "qwen3", 8000))
 
 	// Configured above the model max is capped to the model max.
-	assert.Equal(t, 40960, o2.ResolveContextWindow(context.Background(), "qwen3", 131072))
+	assert.Equal(t, 40960, o2.ResolveContextWindow(context.Background(), "qwen3", 128000))
 }
 
 // TestOllamaResolveContextWindowFallback covers the case where /api/show is
@@ -168,6 +176,86 @@ func TestOllamaFetchContextLength(t *testing.T) {
 	defer srv.Close()
 	o, _ := NewOllama(OllamaConfig{BaseURL: srv.URL})
 	assert.Equal(t, 8192, o.fetchContextLength(context.Background(), "llama3.2"))
+}
+
+// TestOllamaFetchContextLengthSendsVerbose verifies the request asks Ollama
+// for the verbose payload, since model_info (which carries context_length) is
+// otherwise omitted by some versions and cloud models.
+func TestOllamaFetchContextLengthSendsVerbose(t *testing.T) {
+	var gotVerbose any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		gotVerbose = body["verbose"]
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model_info":{"general.architecture":"qwen3","qwen3.context_length":40960}}`))
+	}))
+	defer srv.Close()
+	o, _ := NewOllama(OllamaConfig{BaseURL: srv.URL})
+	assert.Equal(t, 40960, o.fetchContextLength(context.Background(), "qwen3"))
+	assert.Equal(t, true, gotVerbose)
+}
+
+// TestOllamaFetchContextLengthPrefersArchKey verifies the architecture-qualified
+// key matching general.architecture wins over other *.context_length entries.
+func TestOllamaFetchContextLengthPrefersArchKey(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Two context_length entries; the one matching general.architecture
+		// (qwen3) should win over the stray legacy entry.
+		_, _ = w.Write([]byte(`{"model_info":{"general.architecture":"qwen3","qwen3.context_length":40960,"legacy.context_length":2048}}`))
+	}))
+	defer srv.Close()
+	o, _ := NewOllama(OllamaConfig{BaseURL: srv.URL})
+	assert.Equal(t, 40960, o.fetchContextLength(context.Background(), "qwen3"))
+}
+
+// TestOllamaFetchContextLengthStringCoerces verifies a string-typed
+// context_length is coerced to int.
+func TestOllamaFetchContextLengthStringCoerces(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model_info":{"general.architecture":"llama","llama.context_length":"32768"}}`))
+	}))
+	defer srv.Close()
+	o, _ := NewOllama(OllamaConfig{BaseURL: srv.URL})
+	assert.Equal(t, 32768, o.fetchContextLength(context.Background(), "llama3"))
+}
+
+// TestOllamaShowModel verifies ShowModel surfaces the full structured detail
+// block from /api/show: context length, architecture, family, parameter size,
+// quantization, capabilities, and the runtime num_ctx parsed from parameters.
+func TestOllamaShowModel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"parameters": "num_ctx 8192\ntemperature 0.7",
+			"capabilities": ["completion", "tools"],
+			"model_info": {"general.architecture":"llama","llama.context_length":32768},
+			"details": {"family":"llama","families":["llama"],"parameter_size":"3B","quantization_level":"q4_0"}
+		}`))
+	}))
+	defer srv.Close()
+	o, _ := NewOllama(OllamaConfig{BaseURL: srv.URL})
+	d, err := o.ShowModel(context.Background(), "llama3.2")
+	require.NoError(t, err)
+	assert.Equal(t, "llama3.2", d.ID)
+	assert.Equal(t, 32768, d.ContextWindow)
+	assert.Equal(t, 8192, d.RuntimeContextWindow)
+	assert.Equal(t, "llama", d.Architecture)
+	assert.Equal(t, "llama", d.Family)
+	assert.Equal(t, []string{"llama"}, d.Families)
+	assert.Equal(t, "3B", d.ParameterSize)
+	assert.Equal(t, "q4_0", d.Quantization)
+	assert.Equal(t, []string{"completion", "tools"}, d.Capabilities)
+}
+
+// TestParseOllamaNumCtx verifies the runtime num_ctx is parsed from the
+// serialized parameters string and returns 0 when absent.
+func TestParseOllamaNumCtx(t *testing.T) {
+	assert.Equal(t, 8192, parseOllamaNumCtx("temperature 0.7\nnum_ctx 8192"))
+	assert.Equal(t, 0, parseOllamaNumCtx("temperature 0.7"))
+	assert.Equal(t, 4096, parseOllamaNumCtx("# comment\nnum_ctx 4096\nstop \"<|end|>\""))
 }
 
 func TestOllamaDataURLToBase64(t *testing.T) {

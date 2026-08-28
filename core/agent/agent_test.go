@@ -106,7 +106,7 @@ provider: test
 model: gpt-4
 system_prompt: hello
 tools: [echo]
-max_tokens: 8192
+max_tokens: 8000
 tool_execution:
   mode: serial
   max_parallel: 1
@@ -121,8 +121,8 @@ tool_execution:
 	if a.ToolExecMode() != "serial" {
 		t.Fatalf("ToolExecMode = %q, want serial", a.ToolExecMode())
 	}
-	if a.MaxTokens != 8192 {
-		t.Fatalf("MaxTokens = %d, want 8192", a.MaxTokens)
+	if a.MaxTokens != 8000 {
+		t.Fatalf("MaxTokens = %d, want 8000", a.MaxTokens)
 	}
 }
 

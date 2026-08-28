@@ -23,7 +23,9 @@ export async function resolveApproval(
   }
 }
 
-/** Fetches recent LLM request audit records, newest first. */
+/** Fetches recent LLM request audit records, newest first. List responses
+ * carry only summaries; fetch full request/response payloads via
+ * fetchRequestLogDetail. */
 export async function fetchRequestLogs(params: {
   sessionId?: string
   source?: string
@@ -38,4 +40,19 @@ export async function fetchRequestLogs(params: {
   })
   await ensureOK(res, "api.fetchRequestLogsFailed")
   return (await res.json()) ?? []
+}
+
+/** Fetches the full detail (request/response payloads) of one audited LLM
+ * request, identified by its timestamp string and optional session id. */
+export async function fetchRequestLogDetail(
+  ts: string,
+  sessionId?: string
+): Promise<RequestLogRecord> {
+  const qs = new URLSearchParams({ ts })
+  if (sessionId) qs.set("session_id", sessionId)
+  const res = await fetch(`/v1/audit/requests/detail?${qs.toString()}`, {
+    headers: langHeaders(),
+  })
+  await ensureOK(res, "api.fetchRequestLogDetailFailed")
+  return res.json()
 }

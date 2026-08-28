@@ -22,14 +22,29 @@ type AgentSummary struct {
 	ContextWindow int      `json:"context_window,omitempty"`
 }
 
-// agentContextWindow resolves the agent's effective model context window the
-// same way the loop does: agent compaction config wins, then the model spec.
-func agentContextWindow(a *agent.Agent) int {
-	window := 0
-	if a.Compaction != nil {
-		window = a.Compaction.ContextWindow
+// agentContextWindow is the window advertised on the agent list: explicit
+// compaction config, then a window saved on the provider (Ollama /api/show
+// at setup), then an official model spec. Unknown models stay 0.
+func (s *Service) agentContextWindow(a *agent.Agent) int {
+	if a.Compaction != nil && a.Compaction.ContextWindow > 0 {
+		return a.Compaction.ContextWindow
 	}
-	return provider.EffectiveContextWindow(a.Model, window)
+	if s.ModelWindow != nil {
+		if n := s.ModelWindow(a.Provider, a.Model); n > 0 {
+			return n
+		}
+	}
+	if spec, ok := provider.SpecForModel(a.Model); ok {
+		return spec.ContextWindow
+	}
+	return 0
+}
+
+func (s *Service) savedContextWindow(a *agent.Agent) int {
+	if s.ModelWindow == nil || a == nil {
+		return 0
+	}
+	return s.ModelWindow(a.Provider, a.Model)
 }
 
 // ListAgents loads all agents and returns summaries. Errors per-agent are logged
@@ -52,7 +67,7 @@ func (s *Service) ListAgents() []AgentSummary {
 			Model:         a.Model,
 			Tools:         a.Tools,
 			MaxTurns:      a.MaxTurns,
-			ContextWindow: agentContextWindow(a),
+			ContextWindow: s.agentContextWindow(a),
 		}
 	}
 	return out

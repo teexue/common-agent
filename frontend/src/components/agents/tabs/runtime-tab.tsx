@@ -9,21 +9,21 @@ import {
 } from "@/components/ui/select"
 import type { AgentFormData } from "@/lib/agent-yaml"
 import { Field, SectionCard } from "./shared"
-import { formatTokens } from "./perm-utils"
+import { formatTokenCount } from "@/lib/format"
 
 const MAX_TOKEN_OPTIONS = [
-  { value: 8192, label: "8K" },
-  { value: 16384, label: "16K" },
-  { value: 32768, label: "32K" },
-  { value: 65536, label: "64K" },
-  { value: 131072, label: "128K" },
+  { value: 8000, label: "8K" },
+  { value: 16000, label: "16K" },
+  { value: 32000, label: "32K" },
+  { value: 64000, label: "64K" },
+  { value: 128000, label: "128K" },
 ]
 
 const CONTEXT_WINDOW_OPTIONS = [
-  { value: 131072, label: "128K" },
-  { value: 262144, label: "256K" },
-  { value: 393216, label: "384K" },
-  { value: 1048576, label: "1M" },
+  { value: 128000, label: "128K" },
+  { value: 256000, label: "256K" },
+  { value: 384000, label: "384K" },
+  { value: 1000000, label: "1M" },
 ]
 
 export function RuntimeTab({
@@ -82,7 +82,7 @@ export function RuntimeTab({
                 value: form.maxTokens,
                 label:
                   form.maxTokens > 0
-                    ? formatTokens(form.maxTokens)
+                    ? formatTokenCount(form.maxTokens)
                     : t("agent.maxTokensAuto"),
               }}
               onValueChange={(v) => {
@@ -115,33 +115,9 @@ export function RuntimeTab({
             label={t("agent.compactionStrategy")}
             hint={t("agent.compactionStrategyHint")}
           >
-            <Select
-              value={{
-                value: form.compactionStrategy,
-                label: t(`agent.compactionStrategy_${form.compactionStrategy}`),
-              }}
-              onValueChange={(v) => {
-                if (v && typeof v === "object" && "value" in v) {
-                  setForm((f) => ({
-                    ...f,
-                    compactionStrategy: (v as { value: AgentFormData["compactionStrategy"] }).value,
-                  }))
-                }
-              }}
-            >
-              <SelectTrigger className="h-9 w-full rounded-xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                {(["truncation", "sliding_window", "summarize"] as const).map(
-                  (s) => (
-                    <SelectItem key={s} value={{ value: s, label: t(`agent.compactionStrategy_${s}`) }}>
-                      {t(`agent.compactionStrategy_${s}`)}
-                    </SelectItem>
-                  )
-                )}
-              </SelectContent>
-            </Select>
+            <p className="flex h-9 items-center rounded-xl border border-border bg-muted/40 px-3 text-sm text-foreground">
+              {t("agent.compactionStrategySmart")}
+            </p>
           </Field>
           <Field
             label={t("agent.contextWindow")}
@@ -152,7 +128,7 @@ export function RuntimeTab({
                 value: form.contextWindow,
                 label:
                   form.contextWindow > 0
-                    ? formatTokens(form.contextWindow)
+                    ? formatTokenCount(form.contextWindow)
                     : t("agent.contextWindowUnset"),
               }}
               onValueChange={(v) => {

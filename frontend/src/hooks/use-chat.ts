@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useReducer } from "react"
 import { apiHeaders } from "@/lib/api"
+import { fetchSession, fetchSessionReplay } from "@/lib/api"
 import { chatReducer } from "./use-chat-state"
 import type { ChatAction } from "./use-chat-state"
 import { fromBackendMessages, parseSSELine } from "./use-chat-messages"
 import type { BackendMsg } from "./use-chat-messages"
 import type { AgentEvent, ToolCallEntry } from "@/types/agent"
+import { eventsToEntries, isRunInProgress, lastUserPrompt } from "./chat-replay"
 
 // ─── SSE stream processing ────────────────────────────────────────
 
@@ -182,6 +184,14 @@ async function sendRunRequest(
     throw new Error(errBody?.message ?? `HTTP ${res.status}`)
   }
 
+  // The backend exposes the session id via a response header before the
+  // first SSE frame, so we can persist it to the URL immediately — even
+  // before the run finishes — and survive a page refresh.
+  const headerSessionId = res.headers.get("x-session-id")
+  if (headerSessionId) {
+    dispatch({ type: "SET_SESSION_ID", sessionId: headerSessionId })
+  }
+
   const reader = res.body?.getReader()
   if (!reader) throw new Error("No response body")
   await processSSEStream(reader, entryId, dispatch)
@@ -208,6 +218,20 @@ export function useChat() {
     sessionIdRef.current = state.sessionId
   }, [state.sessionId])
 
+  // Live replay polling state, used to follow an in-progress run after a
+  // page refresh. The interval re-fetches the session's replay events and
+  // folds any new ones into the conversation until the run finishes.
+  const livePollRef = useRef<number | null>(null)
+  const liveSessionRef = useRef<string | null>(null)
+
+  const stopLivePoll = useCallback(() => {
+    if (livePollRef.current !== null) {
+      window.clearInterval(livePollRef.current)
+      livePollRef.current = null
+    }
+    liveSessionRef.current = null
+  }, [])
+
   const sendMessage = useCallback(
     async (
       text: string,
@@ -217,6 +241,7 @@ export function useChat() {
     ) => {
       abortRef.current?.abort()
       abortRef.current = null
+      stopLivePoll()
       // Close any previous streaming entry (e.g. the run this new send
       // interrupts) so it doesn't stay stuck in the "generating" state.
       dispatch({
@@ -253,10 +278,11 @@ export function useChat() {
         })
       }
     },
-    []
+    [stopLivePoll]
   )
 
   const abort = useCallback(() => {
+    stopLivePoll()
     abortRef.current?.abort()
     abortRef.current = null
     dispatch({
@@ -265,7 +291,7 @@ export function useChat() {
       status: "cancelled",
       turns: 0,
     })
-  }, [])
+  }, [stopLivePoll])
 
   const clear = useCallback(() => {
     abort()
@@ -285,9 +311,73 @@ export function useChat() {
     [abort]
   )
 
+  const startLivePoll = useCallback(
+    (sessionId: string, prompt?: string) => {
+      liveSessionRef.current = sessionId
+      let lastSig = ""
+      const tick = () => {
+        if (liveSessionRef.current !== sessionId) return
+        fetchSessionReplay(sessionId)
+          .then((records) => {
+            if (liveSessionRef.current !== sessionId) return
+            const sig = `${records.length}:${records[records.length - 1]?.ts ?? ""}`
+            if (sig === lastSig) return
+            lastSig = sig
+            if (!isRunInProgress(records)) {
+              stopLivePoll()
+              fetchSession(sessionId)
+                .then((sess) =>
+                  loadSession(
+                    sessionId,
+                    sess.messages as BackendMsg[],
+                    sess.metadata
+                  )
+                )
+                .catch(() => {})
+              return
+            }
+            const entries = eventsToEntries(records, prompt)
+            dispatch({ type: "LOAD_LIVE", sessionId, messages: entries })
+          })
+          .catch(() => {})
+      }
+      livePollRef.current = window.setInterval(tick, 2500)
+    },
+    [stopLivePoll, loadSession]
+  )
+
+  /** Resumes a session after a page refresh. If the run is still in progress,
+   * the conversation is rebuilt from replay events and polled until it
+   * finishes; otherwise the persisted messages are loaded directly. */
+  const resumeSession = useCallback(
+    async (
+      sessionId: string
+    ): Promise<{ agent: string; workdir: string | null } | null> => {
+      abort()
+      stopLivePoll()
+      try {
+        const sess = await fetchSession(sessionId)
+        const records = await fetchSessionReplay(sessionId)
+        const prompt = lastUserPrompt(sess.messages as BackendMsg[])
+        if (!isRunInProgress(records)) {
+          await loadSession(sessionId, sess.messages as BackendMsg[], sess.metadata)
+          return { agent: sess.agent, workdir: sess.metadata?.workdir || null }
+        }
+        const entries = eventsToEntries(records, prompt)
+        dispatch({ type: "LOAD_LIVE", sessionId, messages: entries, metadata: sess.metadata })
+        startLivePoll(sessionId, prompt)
+        return { agent: sess.agent, workdir: sess.metadata?.workdir || null }
+      } catch (err) {
+        console.error("Failed to resume session:", err)
+        return null
+      }
+    },
+    [abort, stopLivePoll, loadSession, startLivePoll]
+  )
+
   const setSessionId = useCallback((sessionId: string | null) => {
     dispatch({ type: "SET_SESSION_ID", sessionId })
   }, [])
 
-  return { ...state, sendMessage, abort, clear, loadSession, setSessionId }
+  return { ...state, sendMessage, abort, clear, loadSession, resumeSession, setSessionId }
 }

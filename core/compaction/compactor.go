@@ -16,6 +16,9 @@ const (
 	StrategyTruncation Strategy = "truncation"
 	StrategySliding    Strategy = "sliding_window"
 	StrategySummarize  Strategy = "summarize"
+	// StrategyCascade runs a tiered cascade (trim → snip → collapse) and is
+	// the recommended default. It supersedes the single-strategy modes.
+	StrategyCascade Strategy = "cascade"
 )
 
 // Result describes what a compaction pass did.
@@ -55,6 +58,14 @@ type Config struct {
 	// an estimate of messages appended since). When 0, usage is derived from
 	// EstimateTokens.
 	CurrentTokens int `yaml:"-"`
+	// ContextWindow is the effective model context window in tokens. The
+	// cascade compactor uses it to compute pressure ratios for tiered
+	// escalation (trim/snip/collapse).
+	ContextWindow int `yaml:"-"`
+	// TargetTokens is the post-compaction token budget. Compaction compresses
+	// down to this level (below the trigger line) so multiple new turns can
+	// accrue before the next compaction. 0 falls back to TokenLimit.
+	TargetTokens int `yaml:"-"`
 	// Provider drives LLM summarization for StrategySummarize. When nil, the
 	// summarize strategy falls back to truncation.
 	Provider provider.Provider `yaml:"-"`
@@ -65,9 +76,29 @@ type Config struct {
 }
 
 const (
-	defaultKeepRecent   = 20
-	defaultKeepHead     = 2
-	defaultTriggerRatio = 0.85
+	defaultKeepRecent = 20
+	defaultKeepHead   = 2
+	// defaultTriggerRatio defaults to 1.0 so the trigger line is
+	// window - reserve (aligning with Claude Code's "effective window minus
+	// summary-output budget"). A configured trigger_ratio < 1 applies a
+	// further discount.
+	defaultTriggerRatio = 1.0
+	// defaultTargetRatio is the fraction of the context window compaction
+	// compresses down to. It sits below the trigger line so several new
+	// turns can accumulate before compaction fires again — without it,
+	// compressing right up to the trigger line causes compaction to re-fire
+	// on the very next turn.
+	defaultTargetRatio = 0.6
+	// summaryBudgetCap caps the tokens reserved for a compaction summary
+	// output (and the next completion), mirroring Claude Code's ~20K cap.
+	summaryBudgetCap = 20000
+	// Cascade pressure thresholds, expressed as fractions of the context
+	// window. Trim verbose tool results once usage passes trimRatio, snip
+	// (archive) oldest messages past snipRatio, and full-collapse past the
+	// trigger line.
+	trimRatio    = 0.6
+	snipRatio    = 0.75
+	collapseRatio = 0.9
 )
 
 // Defaults returns a Config with default values applied.
@@ -81,7 +112,7 @@ func (c Config) Defaults() Config {
 		c.KeepHead = defaultKeepHead
 	}
 	if c.Strategy == "" {
-		c.Strategy = StrategyTruncation
+		c.Strategy = StrategyCascade
 	}
 	return c
 }
@@ -90,6 +121,8 @@ func (c Config) Defaults() Config {
 func NewCompactor(cfg Config) Compactor {
 	cfg = cfg.Defaults()
 	switch cfg.Strategy {
+	case StrategyCascade:
+		return NewCascadeCompactor(cfg)
 	case StrategySliding:
 		return NewSlidingWindowCompactor(cfg.KeepRecent)
 	case StrategySummarize:
@@ -98,6 +131,7 @@ func NewCompactor(cfg Config) Compactor {
 			// never fails because summarization is unavailable.
 			tc := NewTruncationCompactorWithHead(cfg.TokenLimit, cfg.MaxMessages, cfg.KeepRecent, cfg.KeepHead)
 			tc.currentTokens = cfg.CurrentTokens
+			tc.targetTokens = cfg.TargetTokens
 			return tc
 		}
 		sc := NewSummarizingCompactor(SummarizeConfig{
@@ -113,6 +147,7 @@ func NewCompactor(cfg Config) Compactor {
 	default:
 		tc := NewTruncationCompactorWithHead(cfg.TokenLimit, cfg.MaxMessages, cfg.KeepRecent, cfg.KeepHead)
 		tc.currentTokens = cfg.CurrentTokens
+		tc.targetTokens = cfg.TargetTokens
 		return tc
 	}
 }
@@ -192,19 +227,53 @@ func isCJK(r rune) bool {
 }
 
 // ResolveTokenLimit derives the soft compaction threshold from a context window.
-// reserveTokens should cover the next model completion (typically agent max_tokens).
-// triggerRatio defaults to 0.85 when <= 0 or >= 1.
+// reserveTokens should cover the next model completion and the compaction
+// summary output (typically min(maxOutput, SummaryBudgetCap)). triggerRatio
+// defaults to 1.0 (window - reserve) when <= 0 or > 1.
 func ResolveTokenLimit(contextWindow, reserveTokens int, triggerRatio float64) int {
 	if contextWindow <= 0 {
 		return 0
 	}
-	if triggerRatio <= 0 || triggerRatio >= 1 {
+	if triggerRatio <= 0 || triggerRatio > 1 {
 		triggerRatio = defaultTriggerRatio
 	}
 	if reserveTokens < 0 {
 		reserveTokens = 0
 	}
 	limit := int(float64(contextWindow)*triggerRatio) - reserveTokens
+	if limit < contextWindow/4 {
+		limit = contextWindow / 4
+	}
+	return limit
+}
+
+// SummaryBudget returns the tokens to reserve for a compaction summary and the
+// next completion: the smaller of the model max output and SummaryBudgetCap.
+func SummaryBudget(maxOutput int) int {
+	if maxOutput <= 0 {
+		return summaryBudgetCap
+	}
+	if maxOutput < summaryBudgetCap {
+		return maxOutput
+	}
+	return summaryBudgetCap
+}
+
+// ResolveTargetLimit derives the post-compaction token budget from a context
+// window. It is intentionally below the trigger limit so compaction leaves
+// headroom for several new turns before firing again. targetRatio defaults
+// to 0.6 when <= 0 or >= 1 (and is clamped below the trigger ratio).
+func ResolveTargetLimit(contextWindow, reserveTokens int, targetRatio float64) int {
+	if contextWindow <= 0 {
+		return 0
+	}
+	if targetRatio <= 0 || targetRatio >= 1 {
+		targetRatio = defaultTargetRatio
+	}
+	if reserveTokens < 0 {
+		reserveTokens = 0
+	}
+	limit := int(float64(contextWindow)*targetRatio) - reserveTokens
 	if limit < contextWindow/4 {
 		limit = contextWindow / 4
 	}

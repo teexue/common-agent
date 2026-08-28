@@ -17,9 +17,9 @@ type Template struct {
 
 // templateDef is an internal template with an i18n description key.
 type templateDef struct {
-	Name        string
-	DescKey     string
-	Content     string
+	Name    string
+	DescKey string
+	Content string
 }
 
 var templateDefs = []templateDef{
@@ -36,7 +36,7 @@ system_prompt: |
 tools:
   - get_time
 max_turns: 0
-max_tokens: 8192
+max_tokens: 8000
 tool_execution:
   mode: parallel
   max_parallel: 4
@@ -68,7 +68,7 @@ tools:
   - search_files
   - get_time
 max_turns: 0
-max_tokens: 8192
+max_tokens: 8000
 tool_execution:
   mode: parallel
   max_parallel: 4
@@ -97,7 +97,7 @@ tools:
   - search_files
   - get_time
 max_turns: 0
-max_tokens: 8192
+max_tokens: 8000
 tool_execution:
   mode: serial
   max_parallel: 1
@@ -137,7 +137,7 @@ tools:
   - web_fetch
   - get_time
 max_turns: 0
-max_tokens: 8192
+max_tokens: 8000
 tool_execution:
   mode: serial
   max_parallel: 1
@@ -185,7 +185,7 @@ tools:
   - web_fetch
   - get_time
 max_turns: 0
-max_tokens: 8192
+max_tokens: 8000
 tool_execution:
   mode: parallel
   max_parallel: 4

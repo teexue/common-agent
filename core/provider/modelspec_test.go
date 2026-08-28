@@ -9,9 +9,9 @@ func TestSpecForModel(t *testing.T) {
 		wantCtx int
 		wantOut int
 	}{
-		{"deepseek-v4-flash", true, 1_048_576, 393_216},
-		{"deepseek-v4-pro", true, 1_048_576, 393_216},
-		{"deepseek-v4-flash-0731", true, 1_048_576, 393_216}, // dated variant
+		{"deepseek-v4-flash", true, 1_000_000, 384_000},
+		{"deepseek-v4-pro", true, 1_000_000, 384_000},
+		{"deepseek-v4-flash-0731", true, 1_000_000, 384_000}, // dated variant
 		{"gpt-5.2", false, 0, 0},
 		{"", false, 0, 0},
 	}
@@ -28,10 +28,10 @@ func TestSpecForModel(t *testing.T) {
 }
 
 func TestEffectiveMaxOutput(t *testing.T) {
-	if got := EffectiveMaxOutput("deepseek-v4-flash", 8192); got != 8192 {
+	if got := EffectiveMaxOutput("deepseek-v4-flash", 8000); got != 8000 {
 		t.Errorf("explicit value should win, got %d", got)
 	}
-	if got := EffectiveMaxOutput("deepseek-v4-flash", 0); got != 393_216 {
+	if got := EffectiveMaxOutput("deepseek-v4-flash", 0); got != 384_000 {
 		t.Errorf("spec should apply, got %d", got)
 	}
 	if got := EffectiveMaxOutput("unknown-model", 0); got != DefaultMaxTokens {
@@ -40,10 +40,10 @@ func TestEffectiveMaxOutput(t *testing.T) {
 }
 
 func TestEffectiveContextWindow(t *testing.T) {
-	if got := EffectiveContextWindow("deepseek-v4-pro", 262144); got != 262144 {
+	if got := EffectiveContextWindow("deepseek-v4-pro", 256000); got != 256000 {
 		t.Errorf("explicit value should win, got %d", got)
 	}
-	if got := EffectiveContextWindow("deepseek-v4-pro", 0); got != 1_048_576 {
+	if got := EffectiveContextWindow("deepseek-v4-pro", 0); got != 1_000_000 {
 		t.Errorf("spec should apply, got %d", got)
 	}
 	if got := EffectiveContextWindow("unknown-model", 0); got != DefaultContextWindow {

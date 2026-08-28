@@ -16,8 +16,8 @@ var modelSpecs = []struct {
 }{
 	// DeepSeek V4 (api-docs.deepseek.com/quick_start/pricing): 1M context,
 	// 384K max output for both flash and pro.
-	{"deepseek-v4-flash", ModelSpec{ContextWindow: 1_048_576, MaxOutput: 393_216}},
-	{"deepseek-v4-pro", ModelSpec{ContextWindow: 1_048_576, MaxOutput: 393_216}},
+	{"deepseek-v4-flash", ModelSpec{ContextWindow: 1_000_000, MaxOutput: 384_000}},
+	{"deepseek-v4-pro", ModelSpec{ContextWindow: 1_000_000, MaxOutput: 384_000}},
 }
 
 // SpecForModel returns the official spec for a model, matched by exact name
@@ -46,7 +46,7 @@ func EffectiveMaxOutput(model string, configured int) int {
 // DefaultContextWindow is the conservative context size assumed for models
 // without a known spec. It keeps compaction active for any model so long
 // histories get trimmed instead of growing unboundedly.
-const DefaultContextWindow = 128 * 1024 // 128K tokens
+const DefaultContextWindow = 128_000 // 128K tokens
 
 // EffectiveContextWindow resolves the model context window: an explicit
 // configuration wins, then the model's official spec, then a conservative

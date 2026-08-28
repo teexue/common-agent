@@ -32,6 +32,10 @@ type Service struct {
 	// RequestLogger, when set, audits every LLM request/response. Optional.
 	RequestLogger *audit.RequestLogger
 
+	// ModelWindow looks up a context window saved on the provider for a model.
+	// Optional; nil means no saved windows (fall back to spec / 0).
+	ModelWindow func(providerName, model string) int
+
 	Knowledge        *knowledge.Manager
 	Ingester         *knowledge.Ingester
 	Retriever        *knowledge.Retriever

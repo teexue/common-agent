@@ -3,6 +3,7 @@ package compaction
 import (
 	"context"
 	"strconv"
+	"strings"
 
 	"github.com/teexue/common-agent/core/provider"
 )
@@ -19,6 +20,10 @@ type TruncationCompactor struct {
 	keepRecent    int
 	keepHead      int
 	currentTokens int
+	// targetTokens is the post-compaction budget. fits() compresses down to
+	// this level instead of tokenLimit, leaving headroom so compaction does
+	// not re-fire on the next turn. 0 falls back to tokenLimit.
+	targetTokens int
 }
 
 // NewTruncationCompactor creates a TruncationCompactor with the default head.
@@ -85,20 +90,39 @@ func (c *TruncationCompactor) Compact(ctx context.Context, messages []provider.M
 		}
 	}
 
-	head, middle, recent := splitHeadMiddleRecent(convMsgs, c.keepHead, c.keepRecent)
+	// Separate prior facts blocks so they are neither re-summarized as noise
+	// nor silently dropped: their content is merged into the new facts so
+	// key context survives across repeated compactions.
+	var priorFacts []string
+	var nonFacts []provider.Message
+	for _, m := range convMsgs {
+		if m.Role == provider.RoleUser && strings.HasPrefix(m.Content, factsMarker) {
+			priorFacts = append(priorFacts, strings.TrimPrefix(m.Content, factsMarker))
+			continue
+		}
+		nonFacts = append(nonFacts, m)
+	}
+
+	head, middle, recent := splitHeadMiddleRecent(nonFacts, c.keepHead, c.keepRecent)
 	fullMiddle := append([]provider.Message{}, middle...)
 	fullHead := append([]provider.Message{}, head...)
 	recent = ensureToolPairs(recent)
 
 	// fits reports whether system + head + middle + recent is under both the
-	// token and (optional) message-count thresholds.
+	// post-compaction target budget (so compaction leaves headroom) and the
+	// optional message-count threshold. The target is below the trigger line
+	// to avoid re-firing compaction on the very next turn.
 	fits := func(h, m []provider.Message) bool {
 		trial := make([]provider.Message, 0, len(systemMsgs)+len(h)+len(m)+len(recent))
 		trial = append(trial, systemMsgs...)
 		trial = append(trial, h...)
 		trial = append(trial, m...)
 		trial = append(trial, recent...)
-		overTokens := c.tokenLimit > 0 && c.trialTokens(trial, messages) > c.tokenLimit
+		budget := c.targetTokens
+		if budget <= 0 {
+			budget = c.tokenLimit
+		}
+		overTokens := budget > 0 && c.trialTokens(trial, messages) > budget
 		overMsgs := c.maxMessages > 0 && len(trial) > c.maxMessages
 		return !overTokens && !overMsgs
 	}
@@ -123,6 +147,7 @@ func (c *TruncationCompactor) Compact(ctx context.Context, messages []provider.M
 	factsInput = append(factsInput, fullMiddle...)
 	factsInput = append(factsInput, droppedHead...)
 	facts := ExtractFacts(factsInput, defaultFactsMaxChars)
+	facts = mergeFacts(priorFacts, facts, defaultFactsMaxChars)
 	if facts == "" {
 		facts = buildTruncationSummary(oldCount, len(systemMsgs)+len(keptConv))
 	}
@@ -247,4 +272,32 @@ func ensureToolPairs(messages []provider.Message) []provider.Message {
 func buildTruncationSummary(oldCount, newCount int) string {
 	dropped := oldCount - newCount
 	return "[Context compacted: " + strconv.Itoa(dropped) + " older messages removed to stay within context window]"
+}
+
+// mergeFacts folds prior facts blocks into a freshly extracted one so key
+// context survives repeated compactions. Prior blocks are kept as a
+// "[历史保留]" prefix; the combined block is bounded by maxChars, keeping
+// the newest content when it overflows.
+func mergeFacts(prior []string, fresh string, maxChars int) string {
+	if len(prior) == 0 {
+		return fresh
+	}
+	var sb strings.Builder
+	sb.WriteString(factsMarker)
+	sb.WriteString("\n[历史保留]\n")
+	for _, p := range prior {
+		t := strings.TrimSpace(p)
+		if t != "" {
+			sb.WriteString(t)
+			sb.WriteByte('\n')
+		}
+	}
+	if fresh != "" {
+		sb.WriteString(strings.TrimSpace(strings.TrimPrefix(fresh, factsMarker)))
+	}
+	out := sb.String()
+	if maxChars > 0 && len(out) > maxChars {
+		out = truncateTailBytes(out, maxChars)
+	}
+	return out
 }

@@ -6,12 +6,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"time"
 
 	"github.com/teexue/common-agent/core/tool"
 )
 
 const defaultCommandTimeout = 30 * time.Second
+
+// shellName returns the shell used to execute commands on the current OS.
+// Windows lacks /bin/sh, so cmd.exe is used instead.
+func shellName() string {
+	if runtime.GOOS == "windows" {
+		return "cmd"
+	}
+	return "sh"
+}
+
+// shellFlag returns the flag that tells the shell to run a command string.
+func shellFlag() string {
+	if runtime.GOOS == "windows" {
+		return "/c"
+	}
+	return "-c"
+}
 
 // maxCommandOutputBytes caps the captured stdout/stderr per command. Without a
 // cap, a chatty command (logs, build output, tests) can produce megabytes that
@@ -78,7 +96,7 @@ func (rc RunCommand) Execute(ctx context.Context, input json.RawMessage) (tool.R
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "sh", "-c", args.Command)
+	cmd := exec.CommandContext(ctx, shellName(), shellFlag(), args.Command)
 
 	// Set working directory
 	workDir := resolveWorkDir(ctx, rc.WorkDir)

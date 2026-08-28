@@ -2,6 +2,7 @@ package compaction
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -122,10 +123,64 @@ func TestSlidingWindowCompactor_Compacts(t *testing.T) {
 	require.NotNil(t, res)
 }
 
-func TestNewCompactor_DefaultsToTruncation(t *testing.T) {
+func TestNewCompactor_DefaultsToCascade(t *testing.T) {
 	c := NewCompactor(Config{TokenLimit: 1000})
+	_, ok := c.(*CascadeCompactor)
+	assert.True(t, ok)
+}
+
+func TestNewCompactor_Truncation(t *testing.T) {
+	c := NewCompactor(Config{Strategy: StrategyTruncation, TokenLimit: 1000})
 	_, ok := c.(*TruncationCompactor)
 	assert.True(t, ok)
+}
+
+func TestTrimToolResults_ShrinksVerboseOutput(t *testing.T) {
+	big := strings.Repeat("x", 5000)
+	msgs := []provider.Message{
+		{Role: provider.RoleUser, Content: "hi"},
+		{Role: provider.RoleTool, ToolCallID: "c1", Name: "run_command", Content: big},
+		{Role: provider.RoleTool, ToolCallID: "c2", Name: "read_file", Content: "small"},
+	}
+	out := TrimToolResults(msgs, 1000)
+	assert.Equal(t, "hi", out[0].Content) // non-tool untouched
+	assert.Contains(t, out[1].Content, "[tool output trimmed]")
+	assert.Less(t, len(out[1].Content), 1200)
+	assert.Equal(t, "small", out[2].Content) // small tool result untouched
+}
+
+func TestCascadeCompactor_TrimsBeforeSnip(t *testing.T) {
+	// One huge tool result plus a few small turns. With a target below the
+	// trigger, the cascade should satisfy the budget by trimming the verbose
+	// tool result alone, without dropping any conversation turns.
+	big := strings.Repeat("x", 100000) // ~25000 tokens
+	msgs := []provider.Message{{Role: provider.RoleSystem, Content: "sys"}}
+	msgs = append(msgs, provider.Message{Role: provider.RoleUser, Content: "do it"})
+	msgs = append(msgs, provider.Message{Role: provider.RoleAssistant, Content: "ok", ToolCalls: []provider.ToolCall{{ID: "c1", Name: "run_command", Arguments: json.RawMessage("{}")}}})
+	msgs = append(msgs, provider.Message{Role: provider.RoleTool, ToolCallID: "c1", Name: "run_command", Content: big})
+	msgs = append(msgs, provider.Message{Role: provider.RoleUser, Content: "thanks"})
+
+	c := NewCascadeCompactor(Config{
+		Strategy:      StrategyCascade,
+		TokenLimit:     6000,
+		TargetTokens:   3000,
+		ContextWindow:  10000,
+		KeepRecent:     4,
+		KeepHead:       0,
+		CurrentTokens:  30000,
+	})
+	res, err := c.Compact(context.Background(), msgs)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	// No conversation turns dropped (only the tool result trimmed).
+	assert.Equal(t, len(msgs), res.NewCount)
+	assert.LessOrEqual(t, EstimateTokens(res.Compacted), 3000)
+}
+
+func TestSummaryBudget(t *testing.T) {
+	assert.Equal(t, summaryBudgetCap, SummaryBudget(0))
+	assert.Equal(t, 4096, SummaryBudget(4096))
+	assert.Equal(t, summaryBudgetCap, SummaryBudget(100000))
 }
 
 func TestNewCompactor_SlidingWindow(t *testing.T) {
@@ -362,4 +417,40 @@ func TestTruncationCompactor_KeepsStableHead(t *testing.T) {
 	assert.Equal(t, provider.RoleSystem, res.Compacted[0].Role)
 	assert.Equal(t, "task-def", res.Compacted[1].Content)
 	assert.Equal(t, "understood", res.Compacted[2].Content)
+}
+
+// TestTruncationCompactor_TargetBelowTrigger verifies that when a target
+// budget below the trigger line is set, compaction compresses down toward
+// the target (not just the trigger), leaving headroom so the next turn does
+// not immediately re-trigger compaction.
+func TestTruncationCompactor_TargetBelowTrigger(t *testing.T) {
+	small := strings.Repeat("x", 400) // ~100 tokens each
+	msgs := []provider.Message{{Role: provider.RoleSystem, Content: "system"}}
+	for i := 0; i < 12; i++ {
+		msgs = append(msgs, provider.Message{Role: provider.RoleUser, Content: small})
+		msgs = append(msgs, provider.Message{Role: provider.RoleAssistant, Content: small})
+	}
+	// Trigger at 5000, compress down to 1500. keepHead=0, keepRecent=4 (~400
+	// tokens) so the target is reachable once the middle is dropped.
+	c := NewTruncationCompactorWithHead(5000, 0, 4, 0)
+	c.targetTokens = 1500
+	c.currentTokens = 5500 // over the trigger line
+	res, err := c.Compact(context.Background(), msgs)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	// Post-compaction estimated tokens must be at or below the target budget,
+	// not just below the trigger line.
+	assert.LessOrEqual(t, EstimateTokens(res.Compacted), 1500)
+}
+
+func TestResolveTargetLimit_DefaultsAndClamp(t *testing.T) {
+	assert.Equal(t, 0, ResolveTargetLimit(0, 0, 0))
+	// Default ratio 0.6.
+	assert.Equal(t, 6000, ResolveTargetLimit(10000, 0, 0))
+	// Reserve subtracted.
+	assert.Equal(t, 5000, ResolveTargetLimit(10000, 1000, 0))
+	// Floor at window/4.
+	assert.Equal(t, 2500, ResolveTargetLimit(10000, 8000, 0))
+	// Explicit ratio honored.
+	assert.Equal(t, 5000, ResolveTargetLimit(10000, 0, 0.5))
 }

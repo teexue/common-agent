@@ -82,6 +82,100 @@ type RequestFilter struct {
 	Limit     int
 }
 
+// RequestSummary is the lightweight list view of a RequestRecord, omitting
+// the bulky request/response payloads which are fetched on demand via Find.
+type RequestSummary struct {
+	Timestamp                time.Time `json:"ts"`
+	SessionID                string    `json:"session_id,omitempty"`
+	UserID                   string    `json:"user_id,omitempty"`
+	KeyID                    string    `json:"key_id,omitempty"`
+	Agent                    string    `json:"agent,omitempty"`
+	Source                   string    `json:"source,omitempty"`
+	Model                    string    `json:"model,omitempty"`
+	DurationMs               int64     `json:"duration_ms"`
+	Error                    string    `json:"error,omitempty"`
+	InputTokens              int       `json:"input_tokens,omitempty"`
+	OutputTokens             int       `json:"output_tokens,omitempty"`
+	CacheReadInputTokens     int       `json:"cache_read_input_tokens,omitempty"`
+	CacheCreationInputTokens int       `json:"cache_creation_input_tokens,omitempty"`
+}
+
+// Summary returns the lightweight view of a record for list endpoints.
+func (r RequestRecord) Summary() RequestSummary {
+	return RequestSummary{
+		Timestamp: r.Timestamp, SessionID: r.SessionID, UserID: r.UserID,
+		KeyID: r.KeyID, Agent: r.Agent, Source: r.Source, Model: r.Model,
+		DurationMs: r.DurationMs, Error: r.Error, InputTokens: r.InputTokens,
+		OutputTokens: r.OutputTokens, CacheReadInputTokens: r.CacheReadInputTokens,
+		CacheCreationInputTokens: r.CacheCreationInputTokens,
+	}
+}
+
+// Find returns the full request record matching the given timestamp string
+// (RFC3339Nano, as emitted in list responses) and optional session id. It
+// scans daily files newest-first and returns the first exact match.
+func (l *RequestLogger) Find(ts, sessionID string) (RequestRecord, error) {
+	entries, err := os.ReadDir(l.dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return RequestRecord{}, fmt.Errorf("%w: %s", errRecordNotFound, ts)
+		}
+		return RequestRecord{}, fmt.Errorf("read request log dir: %w", err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() && filepath.Ext(e.Name()) == ".jsonl" {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(names)))
+	for _, name := range names {
+		rec, err := findInFile(filepath.Join(l.dir, name), ts, sessionID)
+		if err != nil {
+			if err == errRecordNotFound {
+				continue
+			}
+			return RequestRecord{}, err
+		}
+		return rec, nil
+	}
+	return RequestRecord{}, fmt.Errorf("%w: %s", errRecordNotFound, ts)
+}
+
+var errRecordNotFound = fmt.Errorf("request record not found")
+
+// findInFile scans one daily file for a record whose timestamp matches ts.
+func findInFile(path, ts, sessionID string) (RequestRecord, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return RequestRecord{}, fmt.Errorf("open request log: %w", err)
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 256*1024), 256*1024)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var rec RequestRecord
+		if err := json.Unmarshal(line, &rec); err != nil {
+			continue
+		}
+		if rec.Timestamp.Format(time.RFC3339Nano) != ts {
+			continue
+		}
+		if sessionID != "" && rec.SessionID != sessionID {
+			continue
+		}
+		return rec, nil
+	}
+	if err := scanner.Err(); err != nil {
+		return RequestRecord{}, fmt.Errorf("read request log: %w", err)
+	}
+	return RequestRecord{}, errRecordNotFound
+}
+
 // Query returns recent request records, newest first, reading daily files
 // backwards until the limit is reached.
 func (l *RequestLogger) Query(filter RequestFilter) ([]RequestRecord, error) {

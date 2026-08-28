@@ -26,6 +26,7 @@ type ProviderSpec struct {
 	Vision       bool
 	ThinkingType string
 	ThinkingKeep string
+	ModelWindows map[string]int
 }
 
 // InitInteractive runs a wizard to bootstrap ~/.common-agent.
@@ -294,7 +295,9 @@ func UpsertProvider(home string, spec ProviderSpec) error {
 	}
 
 	// For updates, preserve existing fields if not provided.
-	if existing, ok := providers[spec.Name]; ok {
+	var existing provider.ProfileEntry
+	if e, ok := providers[spec.Name]; ok {
+		existing = e
 		if spec.APIKeyEnv == "" {
 			spec.APIKeyEnv = existing.APIKeyEnv
 		}
@@ -329,9 +332,13 @@ func UpsertProvider(home string, spec ProviderSpec) error {
 		DisplayName:  spec.DisplayName,
 		ModelsPath:   spec.ModelsPath,
 		Vision:       spec.Vision,
+		KeepAlive:    existing.KeepAlive,
+		ModelWindows: provider.MergeModelWindows(existing.ModelWindows, spec.ModelWindows),
 	}
 	if spec.ThinkingType != "" {
 		entry.Thinking = &provider.ThinkingConfig{Type: spec.ThinkingType, Keep: spec.ThinkingKeep}
+	} else {
+		entry.Thinking = existing.Thinking
 	}
 
 	if stateDB != nil {
@@ -343,6 +350,60 @@ func UpsertProvider(home string, spec ProviderSpec) error {
 		return fmt.Errorf("marshal providers: %w", err)
 	}
 	return os.WriteFile(ProvidersFile(home), data, 0o644)
+}
+
+// MergeProviderModelWindow records a discovered context window for one model
+// on an existing provider. Returns changed=false when the stored value already
+// matches, so callers can skip a catalog reload.
+func MergeProviderModelWindow(home, name, model string, window int) (bool, error) {
+	if name == "" || model == "" || window <= 0 {
+		return false, nil
+	}
+	providers := map[string]provider.ProfileEntry{}
+	if stateDB != nil {
+		var err error
+		providers, err = stateDB.ListProviderEntries()
+		if err != nil {
+			return false, err
+		}
+	} else {
+		path := ProvidersFile(home)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return false, fmt.Errorf("read providers: %w", err)
+		}
+		var file provider.CatalogFile
+		if err := yaml.Unmarshal(data, &file); err != nil {
+			return false, fmt.Errorf("parse providers: %w", err)
+		}
+		providers = file.Providers
+		if providers == nil {
+			return false, fmt.Errorf("provider %q not found", name)
+		}
+	}
+	entry, ok := providers[name]
+	if !ok {
+		return false, fmt.Errorf("provider %q not found", name)
+	}
+	if entry.ModelWindows[model] == window {
+		return false, nil
+	}
+	entry.ModelWindows = provider.MergeModelWindows(entry.ModelWindows, map[string]int{model: window})
+	if stateDB != nil {
+		if err := stateDB.UpsertProviderEntry(name, entry); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	providers[name] = entry
+	out, err := yaml.Marshal(provider.CatalogFile{Providers: providers})
+	if err != nil {
+		return false, fmt.Errorf("marshal providers: %w", err)
+	}
+	if err := os.WriteFile(ProvidersFile(home), out, 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // DeleteProvider removes a provider (SQLite when bound, else providers.yaml).

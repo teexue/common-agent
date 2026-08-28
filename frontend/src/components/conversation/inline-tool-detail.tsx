@@ -92,6 +92,29 @@ function DiffBlock({ lines }: { lines: DiffLine[] }) {
   )
 }
 
+/** FileContentBlock renders file contents as numbered lines in a scrollable
+ * frame, mirroring DiffBlock's compact editor-like layout so read_file and
+ * edit_file details look consistent. */
+function FileContentBlock({ text }: { text: string }) {
+  const lines = text === "" ? [] : text.split("\n")
+  if (lines.length === 0) return null
+  return (
+    <div className="overflow-auto" style={{ maxHeight: "14rem" }}>
+      {lines.map((l, i) => (
+        <div
+          key={i}
+          className="flex gap-2 px-2.5 font-mono text-[11px] leading-relaxed whitespace-pre"
+        >
+          <span className="w-6 shrink-0 select-none text-right text-muted-foreground/50">
+            {i + 1}
+          </span>
+          <span className="min-w-0 flex-1 break-all text-foreground">{l}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function PathLine({ path }: { path: string }) {
   if (!path) return null
   return <p className="font-mono text-[11px] break-all text-foreground">{path}</p>
@@ -224,14 +247,7 @@ function ReadFile({ input, output }: { input: Rec | null; output: Rec | null }) 
         </>
       }
     >
-      {content && (
-        <pre
-          className="overflow-auto px-2.5 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all text-foreground"
-          style={{ maxHeight: "14rem" }}
-        >
-          {content}
-        </pre>
-      )}
+      {content && <FileContentBlock text={content} />}
     </FilePanel>
   )
 }

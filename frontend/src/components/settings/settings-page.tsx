@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router"
 import { useTranslation } from "react-i18next"
 import i18n from "@/i18n"
 import { useTheme } from "@/components/theme-provider"
@@ -22,14 +21,12 @@ import { BackgroundPanel } from "@/components/settings/background-panel"
 /** Personal preference settings: appearance, language, workspace, background, shortcuts, about. */
 export function SettingsPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
 
   return (
     <PageShell>
       <PageHeader
         icon={Settings}
         title={t("settings.title")}
-        onBack={() => navigate(-1)}
       />
 
       <PageMain contentClassName="w-full space-y-6">

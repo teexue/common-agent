@@ -129,6 +129,21 @@ type ModelInfo struct {
 	ContextWindow int    `json:"context_window,omitempty"`
 }
 
+// ModelDetail describes a single model's metadata, as reported by a provider
+// that can introspect a model (e.g. Ollama /api/show). Fields are optional
+// since not every provider exposes every attribute.
+type ModelDetail struct {
+	ID                   string   `json:"id"`
+	ContextWindow        int      `json:"context_window,omitempty"`         // training context length
+	RuntimeContextWindow int      `json:"runtime_context_window,omitempty"` // runtime num_ctx, 0 = provider default
+	Architecture         string   `json:"architecture,omitempty"`
+	Family               string   `json:"family,omitempty"`
+	Families             []string `json:"families,omitempty"`
+	ParameterSize        string   `json:"parameter_size,omitempty"`
+	Quantization         string   `json:"quantization,omitempty"`
+	Capabilities         []string `json:"capabilities,omitempty"`
+}
+
 // Capabilities advertises optional features of a provider implementation.
 type Capabilities struct {
 	Vision    bool `json:"vision"`
@@ -138,6 +153,13 @@ type Capabilities struct {
 // ModelLister lists models available to a provider (requires a valid API key).
 type ModelLister interface {
 	ListModels(ctx context.Context) ([]ModelInfo, error)
+}
+
+// ModelDetailer returns structured metadata for a single model. Providers
+// that can introspect a model (e.g. Ollama via /api/show) implement this so
+// the UI can surface context length, family, parameter size, etc.
+type ModelDetailer interface {
+	ShowModel(ctx context.Context, model string) (ModelDetail, error)
 }
 
 // Capabler exposes a provider's advertised capabilities.
@@ -160,7 +182,7 @@ type Provider interface {
 }
 
 // DefaultMaxTokens is the fallback when agent configuration omits max_tokens.
-const DefaultMaxTokens = 8192
+const DefaultMaxTokens = 8000
 
 // DefaultHTTPClient returns an *http.Client suitable for streaming LLM
 // calls: no total timeout (long generations legitimately run for minutes),

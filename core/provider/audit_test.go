@@ -108,3 +108,30 @@ func TestWrapAuditedNilLoggerPassthrough(t *testing.T) {
 		t.Fatal("nil logger should return the inner provider unchanged")
 	}
 }
+
+type stubResolver struct {
+	stubProvider
+	gotModel string
+	gotCfg   int
+	window   int
+}
+
+func (s *stubResolver) ResolveContextWindow(_ context.Context, model string, configured int) int {
+	s.gotModel = model
+	s.gotCfg = configured
+	return s.window
+}
+
+func TestWrapAuditedForwardsContextResolver(t *testing.T) {
+	logger := audit.NewRequestLogger(t.TempDir())
+	inner := &stubResolver{window: 1_000_000}
+	p := WrapAudited(inner, logger)
+	r, ok := p.(ContextResolver)
+	if !ok {
+		t.Fatal("audited provider must implement ContextResolver")
+	}
+	got := r.ResolveContextWindow(context.Background(), "glm5", 0)
+	if got != 1_000_000 || inner.gotModel != "glm5" {
+		t.Fatalf("forwarded window = %d model = %q", got, inner.gotModel)
+	}
+}

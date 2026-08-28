@@ -1,9 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
+import i18n from "@/i18n"
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -15,6 +17,7 @@ import {
   SERVER_API_KEY_CHANGED,
   type AuthUserInfo,
 } from "@/lib/api"
+import { useToast } from "@/components/ui/toast"
 
 export type AuthState = "loading" | "authenticated" | "unauthenticated"
 
@@ -35,6 +38,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUserInfo | null>(null)
   const [hasUsers, setHasUsers] = useState(false)
   const [allowRegistration, setAllowRegistration] = useState(false)
+  const toast = useToast()
+  const toastRef = useRef(toast)
+  useEffect(() => {
+    toastRef.current = toast
+  }, [toast])
 
   const refresh = useCallback(async () => {
     try {
@@ -83,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken("")
       setUser(null)
       setState("unauthenticated")
+      toastRef.current.warning(i18n.t("auth.sessionExpired"))
     }
     window.addEventListener(SERVER_API_KEY_CHANGED, onTokenChange)
     window.addEventListener("auth:unauthorized", onUnauthorized)

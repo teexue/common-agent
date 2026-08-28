@@ -116,7 +116,9 @@ func (s *Server) handleSessionsDelete(c *gin.Context) {
 }
 
 // handleAuditRequests returns recent LLM request audit records, newest
-// first. Optional filters: session_id, source, limit.
+// first. Optional filters: session_id, source, limit. Only lightweight
+// summaries are returned; full request/response payloads are fetched via
+// GET /v1/audit/requests/detail to keep list responses small.
 func (s *Server) handleAuditRequests(c *gin.Context) {
 	limit := 0
 	if v := c.Query("limit"); v != "" {
@@ -131,10 +133,28 @@ func (s *Server) handleAuditRequests(c *gin.Context) {
 		respondErrorDetails(c, http.StatusInternalServerError, "audit_error", "api.error.audit_error", err.Error())
 		return
 	}
-	if records == nil {
-		records = []audit.RequestRecord{}
+	out := make([]audit.RequestSummary, 0, len(records))
+	for _, r := range records {
+		out = append(out, r.Summary())
 	}
-	c.JSON(http.StatusOK, records)
+	c.JSON(http.StatusOK, out)
+}
+
+// handleAuditRequestDetail returns the full request record (including
+// request/response payloads) for a single audited LLM call, identified by
+// its timestamp string (RFC3339Nano) and optional session_id.
+func (s *Server) handleAuditRequestDetail(c *gin.Context) {
+	ts := c.Query("ts")
+	if ts == "" {
+		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request")
+		return
+	}
+	rec, err := s.requestLogger.Find(ts, c.Query("session_id"))
+	if err != nil {
+		respondError(c, http.StatusNotFound, "not_found", "api.error.audit_error")
+		return
+	}
+	c.JSON(http.StatusOK, rec)
 }
 
 func (s *Server) handleSessionReplay(c *gin.Context) {

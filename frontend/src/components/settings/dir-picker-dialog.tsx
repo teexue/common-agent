@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowUp, Folder, FolderOpen, Home, Loader2 } from "lucide-react"
+import { ChevronRight, Folder, FolderOpen, Home, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,12 +14,26 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { fetchDirList, type DirListResponse } from "@/lib/api"
 import { isComposingEvent } from "@/lib/keys"
+import { cn } from "@/lib/utils"
 
 interface DirPickerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   initialPath?: string
   onSelect: (path: string) => void
+}
+
+/** Splits an absolute path into clickable breadcrumb segments. */
+function breadcrumbs(path: string): { label: string; path: string }[] {
+  if (!path) return []
+  const parts = path.split("/").filter(Boolean)
+  const crumbs: { label: string; path: string }[] = []
+  let acc = ""
+  for (const p of parts) {
+    acc += "/" + p
+    crumbs.push({ label: p, path: acc })
+  }
+  return crumbs
 }
 
 export function DirPickerDialog({
@@ -60,6 +74,8 @@ export function DirPickerDialog({
     onOpenChange(false)
   }
 
+  const crumbs = breadcrumbs(current)
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-4 rounded-2xl p-5 sm:max-w-lg">
@@ -90,25 +106,30 @@ export function DirPickerDialog({
           </Button>
         </div>
 
-        <div className="flex gap-1.5">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 rounded-lg text-xs text-muted-foreground"
-            disabled={loading || !data?.parent}
-            onClick={() => data?.parent && void load(data.parent)}
-          >
-            <ArrowUp className="h-3.5 w-3.5" /> {t("settings.parentDir")}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 rounded-lg text-xs text-muted-foreground"
+        {/* Breadcrumb navigation: click any segment to jump. */}
+        <div className="flex flex-wrap items-center gap-0.5 text-[11px]">
+          <button
+            type="button"
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-muted-foreground hover:bg-muted/60 hover:text-foreground"
             disabled={loading}
             onClick={() => void load("")}
           >
-            <Home className="h-3.5 w-3.5" /> {t("settings.homeDir")}
-          </Button>
+            <Home className="h-3 w-3" />
+          </button>
+          {crumbs.map((c) => (
+            <span key={c.path} className="flex items-center">
+              <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
+              <button
+                type="button"
+                className="max-w-[10rem] truncate rounded px-1.5 py-0.5 font-mono text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                disabled={loading}
+                onClick={() => void load(c.path)}
+                title={c.path}
+              >
+                {c.label}
+              </button>
+            </span>
+          ))}
         </div>
 
         <div className="overflow-hidden rounded-xl border border-border">
@@ -129,23 +150,34 @@ export function DirPickerDialog({
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {data.entries.map((entry) => (
-                  <button
-                    key={entry.path}
-                    type="button"
-                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/60"
-                    onClick={() => void load(entry.path)}
-                    onDoubleClick={() => {
-                      onSelect(entry.path)
-                      onOpenChange(false)
-                    }}
-                  >
-                    <Folder className="h-3.5 w-3.5 shrink-0 text-primary/70" />
-                    <span className="truncate font-mono text-foreground">
-                      {entry.name}
-                    </span>
-                  </button>
-                ))}
+                {data.entries.map((entry) => {
+                  const active = entry.path === current
+                  return (
+                    <button
+                      key={entry.path}
+                      type="button"
+                      className={cn(
+                        "flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/60",
+                        active && "bg-primary/10"
+                      )}
+                      onClick={() => void load(entry.path)}
+                      onDoubleClick={() => {
+                        onSelect(entry.path)
+                        onOpenChange(false)
+                      }}
+                    >
+                      <Folder
+                        className={cn(
+                          "h-3.5 w-3.5 shrink-0",
+                          active ? "text-primary" : "text-primary/70"
+                        )}
+                      />
+                      <span className="truncate font-mono text-foreground">
+                        {entry.name}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             )}
           </ScrollArea>

@@ -62,9 +62,6 @@ function agentDetailToForm(d: AgentDetail): AgentFormData {
     knowledgeTopK: d.knowledge?.top_k || 5,
     optimizeUserPrompt: d.optimize?.user_prompt ?? false,
     contextWindow: d.compaction?.context_window ?? 0,
-    compactionStrategy:
-      (d.compaction?.strategy as AgentFormData["compactionStrategy"]) ??
-      "truncation",
   }
 }
 
@@ -189,7 +186,6 @@ export function AgentEditorPage({
             : t("agent.editTitle", { name: form.name || agentId })
         }
         description={t("agent.editorSubtitle")}
-        onBack={onBack}
         actions={
           <>
             <Button

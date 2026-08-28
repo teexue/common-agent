@@ -57,6 +57,16 @@ func WrapAudited(p Provider, logger *audit.RequestLogger) Provider {
 	return &auditedProvider{inner: p, logger: logger}
 }
 
+// ResolveContextWindow forwards to the inner provider when it knows the
+// model's real window (e.g. Ollama). Without this, the audit wrapper hides
+// ContextResolver and the loop falls back to the 128K default.
+func (a *auditedProvider) ResolveContextWindow(ctx context.Context, model string, configured int) int {
+	if r, ok := a.inner.(ContextResolver); ok {
+		return r.ResolveContextWindow(ctx, model, configured)
+	}
+	return EffectiveContextWindow(model, configured)
+}
+
 // Stream delegates to the inner provider, draining the chunk stream and
 // persisting one audit record per call.
 func (a *auditedProvider) Stream(ctx context.Context, req Request) (<-chan Chunk, error) {

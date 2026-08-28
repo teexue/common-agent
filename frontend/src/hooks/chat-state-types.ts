@@ -73,3 +73,9 @@ export type ChatAction =
       /** Session metadata from the backend; restores cumulative token usage. */
       metadata?: Record<string, string>
     }
+  | {
+      type: "LOAD_LIVE"
+      sessionId: string
+      messages: ConversationEntry[]
+      metadata?: Record<string, string>
+    }

@@ -85,7 +85,7 @@ model: unknown-model
 system_prompt: hi
 tools: [echo]
 compaction:
-  context_window: 262144
+  context_window: 256000
 `)))
 
 	summaries := svc.ListAgents()
@@ -95,6 +95,34 @@ compaction:
 	for _, s := range summaries {
 		byID[s.ID] = s
 	}
-	assert.Equal(t, 1_048_576, byID["spec"].ContextWindow, "model spec window")
-	assert.Equal(t, 262144, byID["cfg"].ContextWindow, "configured compaction window")
+	assert.Equal(t, 1_000_000, byID["spec"].ContextWindow, "model spec window")
+	assert.Equal(t, 256000, byID["cfg"].ContextWindow, "configured compaction window")
+
+	// Unknown model with no compaction window → omit (do not advertise 128K).
+	require.NoError(t, svc.SaveAgent("unk", []byte(`id: unk
+name: unk-agent
+provider: ollama
+model: glm5_next
+system_prompt: hi
+tools: [echo]
+`)))
+	summaries = svc.ListAgents()
+	byID = map[string]service.AgentSummary{}
+	for _, s := range summaries {
+		byID[s.ID] = s
+	}
+	assert.Equal(t, 0, byID["unk"].ContextWindow, "unknown model has no advertised window")
+
+	svc.ModelWindow = func(providerName, model string) int {
+		if providerName == "ollama" && model == "glm5_next" {
+			return 1_000_000
+		}
+		return 0
+	}
+	summaries = svc.ListAgents()
+	byID = map[string]service.AgentSummary{}
+	for _, s := range summaries {
+		byID[s.ID] = s
+	}
+	assert.Equal(t, 1_000_000, byID["unk"].ContextWindow, "provider-saved window")
 }

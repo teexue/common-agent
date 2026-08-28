@@ -3,6 +3,7 @@ import type {
   ProviderInfo,
   VendorInfo,
   ModelInfo,
+  ModelDetail,
   MCPServerInfo,
 } from "@/types/agent"
 
@@ -55,7 +56,35 @@ export async function fetchProviderModels(opts: {
   return (await res.json()) ?? []
 }
 
-/** Creates or updates a provider. */
+/** Fetches structured metadata for a single model using inline provider
+ *  config (no saved provider required), mirroring fetchProviderModels so
+ *  the UI can show model details while creating a provider. Only providers
+ *  that support model introspection (e.g. Ollama) return a payload. */
+export async function fetchProviderModelDetail(opts: {
+  name?: string
+  api_style: string
+  base_url?: string
+  models_path?: string
+  api_version?: string
+  auth_style?: string
+  api_key?: string
+  model: string
+}): Promise<ModelDetail> {
+  const res = await fetch("/v1/providers/models/detail", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...langHeaders() },
+    body: JSON.stringify(opts),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    const detail = err?.details ? `: ${err.details}` : ""
+    throw new Error(
+      (err?.message ??
+        i18n.t("api.fetchModelDetailFailed", { status: res.status })) + detail
+    )
+  }
+  return res.json()
+}
 export async function upsertProvider(data: {
   name: string
   api_style: string
@@ -68,6 +97,7 @@ export async function upsertProvider(data: {
   display_name?: string
   models_path?: string
   vision?: boolean
+  context_window?: number
 }): Promise<void> {
   const res = await fetch("/v1/providers", {
     method: "POST",

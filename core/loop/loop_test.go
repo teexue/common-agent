@@ -612,7 +612,7 @@ func TestRunDoneCarriesContextWindow(t *testing.T) {
 	require.NotNil(t, done, "expected done event")
 	assert.Equal(t, "completed", done.Status)
 	// deepseek-v4-pro resolves to the official 1M context window.
-	assert.Equal(t, 1_048_576, done.ContextWindow)
+	assert.Equal(t, 1_000_000, done.ContextWindow)
 }
 
 func TestDoneCarriesConfiguredContextWindow(t *testing.T) {
@@ -627,7 +627,7 @@ func TestDoneCarriesConfiguredContextWindow(t *testing.T) {
 		Tools:        []string{"echo"},
 		Model:        "unknown-model",
 		MaxTurns:     3,
-		Compaction:   &agent.CompactionConfig{ContextWindow: 262144},
+		Compaction:   &agent.CompactionConfig{ContextWindow: 256000},
 	}
 
 	events, err := loop.Run(context.Background(), loop.Config{
@@ -646,7 +646,7 @@ func TestDoneCarriesConfiguredContextWindow(t *testing.T) {
 		}
 	}
 	require.NotNil(t, done, "expected done event")
-	assert.Equal(t, 262144, done.ContextWindow)
+	assert.Equal(t, 256000, done.ContextWindow)
 }
 
 type cacheAwareProvider struct{}

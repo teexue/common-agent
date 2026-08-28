@@ -19,7 +19,6 @@ export interface AgentFormData {
   knowledgeTopK: number
   optimizeUserPrompt: boolean
   contextWindow: number // 0 = 不设置（用运行时/提供商默认）
-  compactionStrategy: "truncation" | "sliding_window" | "summarize"
 }
 
 /** MCP server as edited in the form (args/env as editable strings). */
@@ -40,7 +39,7 @@ export const EMPTY_FORM: AgentFormData = {
   systemPrompt: "You are a helpful assistant.",
   tools: [],
   maxTurns: 0,
-  maxTokens: 8192,
+  maxTokens: 8000,
   execMode: "parallel",
   maxParallel: 4,
   autoApprove: [],
@@ -50,7 +49,6 @@ export const EMPTY_FORM: AgentFormData = {
   knowledgeTopK: 5,
   optimizeUserPrompt: false,
   contextWindow: 0,
-  compactionStrategy: "truncation",
 }
 
 export function emptyMcpServer(): McpServerFormItem {
@@ -229,14 +227,9 @@ export function formDataToYaml(form: AgentFormData): string {
     }
   }
 
-  if (form.contextWindow > 0 || form.compactionStrategy !== "truncation") {
+  if (form.contextWindow > 0) {
     lines.push(`compaction:`)
-    if (form.compactionStrategy !== "truncation") {
-      lines.push(`  strategy: ${form.compactionStrategy}`)
-    }
-    if (form.contextWindow > 0) {
-      lines.push(`  context_window: ${form.contextWindow}`)
-    }
+    lines.push(`  context_window: ${form.contextWindow}`)
   }
 
   if (form.optimizeUserPrompt) {

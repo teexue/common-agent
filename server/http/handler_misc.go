@@ -97,6 +97,29 @@ func (s *Server) handleProviderModels(c *gin.Context) {
 	c.JSON(http.StatusOK, models)
 }
 
+// handleProviderModelDetail returns structured metadata for a single model
+// from a configured provider (e.g. Ollama /api/show: context length, family,
+// parameter size, quantization, capabilities).
+func (s *Server) handleProviderModelDetail(c *gin.Context) {
+	if s.catalog == nil {
+		respondError(c, http.StatusServiceUnavailable, "no_catalog", "api.error.no_catalog")
+		return
+	}
+	name := c.Param("name")
+	model := c.Param("model")
+	if name == "" || model == "" {
+		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request")
+		return
+	}
+	detail, err := s.catalog.ShowModel(c.Request.Context(), name, model)
+	if err != nil {
+		respondErrorDetails(c, http.StatusBadGateway, "provider_error", "api.error.provider_error", err.Error())
+		return
+	}
+	s.rememberModelWindow(name, model, detail.ContextWindow)
+	c.JSON(http.StatusOK, detail)
+}
+
 // ProviderModelsRequest is the DTO for POST /v1/providers/models.
 // It fetches models using inline config (no saved provider required), so the
 // UI can pull a model list while creating a provider before saving it.
@@ -110,18 +133,14 @@ type ProviderModelsRequest struct {
 	APIKey     string `json:"api_key,omitempty"`
 }
 
-// handleProviderModelsTest fetches models from an inline provider config.
-// If api_key is empty and name matches a saved provider, the stored key is used.
-func (s *Server) handleProviderModelsTest(c *gin.Context) {
-	var req ProviderModelsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
-		return
-	}
+// buildInlineProvider constructs a provider from an inline config, filling in
+// vendor defaults and falling back to a saved provider's API key when one is
+// not supplied. It is shared by the inline model-list and model-detail
+// endpoints so the UI can introspect a provider before it is saved.
+func (s *Server) buildInlineProvider(req ProviderModelsRequest) (provider.Provider, error) {
 	style := provider.APIStyle(req.APIStyle)
 	if style != provider.StyleOpenAI && style != provider.StyleAnthropic && style != provider.StyleOllama {
-		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request")
-		return
+		return nil, fmt.Errorf("unsupported api_style %q", req.APIStyle)
 	}
 
 	apiKey := req.APIKey
@@ -132,8 +151,7 @@ func (s *Server) handleProviderModelsTest(c *gin.Context) {
 	}
 	// Local Ollama needs no API key; only require a key for the other styles.
 	if apiKey == "" && style != provider.StyleOllama {
-		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request")
-		return
+		return nil, fmt.Errorf("api_key required for %q", req.APIStyle)
 	}
 
 	baseURL := req.BaseURL
@@ -168,7 +186,7 @@ func (s *Server) handleProviderModelsTest(c *gin.Context) {
 		}
 	}
 
-	p, err := provider.NewProvider(provider.ListingProfile(provider.Profile{
+	return provider.NewProvider(provider.ListingProfile(provider.Profile{
 		Name:       req.Name,
 		APIStyle:   style,
 		BaseURL:    baseURL,
@@ -177,6 +195,17 @@ func (s *Server) handleProviderModelsTest(c *gin.Context) {
 		AuthStyle:  authStyle,
 		ModelsPath: modelsPath,
 	}))
+}
+
+// handleProviderModelsTest fetches models from an inline provider config.
+// If api_key is empty and name matches a saved provider, the stored key is used.
+func (s *Server) handleProviderModelsTest(c *gin.Context) {
+	var req ProviderModelsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		return
+	}
+	p, err := s.buildInlineProvider(req)
 	if err != nil {
 		respondErrorDetails(c, http.StatusBadRequest, "provider_error", "api.error.provider_error", err.Error())
 		return
@@ -194,19 +223,59 @@ func (s *Server) handleProviderModelsTest(c *gin.Context) {
 	c.JSON(http.StatusOK, models)
 }
 
+// ProviderModelDetailRequest is the DTO for POST /v1/providers/models/detail.
+// It introspects a single model using inline config, mirroring the inline
+// model-list endpoint so the UI can show model details before saving.
+type ProviderModelDetailRequest struct {
+	ProviderModelsRequest
+	Model string `json:"model"`
+}
+
+// handleProviderModelDetailTest returns structured metadata for a single model
+// using inline provider config. Only providers implementing ModelDetailer
+// (e.g. Ollama) are supported.
+func (s *Server) handleProviderModelDetailTest(c *gin.Context) {
+	var req ProviderModelDetailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		return
+	}
+	if req.Model == "" {
+		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request")
+		return
+	}
+	p, err := s.buildInlineProvider(req.ProviderModelsRequest)
+	if err != nil {
+		respondErrorDetails(c, http.StatusBadRequest, "provider_error", "api.error.provider_error", err.Error())
+		return
+	}
+	detailer, ok := p.(provider.ModelDetailer)
+	if !ok {
+		respondErrorDetails(c, http.StatusBadGateway, "provider_error", "api.error.provider_error", "provider does not support model detail")
+		return
+	}
+	detail, err := detailer.ShowModel(c.Request.Context(), req.Model)
+	if err != nil {
+		respondErrorDetails(c, http.StatusBadGateway, "provider_error", "api.error.provider_error", err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, detail)
+}
+
 // ProviderUpsertRequest is the DTO for POST/PUT /v1/providers.
 type ProviderUpsertRequest struct {
-	Name         string `json:"name"`
-	APIStyle     string `json:"api_style"`
-	BaseURL      string `json:"base_url,omitempty"`
-	APIKey       string `json:"api_key,omitempty"`
-	APIKeyEnv    string `json:"api_key_env,omitempty"`
-	APIVersion   string `json:"api_version,omitempty"`
-	AuthStyle    string `json:"auth_style,omitempty"`
-	DefaultModel string `json:"default_model,omitempty"`
-	DisplayName  string `json:"display_name,omitempty"`
-	ModelsPath   string `json:"models_path,omitempty"`
-	Vision       bool   `json:"vision,omitempty"`
+	Name          string `json:"name"`
+	APIStyle      string `json:"api_style"`
+	BaseURL       string `json:"base_url,omitempty"`
+	APIKey        string `json:"api_key,omitempty"`
+	APIKeyEnv     string `json:"api_key_env,omitempty"`
+	APIVersion    string `json:"api_version,omitempty"`
+	AuthStyle     string `json:"auth_style,omitempty"`
+	DefaultModel  string `json:"default_model,omitempty"`
+	DisplayName   string `json:"display_name,omitempty"`
+	ModelsPath    string `json:"models_path,omitempty"`
+	Vision        bool   `json:"vision,omitempty"`
+	ContextWindow int    `json:"context_window,omitempty"`
 }
 
 func (s *Server) handleProviderUpsert(c *gin.Context) {
@@ -221,19 +290,14 @@ func (s *Server) handleProviderUpsert(c *gin.Context) {
 	}
 
 	home := filepath.Dir(s.agentsDir)
-	if req.APIKeyEnv == "" {
-		// Prefer the built-in vendor's api_key_env when the provider name
-		// matches a preset. Local Ollama has an empty api_key_env (no auth),
-		// so we must not fall back to a derived OLLAMA_API_KEY that would then
-		// require a key at resolve time.
-		if v, ok := provider.LookupVendor(req.Name); ok {
-			req.APIKeyEnv = v.APIKeyEnv
-		} else if existing, ok := existingProviderAPIKeyEnv(home, req.Name); ok {
-			req.APIKeyEnv = existing
-		} else {
-			req.APIKeyEnv = defaultAPIKeyEnv(req.Name)
-		}
+	existingEnv, _ := existingProviderAPIKeyEnv(home, req.Name)
+	vendorEnv := ""
+	hasVendor := false
+	if v, ok := provider.LookupVendor(req.Name); ok {
+		vendorEnv = v.APIKeyEnv
+		hasVendor = true
 	}
+	req.APIKeyEnv = resolveProviderAPIKeyEnv(req.Name, req.APIKeyEnv, existingEnv, vendorEnv, hasVendor)
 
 	spec := config.ProviderSpec{
 		Name:         req.Name,
@@ -246,6 +310,7 @@ func (s *Server) handleProviderUpsert(c *gin.Context) {
 		DisplayName:  req.DisplayName,
 		ModelsPath:   req.ModelsPath,
 		Vision:       req.Vision,
+		ModelWindows: s.modelWindowsForUpsert(c.Request.Context(), req),
 	}
 	if err := config.UpsertProvider(home, spec); err != nil {
 		respondErrorDetails(c, http.StatusBadRequest, "provider_error", "api.error.provider_error", err.Error())
@@ -291,7 +356,34 @@ func defaultAPIKeyEnv(name string) string {
 	return s + "_API_KEY"
 }
 
+// resolveProviderAPIKeyEnv picks the credential env name for a provider upsert.
+// An existing provider keeps its env unless the request sets one explicitly, so
+// a re-save without an API key cannot retarget a newly invented name.
+func resolveProviderAPIKeyEnv(name, requested, existing, vendorEnv string, hasVendor bool) string {
+	if requested != "" {
+		return requested
+	}
+	if existing != "" {
+		return existing
+	}
+	if hasVendor {
+		return vendorEnv
+	}
+	return defaultAPIKeyEnv(name)
+}
+
 func existingProviderAPIKeyEnv(home, name string) (string, bool) {
+	if db := config.DB(); db != nil {
+		entries, err := db.ListProviderEntries()
+		if err != nil {
+			return "", false
+		}
+		entry, ok := entries[name]
+		if !ok || entry.APIKeyEnv == "" {
+			return "", false
+		}
+		return entry.APIKeyEnv, true
+	}
 	data, err := os.ReadFile(config.ProvidersFile(home))
 	if err != nil {
 		return "", false

@@ -1,4 +1,4 @@
-import { useNavigate, useSearchParams } from "react-router"
+import { useSearchParams } from "react-router"
 import { useTranslation } from "react-i18next"
 import { KeyRound, Monitor, ScrollText, ShieldCheck, Users } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -14,7 +14,6 @@ const TAB_VALUES = ["users", "api-keys", "monitoring", "request-logs"] as const
 /** Admin hub: user accounts, API keys, runtime monitoring, and request audit logs. */
 export function AdminPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const rawTab = searchParams.get("tab") || "users"
   const activeTab = (TAB_VALUES as readonly string[]).includes(rawTab)
@@ -37,7 +36,6 @@ export function AdminPage() {
       <PageHeader
         icon={ShieldCheck}
         title={t("admin.title")}
-        onBack={() => navigate(-1)}
       />
 
       <PageMain contentClassName="w-full">

@@ -17,9 +17,13 @@ interface ActivityEntryProps {
 
 function UserMessage({ entry }: { entry: ConversationEntry }) {
   return (
-    <p className="border-l-2 border-primary/35 py-0.5 pl-3 text-[13px] leading-relaxed whitespace-pre-wrap text-foreground">
-      {entry.content}
-    </p>
+    <div className="flex justify-end">
+      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-gradient-to-br from-accent via-primary/10 to-primary/25 px-3.5 py-2 shadow-md shadow-primary/15">
+        <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-foreground">
+          {entry.content}
+        </p>
+      </div>
+    </div>
   )
 }
 

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest"
 import i18n from "@/i18n"
 import {
   cacheHitPercent,
+  formatParameterSize,
   formatRelativeTime,
   formatTimestamp,
   formatTokenCount,
@@ -42,6 +43,16 @@ describe("format i18n", () => {
     expect(formatTokenCount(1_234_567)).toBe("1.2M")
     expect(formatTokenCount(12_345_678)).toBe("12.3M")
     expect(formatTokenCount(123_456_789)).toBe("123M")
+    expect(formatTokenCount(128_000)).toBe("128K")
+    expect(formatTokenCount(1_000_000)).toBe("1.0M")
+  })
+
+  it("formatParameterSize turns raw counts into B/M labels", () => {
+    expect(formatParameterSize("321323031390")).toBe("321B")
+    expect(formatParameterSize("8000000000")).toBe("8B")
+    expect(formatParameterSize("3B")).toBe("3B")
+    expect(formatParameterSize("8x7B")).toBe("8x7B")
+    expect(formatParameterSize("")).toBe("")
   })
 
   it("cacheHitPercent uses total input (cached + fresh) as denominator", () => {
