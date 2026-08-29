@@ -1,7 +1,5 @@
 import { ensureOK, langHeaders } from "./client"
 
-// ─── Admin API (admin role required) ─────────────────────────────
-
 export interface AdminUserInfo {
   id: string
   username: string

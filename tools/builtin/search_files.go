@@ -21,6 +21,7 @@ type SearchFiles struct {
 
 // Name returns the tool name.
 func (SearchFiles) Name() string { return "search_files" }
+
 // Description returns a human-readable description.
 func (SearchFiles) Description() string {
 	return "Search for a regex pattern in files within a directory. Returns matching lines with file paths and line numbers."
@@ -53,10 +54,10 @@ func (SearchFiles) InputSchema() map[string]any {
 }
 
 type searchMatch struct {
-	File    string `json:"file"`
-	Line    int    `json:"line"`
-	Column  int    `json:"column"`
-	Text    string `json:"text"`
+	File   string `json:"file"`
+	Line   int    `json:"line"`
+	Column int    `json:"column"`
+	Text   string `json:"text"`
 }
 
 // Execute runs the tool.
@@ -109,7 +110,7 @@ func walkAndSearch(root, glob string, re *regexp.Regexp, maxResults int) ([]sear
 	var matches []searchMatch
 	truncated := false
 
-	filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil || info.IsDir() {
 			return nil
 		}

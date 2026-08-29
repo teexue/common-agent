@@ -1,38 +1,20 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useState } from "react"
 import { useNavigate } from "react-router"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
-import { fetchSessions, fetchSession, deleteSession } from "@/lib/api"
-import type { SessionMeta } from "@/types/agent"
+import { useAgentManager } from "@/hooks/use-agent-manager"
+import { useSessionStore } from "./session-store"
+import { fetchSession } from "@/lib/api"
 
 export function useSessionList() {
-  const [sessions, setSessions] = useState<SessionMeta[]>([])
-  const refresh = useCallback(() => {
-    fetchSessions()
-      .then((d) => setSessions(d ?? []))
-      .catch(() => {})
-  }, [])
-  useEffect(() => {
-    refresh()
-  }, [refresh])
-  const remove = useCallback(
-    async (id: string) => {
-      try {
-        await deleteSession(id)
-        refresh()
-      } catch (err) {
-        console.error("Failed to delete session:", err)
-      }
-    },
-    [refresh]
-  )
+  const { sessions, refresh, remove } = useSessionStore()
   return { sessions, refresh, remove }
 }
 
 export function useShellNav() {
   const navigate = useNavigate()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const sessList = useSessionList()
-  const [replaySessionId, setReplaySessionId] = useState<string | null>(null)
+  const { sessions, remove } = useSessionStore()
+  const agentMgr = useAgentManager()
 
   useKeyboardShortcuts({
     onToggleSidebar: () => setSidebarCollapsed((v) => !v),
@@ -57,24 +39,26 @@ export function useShellNav() {
     navigate,
     sidebarCollapsed,
     setSidebarCollapsed,
+    agentMgr,
+    agents: agentMgr.agents,
     onToggleSidebar: () => setSidebarCollapsed((v) => !v),
     onOpenSettings: () => navigate("/settings"),
     onOpenManage: () => navigate("/manage"),
     onOpenKanban: () => navigate("/kanban"),
     onOpenApiDocs: () => navigate("/api-docs"),
+    onOpenUsage: () => navigate("/usage"),
     onOpenAdmin: () => navigate("/admin"),
     onNewSession: () => navigate("/"),
-    sessions: sessList.sessions,
+    sessions,
     onResumeSession: handleResumeSession,
-    onDeleteSession: sessList.remove,
-    onReplaySession: (id: string) => setReplaySessionId(id),
-    replaySessionId,
-    setReplaySessionId,
+    onDeleteSession: remove,
   }
 }
 
+export type ShellNav = ReturnType<typeof useShellNav>
+
 export function shellLayoutProps(
-  shell: ReturnType<typeof useShellNav>,
+  shell: ShellNav,
   theme: string,
   setTheme: (t: "dark" | "light" | "system") => void
 ) {
@@ -85,12 +69,13 @@ export function shellLayoutProps(
     onOpenManage: shell.onOpenManage,
     onOpenKanban: shell.onOpenKanban,
     onOpenApiDocs: shell.onOpenApiDocs,
+    onOpenUsage: shell.onOpenUsage,
     onOpenAdmin: shell.onOpenAdmin,
     onNewSession: shell.onNewSession,
     sessions: shell.sessions,
+    agents: shell.agents,
     onResumeSession: shell.onResumeSession,
     onDeleteSession: shell.onDeleteSession,
-    onReplaySession: shell.onReplaySession,
     agent: {
       id: "",
       name: "common-agent",

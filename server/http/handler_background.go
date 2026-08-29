@@ -56,7 +56,7 @@ func (s *Server) handleBackgroundUpload(c *gin.Context) {
 	home := filepath.Dir(s.agentsDir)
 	file, err := c.FormFile("file")
 	if err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	ext := strings.ToLower(filepath.Ext(file.Filename))
@@ -65,7 +65,7 @@ func (s *Server) handleBackgroundUpload(c *gin.Context) {
 		return
 	}
 	if err := os.MkdirAll(home, 0o755); err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "background_error", "api.error.background_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "background_error", MsgKey: "api.error.background_error", Details: err.Error()})
 		return
 	}
 	// Remove any existing background file before writing the new one.
@@ -74,7 +74,7 @@ func (s *Server) handleBackgroundUpload(c *gin.Context) {
 	}
 	dst := filepath.Join(home, "background"+ext)
 	if err := c.SaveUploadedFile(file, dst); err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "background_error", "api.error.background_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "background_error", MsgKey: "api.error.background_error", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"url": "/v1/background"})
@@ -89,7 +89,7 @@ func (s *Server) handleBackgroundDelete(c *gin.Context) {
 		return
 	}
 	if err := os.Remove(path); err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "background_error", "api.error.background_error", fmt.Sprintf("remove: %v", err))
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "background_error", MsgKey: "api.error.background_error", Details: fmt.Sprintf("remove: %v", err)})
 		return
 	}
 	c.Status(http.StatusNoContent)

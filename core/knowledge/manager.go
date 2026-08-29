@@ -26,11 +26,11 @@ type Meta struct {
 
 // Document describes an ingested file.
 type Document struct {
-	ID        string    `json:"id"`
-	Filename  string    `json:"filename"`
-	Size      int64     `json:"size"`
-	CreatedAt time.Time `json:"created_at"`
-	ChunkCount int      `json:"chunk_count"`
+	ID         string    `json:"id"`
+	Filename   string    `json:"filename"`
+	Size       int64     `json:"size"`
+	CreatedAt  time.Time `json:"created_at"`
+	ChunkCount int       `json:"chunk_count"`
 }
 
 // Hit is a retrieval result fragment.

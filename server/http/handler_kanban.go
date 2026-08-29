@@ -45,9 +45,9 @@ func respondKanbanError(c *gin.Context, err error) {
 	case errors.Is(err, store.ErrKanbanNotFound):
 		respondError(c, http.StatusNotFound, "not_found", "api.error.kanban_not_found")
 	case errors.As(err, &argErr):
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.kanban_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.kanban_error", Details: err.Error()})
 	default:
-		respondErrorDetails(c, http.StatusInternalServerError, "kanban_error", "api.error.kanban_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "kanban_error", MsgKey: "api.error.kanban_error", Details: err.Error()})
 	}
 }
 
@@ -65,10 +65,20 @@ func (s *Server) handleKanbanList(c *gin.Context) {
 	c.JSON(http.StatusOK, items)
 }
 
+func (s *Server) handleKanbanGet(c *gin.Context) {
+	userID := identityFromGin(c).UserID
+	row, err := s.svc.GetKanbanItem(c.Param("id"), userID)
+	if err != nil {
+		respondKanbanError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, kanbanItemResponse(row))
+}
+
 func (s *Server) handleKanbanCreate(c *gin.Context) {
 	var req service.CreateKanbanRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	userID := identityFromGin(c).UserID
@@ -83,7 +93,7 @@ func (s *Server) handleKanbanCreate(c *gin.Context) {
 func (s *Server) handleKanbanPatch(c *gin.Context) {
 	var req service.UpdateKanbanRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	userID := identityFromGin(c).UserID
@@ -123,7 +133,7 @@ type KanbanRejectRequest struct {
 func (s *Server) handleKanbanReject(c *gin.Context) {
 	var req KanbanRejectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	userID := identityFromGin(c).UserID

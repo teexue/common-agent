@@ -15,7 +15,11 @@ import (
 type Status string
 
 const (
-	StatusUp   Status = "up"
+	// StatusUp is the JSON health value when the process (or a component) is
+	// serving; /readyz returns HTTP 200 while every checker reports this.
+	StatusUp Status = "up"
+	// StatusDown is the JSON health value when a checker fails; /readyz then
+	// returns HTTP 503 so load balancers stop sending traffic.
 	StatusDown Status = "down"
 )
 
@@ -80,7 +84,7 @@ func (h *HealthServer) DecrActiveSessions() {
 func (h *HealthServer) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	resp := HealthResponse{Status: StatusUp}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // CheckAll runs all registered component checks and returns an error if any fail.
@@ -134,17 +138,17 @@ func (h *HealthServer) HandleReady(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(httpStatus)
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // MetricsResponse is the JSON response for /metrics.
 type MetricsResponse struct {
-	Goroutines      int                        `json:"goroutines"`
-	HeapAllocBytes  uint64                     `json:"heap_alloc_bytes"`
-	HeapSysBytes    uint64                     `json:"heap_sys_bytes"`
-	ActiveSessions  int64                      `json:"active_sessions"`
-	UptimeSeconds   int64                      `json:"uptime_seconds"`
-	Agents          map[string]AgentStatsView  `json:"agents,omitempty"`
+	Goroutines     int                       `json:"goroutines"`
+	HeapAllocBytes uint64                    `json:"heap_alloc_bytes"`
+	HeapSysBytes   uint64                    `json:"heap_sys_bytes"`
+	ActiveSessions int64                     `json:"active_sessions"`
+	UptimeSeconds  int64                     `json:"uptime_seconds"`
+	Agents         map[string]AgentStatsView `json:"agents,omitempty"`
 }
 
 // HandleMetrics handles GET /metrics — returns runtime metrics.
@@ -162,7 +166,7 @@ func (h *HealthServer) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // ProviderChecker checks if a provider is reachable.

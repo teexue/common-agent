@@ -28,7 +28,7 @@ type OptimizeResponse struct {
 func (s *Server) handleOptimizePrompt(c *gin.Context) {
 	var req OptimizeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 
@@ -52,7 +52,7 @@ func (s *Server) handleOptimizePrompt(c *gin.Context) {
 			msgKey = "api.error.provider_error"
 			status = http.StatusInternalServerError
 		}
-		respondErrorDetails(c, status, code, msgKey, err.Error())
+		respondErrorDetails(c, errorDetails{Status: status, Code: code, MsgKey: msgKey, Details: err.Error()})
 		return
 	}
 

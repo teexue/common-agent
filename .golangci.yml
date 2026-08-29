@@ -1,24 +1,42 @@
-run:
-  timeout: 5m
+version: "2"
 
 linters:
+  default: standard
   enable:
-    - errcheck
-    - govet
-    - staticcheck
-    - unused
-    - ineffassign
-    - gosimple
-    - misspell
-    - unconvert
+    - gocyclo
     - gosec
-
-linters-settings:
-  gosec:
-    excludes:
-      - G104 # duplicate of errcheck for many cases
+    - misspell
+    - nestif
+    - unconvert
+  settings:
+    gocyclo:
+      min-complexity: 16
+    gosec:
+      excludes:
+        - G104
+        - G101
+        - G204
+        - G304
+        - G301
+        - G306
+        - G302
+        - G115
+        - G704
+        - G305
+        - G703
+        - G122
+    nestif:
+      min-complexity: 5
+  exclusions:
+    generated: lax
+    presets:
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
 
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0

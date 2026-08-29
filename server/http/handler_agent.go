@@ -67,7 +67,7 @@ func (s *Server) handleAgentGet(c *gin.Context) {
 			respondError(c, http.StatusNotFound, "not_found", "api.error.agent_not_found")
 			return
 		}
-		respondErrorDetails(c, http.StatusBadRequest, "agent_error", "api.error.agent_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "agent_error", MsgKey: "api.error.agent_error", Details: err.Error()})
 		return
 	}
 
@@ -92,12 +92,12 @@ func (s *Server) handleAgentGet(c *gin.Context) {
 func (s *Server) handleAgentCreate(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
 		return
 	}
 	a, err := s.svc.CreateAgent(body)
 	if err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "save_error", "api.error.save_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "save_error", MsgKey: "api.error.save_error", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"status": "ok", "id": a.ID, "name": a.Name})
@@ -107,12 +107,12 @@ func (s *Server) handleAgentPut(c *gin.Context) {
 	id := c.Param("id")
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
 		return
 	}
 
 	if err := s.svc.SaveAgent(id, body); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "save_error", "api.error.save_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "save_error", MsgKey: "api.error.save_error", Details: err.Error()})
 		return
 	}
 
@@ -126,7 +126,7 @@ func (s *Server) handleAgentDelete(c *gin.Context) {
 			respondError(c, http.StatusNotFound, "not_found", "api.error.agent_not_found")
 			return
 		}
-		respondErrorDetails(c, http.StatusInternalServerError, "delete_error", "api.error.delete_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "delete_error", MsgKey: "api.error.delete_error", Details: err.Error()})
 		return
 	}
 

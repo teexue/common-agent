@@ -13,9 +13,11 @@ import (
 type GetTime struct{}
 
 // Name returns the tool name.
-func (GetTime) Name() string        { return "get_time" }
+func (GetTime) Name() string { return "get_time" }
+
 // Description returns a human-readable description.
 func (GetTime) Description() string { return "Return the current UTC time in RFC3339 format." }
+
 // InputSchema returns the JSON Schema for the tool's input.
 func (GetTime) InputSchema() map[string]any {
 	return map[string]any{

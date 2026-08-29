@@ -25,11 +25,17 @@ func resolveContextWindow(ctx context.Context, cfg Config) int {
 	return provider.EffectiveContextWindow(cfg.Agent.Model, configured)
 }
 
+type compactHint struct {
+	turn   int
+	log    *slog.Logger
+	window int
+}
+
 // compactIfNeeded runs the configured compaction strategy after a turn when
 // the projected prompt usage exceeds the context window budget. window is the
 // already-resolved effective context window (passed in so /api/show is not
 // re-fetched per turn).
-func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, turn int, log *slog.Logger, window int) {
+func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, hint compactHint) {
 	comp := cfg.Agent.Compaction
 	ratio := 0.0
 	keepRecent := 0
@@ -51,7 +57,7 @@ func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, tu
 	// completion: min(maxOutput, 20K), aligning with Claude Code's budget.
 	maxOut := provider.EffectiveMaxOutput(cfg.Agent.Model, cfg.Agent.MaxTokens)
 	reserve := compaction.SummaryBudget(maxOut)
-	tokenLimit := compaction.ResolveTokenLimit(window, reserve, ratio)
+	tokenLimit := compaction.ResolveTokenLimit(hint.window, reserve, ratio)
 	if tokenLimit <= 0 && maxMessages <= 0 {
 		return // no context window and no legacy message trigger
 	}
@@ -61,7 +67,7 @@ func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, tu
 	if comp != nil {
 		targetRatio = comp.TargetRatio
 	}
-	targetLimit := compaction.ResolveTargetLimit(window, reserve, targetRatio)
+	targetLimit := compaction.ResolveTargetLimit(hint.window, reserve, targetRatio)
 
 	// Project the usage the next request would hit: last real input_tokens
 	// from the provider plus an estimate of messages appended since. This
@@ -82,22 +88,22 @@ func compactIfNeeded(ctx context.Context, cfg Config, out chan<- event.Event, tu
 		KeepHead:      keepHead,
 		CurrentTokens: currentTokens,
 		TargetTokens:  targetLimit,
-		ContextWindow: window,
+		ContextWindow: hint.window,
 		Provider:      cfg.Provider,
 		Model:         summaryModel,
 		MaxOutput:     reserve,
 	})
 	result, err := cmp.Compact(ctx, msgs)
 	if err != nil {
-		log.Warn("log.compaction.error", "turn", turn, "error", err)
+		hint.log.Warn("log.compaction.error", "turn", hint.turn, "error", err)
 	} else if result != nil {
 		cfg.Session.SetMessages(result.Compacted)
 		// The recorded real usage no longer describes the message list;
 		// drop it so the next projection starts from the compacted state.
 		cfg.Session.ClearUsage()
 		emit(ctx, out, event.Event{Type: event.TypeCompaction, Content: result.Summary})
-		log.Info("log.compaction.compacted",
-			"turn", turn,
+		hint.log.Info("log.compaction.compacted",
+			"turn", hint.turn,
 			"old_messages", result.OldCount,
 			"new_messages", result.NewCount,
 			"token_limit", tokenLimit,

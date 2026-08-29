@@ -13,8 +13,14 @@ import (
 type ChangeType string
 
 const (
+	// ChangeCreated is emitted when a new agent YAML appears on disk so the
+	// catalog can load it without a process restart.
 	ChangeCreated ChangeType = "created"
+	// ChangeUpdated is emitted when an existing agent YAML is rewritten so the
+	// running catalog can hot-reload the definition.
 	ChangeUpdated ChangeType = "updated"
+	// ChangeDeleted is emitted when an agent YAML is removed or renamed away,
+	// so the catalog drops that agent.
 	ChangeDeleted ChangeType = "deleted"
 )
 

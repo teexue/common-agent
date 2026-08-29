@@ -17,7 +17,7 @@ type testTool struct {
 	name string
 }
 
-func (t *testTool) Name() string       { return t.name }
+func (t *testTool) Name() string        { return t.name }
 func (t *testTool) Description() string { return "test tool" }
 func (t *testTool) InputSchema() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{}}

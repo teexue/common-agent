@@ -11,10 +11,14 @@ import (
 	"sync"
 )
 
-// Supported locales.
 const (
+	// LocaleZhCN is the Chinese catalog key; Normalize maps any zh-* tag here
+	// so content and slog catalogs load the 中文 bundle.
 	LocaleZhCN = "zh-CN"
-	LocaleEn   = "en"
+	// LocaleEn is the English catalog key; Normalize maps any en-* tag here.
+	LocaleEn = "en"
+	// DefaultLocale is used when the locale is missing or unrecognized so the
+	// UI and slog catalogs always have a bundle.
 	DefaultLocale = LocaleZhCN
 )
 

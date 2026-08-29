@@ -239,9 +239,9 @@ func TestEditFile(t *testing.T) {
 
 	ef := builtin.EditFile{WorkDir: dir}
 	input, _ := json.Marshal(map[string]any{
-		"path":        "code.go",
-		"old_string":  "func main() {}",
-		"new_string":  "func main() { fmt.Println(\"hi\") }",
+		"path":       "code.go",
+		"old_string": "func main() {}",
+		"new_string": "func main() { fmt.Println(\"hi\") }",
 	})
 	res, err := ef.Execute(context.Background(), input)
 	if err != nil {
@@ -269,9 +269,9 @@ func TestEditFileNotFound(t *testing.T) {
 
 	ef := builtin.EditFile{WorkDir: dir}
 	input, _ := json.Marshal(map[string]any{
-		"path":        "f.txt",
-		"old_string":  "nonexistent",
-		"new_string":  "replacement",
+		"path":       "f.txt",
+		"old_string": "nonexistent",
+		"new_string": "replacement",
 	})
 	_, err := ef.Execute(context.Background(), input)
 	if err == nil {
@@ -285,10 +285,10 @@ func TestEditFileAll(t *testing.T) {
 
 	ef := builtin.EditFile{WorkDir: dir}
 	input, _ := json.Marshal(map[string]any{
-		"path":        "f.txt",
-		"old_string":  "aaa",
-		"new_string":  "ccc",
-		"all":         true,
+		"path":       "f.txt",
+		"old_string": "aaa",
+		"new_string": "ccc",
+		"all":        true,
 	})
 	res, err := ef.Execute(context.Background(), input)
 	if err != nil {

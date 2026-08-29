@@ -90,7 +90,7 @@ func Run(ctx context.Context, cfg Config, deps Deps, parentOut chan<- event.Even
 
 	loopCfg := loop.Config{
 		Provider: p, Registry: deps.Registry, Agent: a,
-		Session: session.New(a.Name), Prompt: prompt,
+		Session: session.New(a.ID), Prompt: prompt,
 		Logger: deps.Logger, Policy: deps.Policy, Approver: deps.Approver,
 	}
 
@@ -123,7 +123,7 @@ func loadSubAgent(agentsDir string, cfg Config) (*agent.Agent, error) {
 	a := &agent.Agent{
 		Name: "sub-agent", Provider: "default",
 		SystemPrompt: "You are a helpful sub-agent. Complete the assigned task.",
-		Tools: []string{}, MaxTurns: 5, MaxTokens: 4096,
+		Tools:        []string{}, MaxTurns: 5, MaxTokens: 4096,
 	}
 	if cfg.MaxTurns > 0 {
 		a.MaxTurns = cfg.MaxTurns

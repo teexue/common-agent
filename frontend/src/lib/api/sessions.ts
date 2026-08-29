@@ -1,9 +1,7 @@
 import i18n from "@/i18n"
-import type { SessionMeta, ReplayEvent } from "@/types/agent"
+import type { SessionMeta } from "@/types/agent"
 
 import { ensureOK, langHeaders, notifyUnauthorized } from "./client"
-
-// ─── Session API ──────────────────────────────────────────────────
 
 /** Fetches the list of all sessions. */
 export async function fetchSessions(): Promise<SessionMeta[]> {
@@ -16,6 +14,7 @@ export async function fetchSessions(): Promise<SessionMeta[]> {
 export async function fetchSession(id: string): Promise<{
   id: string
   agent: string
+  title?: string
   messages: unknown[]
   metadata: Record<string, string>
   created_at: string
@@ -60,37 +59,4 @@ export async function updateSessionWorkdir(
   await ensureOK(res, "api.updateSessionFailed")
   const data = (await res.json()) as { metadata?: Record<string, string> }
   return data.metadata ?? {}
-}
-
-/** Fetches replay events for a session, optionally filtered by turn range. */
-export async function fetchSessionReplay(
-  id: string,
-  fromTurn?: number,
-  toTurn?: number
-): Promise<ReplayEvent[]> {
-  const params = new URLSearchParams()
-  if (fromTurn !== undefined) params.set("from_turn", String(fromTurn))
-  if (toTurn !== undefined) params.set("to_turn", String(toTurn))
-  const qs = params.toString()
-  const url = `/v1/sessions/${encodeURIComponent(id)}/replay${qs ? `?${qs}` : ""}`
-
-  const res = await fetch(url, { headers: langHeaders() })
-  if (!res.ok) {
-    if (res.status === 404) throw new Error(i18n.t("api.replayNotFound"))
-    throw new Error(i18n.t("api.fetchReplayFailed", { status: res.status }))
-  }
-
-  // Parse NDJSON response
-  const text = await res.text()
-  const events: ReplayEvent[] = []
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    try {
-      events.push(JSON.parse(trimmed))
-    } catch {
-      // skip malformed lines
-    }
-  }
-  return events
 }

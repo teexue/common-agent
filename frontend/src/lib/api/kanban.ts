@@ -3,13 +3,25 @@ import type { KanbanItem } from "@/types/agent"
 
 import { ensureOK, langHeaders } from "./client"
 
-// ─── Kanban API ───────────────────────────────────────────────────
-
 /** Lists all kanban items. */
 export async function fetchKanbanItems(): Promise<KanbanItem[]> {
   const res = await fetch("/v1/kanban", { headers: langHeaders() })
   await ensureOK(res, "api.fetchKanbanFailed")
   return (await res.json()) ?? []
+}
+
+/** Fetches a single kanban item by ID. */
+export async function fetchKanbanItem(id: string): Promise<KanbanItem> {
+  const res = await fetch(`/v1/kanban/${encodeURIComponent(id)}`, {
+    headers: langHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throw new Error(
+      err?.message ?? i18n.t("api.fetchKanbanFailed", { status: res.status })
+    )
+  }
+  return res.json()
 }
 
 /** Payload for creating a kanban item. */

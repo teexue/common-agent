@@ -28,7 +28,7 @@ func (s *Server) handleFSList(c *gin.Context) {
 	raw := c.Query("path")
 	abs, err := resolveListPath(raw)
 	if err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_path", "api.error.invalid_path", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_path", MsgKey: "api.error.invalid_path", Details: err.Error()})
 		return
 	}
 
@@ -38,7 +38,7 @@ func (s *Server) handleFSList(c *gin.Context) {
 			respondError(c, http.StatusNotFound, "not_found", "api.error.path_not_found")
 			return
 		}
-		respondErrorDetails(c, http.StatusBadRequest, "fs_error", "api.error.fs_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "fs_error", MsgKey: "api.error.fs_error", Details: err.Error()})
 		return
 	}
 	if !info.IsDir() {
@@ -48,7 +48,7 @@ func (s *Server) handleFSList(c *gin.Context) {
 
 	entries, err := os.ReadDir(abs)
 	if err != nil {
-		respondErrorDetails(c, http.StatusForbidden, "fs_error", "api.error.fs_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusForbidden, Code: "fs_error", MsgKey: "api.error.fs_error", Details: err.Error()})
 		return
 	}
 

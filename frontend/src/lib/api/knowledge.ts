@@ -9,8 +9,6 @@ import type {
 
 import { langHeaders } from "./client"
 
-// ─── Knowledge API ────────────────────────────────────────────────
-
 /** Lists knowledge bases. */
 export async function fetchKnowledgeBases(): Promise<KnowledgeMeta[]> {
   const res = await fetch("/v1/knowledge", { headers: langHeaders() })

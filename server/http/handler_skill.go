@@ -140,7 +140,7 @@ func (s *Server) handleSkillGet(c *gin.Context) {
 	}
 	sk, err := skill.Load(dir)
 	if err != nil {
-		respondErrorDetails(c, http.StatusNotFound, "skill_not_found", "api.error.skill_not_found", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusNotFound, Code: "skill_not_found", MsgKey: "api.error.skill_not_found", Details: err.Error()})
 		return
 	}
 
@@ -159,7 +159,7 @@ func (s *Server) handleSkillGet(c *gin.Context) {
 func (s *Server) handleSkillCreate(c *gin.Context) {
 	var req SkillUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	scope, ok := normalizeSkillScope(req.Scope)
@@ -179,7 +179,7 @@ func (s *Server) handleSkillCreate(c *gin.Context) {
 
 	fm := frontmatterFromRequest(req)
 	if err := skill.WriteSkill(dir, fm, req.Body); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "skill_error", "api.error.skill_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "skill_error", MsgKey: "api.error.skill_error", Details: err.Error()})
 		return
 	}
 	s.respondSkillWritten(c, http.StatusCreated, dir)
@@ -189,7 +189,7 @@ func (s *Server) handleSkillCreate(c *gin.Context) {
 func (s *Server) handleSkillUpdate(c *gin.Context) {
 	var req SkillUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	scope, ok := normalizeSkillScope(c.DefaultQuery("scope", req.Scope))
@@ -214,7 +214,7 @@ func (s *Server) handleSkillUpdate(c *gin.Context) {
 	fm := frontmatterFromRequest(req)
 	fm.Name = c.Param("name")
 	if err := skill.WriteSkill(dir, fm, req.Body); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "skill_error", "api.error.skill_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "skill_error", MsgKey: "api.error.skill_error", Details: err.Error()})
 		return
 	}
 	s.respondSkillWritten(c, http.StatusOK, dir)
@@ -233,7 +233,7 @@ func (s *Server) handleSkillDelete(c *gin.Context) {
 		return
 	}
 	if err := skill.RemoveSkill(dir); err != nil {
-		respondErrorDetails(c, http.StatusNotFound, "skill_not_found", "api.error.skill_not_found", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusNotFound, Code: "skill_not_found", MsgKey: "api.error.skill_not_found", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"deleted": c.Param("name")})
@@ -243,7 +243,7 @@ func (s *Server) handleSkillDelete(c *gin.Context) {
 func (s *Server) handleSkillsInstall(c *gin.Context) {
 	var req SkillInstallRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	if req.URL == "" {
@@ -266,7 +266,7 @@ func (s *Server) handleSkillsInstall(c *gin.Context) {
 
 	installed, err := skill.Install(c.Request.Context(), req.URL, destRoot, req.Overwrite)
 	if err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "skill_error", "api.error.skill_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "skill_error", MsgKey: "api.error.skill_error", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"installed": installed})
@@ -288,7 +288,7 @@ func frontmatterFromRequest(req SkillUpsertRequest) *skill.SkillFrontmatter {
 func (s *Server) respondSkillWritten(c *gin.Context, status int, dir string) {
 	sk, err := skill.Load(dir)
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "skill_error", "api.error.skill_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "skill_error", MsgKey: "api.error.skill_error", Details: err.Error()})
 		return
 	}
 	c.JSON(status, gin.H{"ok": true, "skill": skillInfo(sk)})

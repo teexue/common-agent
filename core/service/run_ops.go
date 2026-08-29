@@ -69,59 +69,20 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		return nil, &ArgError{Field: "prompt", Message: "prompt is required"}
 	}
 
-	a, err := agent.Resolve(s.AgentsDir, NormalizeAgentName(req.Agent))
+	a, tempToolNames, err := s.loadRunAgent(req.Agent)
 	if err != nil {
-		return nil, fmt.Errorf("load agent: %w", err)
+		return nil, err
 	}
-
-	// Inject skill tools into the registry.
-	tempToolNames := injectSkills(a, s.AgentsDir, s.Registry, s.Logger)
-
-	p, err := s.NewProvider(a)
+	p, prompt, err := s.prepareRunProvider(ctx, a, req.Prompt)
 	if err != nil {
-		return nil, &ServerError{Message: fmt.Sprintf("create provider: %v", err)}
+		return nil, err
 	}
-	p = provider.WrapAudited(p, s.RequestLogger)
-
-	// In-pipeline user prompt optimization (agent-driven, non-fatal).
-	// The session title keeps the raw prompt.
-	optCtx := provider.WithRunMeta(ctx, provider.RunMeta{Agent: a.Name, Source: "optimize"})
-	prompt := OptimizeUserPrompt(optCtx, a, p, req.Prompt, s.Logger)
-
-	userID := auth.IdentityFromContext(ctx).UserID
-	var sess *session.Session
-	if req.SessionID != "" {
-		if s.Store == nil {
-			return nil, &ArgError{Field: "session_id", Message: "session persistence not configured"}
-		}
-		loaded, err := s.LoadSession(req.SessionID, userID)
-		if err != nil {
-			return nil, fmt.Errorf("load session %s: %w", req.SessionID, err)
-		}
-		sess = loaded
-	} else {
-		sess = session.NewForUser(a.ID, userID)
-		sess.EnsureTitle(req.Prompt)
-	}
-	if len(req.Messages) > 0 {
-		sess.SetMessages(req.Messages)
+	sess, workDir, err := s.prepareRunSession(ctx, req, a)
+	if err != nil {
+		return nil, err
 	}
 
-	// Resolve the effective working directory: an explicit request value
-	// wins and is remembered by the session; otherwise fall back to the
-	// session's stored choice. Empty means the tools' registered default.
-	workDir := req.WorkDir
-	if workDir == "" {
-		workDir = sess.GetMetadata()[session.MetadataKeyWorkdir]
-	} else if sess.GetMetadata()[session.MetadataKeyWorkdir] != workDir {
-		sess.SetMetadata(session.MetadataKeyWorkdir, workDir)
-	}
-
-	// Load context file from working directory (AGENTS.md > CLAUDE.md).
 	a.ProjectContext = loadContextFile(workDir)
-
-	// Connect MCP servers (global + agent) last, so subprocesses only spawn
-	// once the run is otherwise guaranteed to proceed.
 	mcpMgr, mcpToolNames := injectMCP(ctx, a, s.AgentsDir, s.Registry, s.Logger)
 
 	var pol permission.Policy
@@ -155,6 +116,52 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		MCPManager:    mcpMgr,
 		MCPToolNames:  mcpToolNames,
 	}, nil
+}
+
+func (s *Service) loadRunAgent(name string) (*agent.Agent, []string, error) {
+	a, err := agent.Resolve(s.AgentsDir, NormalizeAgentName(name))
+	if err != nil {
+		return nil, nil, fmt.Errorf("load agent: %w", err)
+	}
+	return a, injectSkills(a, s.AgentsDir, s.Registry, s.Logger), nil
+}
+
+func (s *Service) prepareRunProvider(ctx context.Context, a *agent.Agent, prompt string) (provider.Provider, string, error) {
+	p, err := s.NewProvider(a)
+	if err != nil {
+		return nil, "", &ServerError{Message: fmt.Sprintf("create provider: %v", err)}
+	}
+	p = provider.WrapAudited(p, s.RequestLogger)
+	optCtx := provider.WithRunMeta(ctx, provider.RunMeta{Agent: a.Name, Source: "optimize"})
+	return p, OptimizeUserPrompt(optCtx, a, p, prompt, s.Logger), nil
+}
+
+func (s *Service) prepareRunSession(ctx context.Context, req RunRequest, a *agent.Agent) (*session.Session, string, error) {
+	userID := auth.IdentityFromContext(ctx).UserID
+	var sess *session.Session
+	if req.SessionID != "" {
+		if s.Store == nil {
+			return nil, "", &ArgError{Field: "session_id", Message: "session persistence not configured"}
+		}
+		loaded, err := s.LoadSession(req.SessionID, userID)
+		if err != nil {
+			return nil, "", fmt.Errorf("load session %s: %w", req.SessionID, err)
+		}
+		sess = loaded
+	} else {
+		sess = session.NewForUser(a.ID, userID)
+		sess.EnsureTitle(req.Prompt)
+	}
+	if len(req.Messages) > 0 {
+		sess.SetMessages(req.Messages)
+	}
+	workDir := req.WorkDir
+	if workDir == "" {
+		workDir = sess.GetMetadata()[session.MetadataKeyWorkdir]
+	} else if sess.GetMetadata()[session.MetadataKeyWorkdir] != workDir {
+		sess.SetMetadata(session.MetadataKeyWorkdir, workDir)
+	}
+	return sess, workDir, nil
 }
 
 // ToolSummary is the lightweight representation of a tool for list endpoints.

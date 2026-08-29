@@ -8,8 +8,8 @@ import (
 
 // AgentMetrics tracks per-agent run statistics.
 type AgentMetrics struct {
-	mu      sync.RWMutex
-	agents  map[string]*agentStats
+	mu     sync.RWMutex
+	agents map[string]*agentStats
 }
 
 type agentStats struct {

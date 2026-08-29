@@ -8,7 +8,9 @@ import { formatParameterSize, formatTokenCount } from "@/lib/format"
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1">
-      <span className="shrink-0 text-[11px] text-muted-foreground">{label}</span>
+      <span className="shrink-0 text-[11px] text-muted-foreground">
+        {label}
+      </span>
       <span className="text-right font-mono text-[11px] text-foreground">
         {value}
       </span>

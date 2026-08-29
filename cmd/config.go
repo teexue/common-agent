@@ -253,27 +253,31 @@ func runConfigSetProvider(args []string) {
 		os.Exit(1)
 	}
 	fmt.Println(i18n.T("cli.config.provider_updated", "name", spec.Name, "path", store.StateFile(paths.home)))
+	saveWizardAPIKey(paths.home, apiKeyEnv)
+}
 
-	// Prompt for API key if not already set.
-	creds, err := config.NewCredentialStore(paths.home)
+func saveWizardAPIKey(home, apiKeyEnv string) {
+	creds, err := config.NewCredentialStore(home)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	if creds.Lookup(apiKeyEnv) == "" {
-		apiKey, err := config.InputSecret(i18n.T("wizard.input.api_key"))
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		if strings.TrimSpace(apiKey) != "" {
-			if err := creds.Set(apiKeyEnv, apiKey); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}
-			fmt.Println(i18n.T("cli.config.key_saved", "env", apiKeyEnv, "path", config.CredentialsFile(paths.home)))
-		}
+	if creds.Lookup(apiKeyEnv) != "" {
+		return
 	}
+	apiKey, err := config.InputSecret(i18n.T("wizard.input.api_key"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if strings.TrimSpace(apiKey) == "" {
+		return
+	}
+	if err := creds.Set(apiKeyEnv, apiKey); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Println(i18n.T("cli.config.key_saved", "env", apiKeyEnv, "path", config.CredentialsFile(home)))
 }
 
 func runConfigSetProviderFlags(args []string) {

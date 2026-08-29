@@ -1,3 +1,5 @@
+// Package audit provides LLM request logging and usage aggregation.
+// Records are persisted as NDJSON files, one per day.
 package audit
 
 import (

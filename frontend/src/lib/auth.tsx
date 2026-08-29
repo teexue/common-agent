@@ -1,25 +1,8 @@
-/* eslint-disable react-refresh/only-export-components */
-import i18n from "@/i18n"
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react"
-import {
-  fetchAuthMe,
-  fetchAuthStatus,
-  getAccessToken,
-  setAccessToken,
-  SERVER_API_KEY_CHANGED,
-  type AuthUserInfo,
-} from "@/lib/api"
-import { useToast } from "@/components/ui/toast"
+import { createContext, useContext, type ReactNode } from "react"
+import type { AuthUserInfo } from "@/lib/api"
+import { useAuthSession, type AuthState } from "./auth-session"
 
-export type AuthState = "loading" | "authenticated" | "unauthenticated"
+export type { AuthState }
 
 interface AuthContextValue {
   state: AuthState
@@ -34,86 +17,8 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 /** Provides session auth state for the SPA login gate. */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>("loading")
-  const [user, setUser] = useState<AuthUserInfo | null>(null)
-  const [hasUsers, setHasUsers] = useState(false)
-  const [allowRegistration, setAllowRegistration] = useState(false)
-  const toast = useToast()
-  const toastRef = useRef(toast)
-  useEffect(() => {
-    toastRef.current = toast
-  }, [toast])
-
-  const refresh = useCallback(async () => {
-    try {
-      const status = await fetchAuthStatus()
-      setHasUsers(!!status.has_users)
-      setAllowRegistration(!!status.allow_registration)
-    } catch {
-      setHasUsers(false)
-      setAllowRegistration(false)
-    }
-
-    const token = getAccessToken()
-    if (!token) {
-      setUser(null)
-      setState("unauthenticated")
-      return
-    }
-
-    try {
-      const me = await fetchAuthMe()
-      if (!me.user) {
-        setAccessToken("")
-        setUser(null)
-        setState("unauthenticated")
-        return
-      }
-      setUser(me.user)
-      setState("authenticated")
-    } catch {
-      setAccessToken("")
-      setUser(null)
-      setState("unauthenticated")
-    }
-  }, [])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void refresh()
-  }, [refresh])
-
-  useEffect(() => {
-    const onTokenChange = () => {
-      void refresh()
-    }
-    const onUnauthorized = () => {
-      setAccessToken("")
-      setUser(null)
-      setState("unauthenticated")
-      toastRef.current.warning(i18n.t("auth.sessionExpired"))
-    }
-    window.addEventListener(SERVER_API_KEY_CHANGED, onTokenChange)
-    window.addEventListener("auth:unauthorized", onUnauthorized)
-    return () => {
-      window.removeEventListener(SERVER_API_KEY_CHANGED, onTokenChange)
-      window.removeEventListener("auth:unauthorized", onUnauthorized)
-    }
-  }, [refresh])
-
-  const logout = useCallback(() => {
-    setAccessToken("")
-    setUser(null)
-    setState("unauthenticated")
-  }, [])
-
-  return (
-    <AuthContext.Provider
-      value={{ state, user, hasUsers, allowRegistration, logout, refresh }}
-    >
-      {children}
-    </AuthContext.Provider>
-  )
+  const value = useAuthSession()
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 /** Returns the auth context; must be used under AuthProvider. */

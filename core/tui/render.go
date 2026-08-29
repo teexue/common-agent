@@ -73,6 +73,21 @@ func (r *Renderer) render(ev event.Event) {
 			_, _ = fmt.Fprintln(r.out, mutedStyle.Render("  ⎿  "+line))
 		}
 
+	case event.TypeToolApproval:
+		r.closeLine()
+		_, _ = fmt.Fprintln(r.out, toolStyle.Render("⏸ "+ev.Tool))
+
+	case event.TypeCompaction:
+		r.closeLine()
+		_, _ = fmt.Fprintln(r.out, mutedStyle.Render("⟳ "+ev.Content))
+
+	case event.TypeSubAgentStart:
+		r.closeLine()
+		_, _ = fmt.Fprintln(r.out, toolStyle.Render("↳ "+ev.Tool))
+
+	case event.TypeSubAgentEnd:
+		_, _ = fmt.Fprintln(r.out, mutedStyle.Render("↲ "+ev.Tool))
+
 	case event.TypeError:
 		r.closeLine()
 		_, _ = fmt.Fprintln(r.out, Error(ev.Message))

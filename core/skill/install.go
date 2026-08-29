@@ -272,20 +272,29 @@ func findSkillDirs(root string) ([]string, error) {
 		return nil, fmt.Errorf("scan repository: %w", err)
 	}
 	if len(found) == 0 {
-		if entries, err := os.ReadDir(root); err == nil {
-			for _, e := range entries {
-				if e.IsDir() && e.Name() == "skills" {
-					if err := scan(filepath.Join(root, "skills")); err != nil {
-						return nil, fmt.Errorf("scan skills dir: %w", err)
-					}
-				}
-			}
+		if err := scanSkillsSubdir(root, scan); err != nil {
+			return nil, err
 		}
 	}
 	if len(found) == 0 {
 		return nil, fmt.Errorf("no SKILL.md found in repository")
 	}
 	return found, nil
+}
+
+func scanSkillsSubdir(root string, scan func(string) error) error {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	for _, e := range entries {
+		if e.IsDir() && e.Name() == "skills" {
+			if err := scan(filepath.Join(root, "skills")); err != nil {
+				return fmt.Errorf("scan skills dir: %w", err)
+			}
+		}
+	}
+	return nil
 }
 
 // hasSkillMD reports whether dir directly contains a SKILL.md.

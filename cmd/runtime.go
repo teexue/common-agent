@@ -101,18 +101,24 @@ func registerRuntimeTools(reg *registry.Registry, paths runtimePaths, settings c
 	kbMgr, err := knowledge.NewManager(config.KnowledgeDir(paths.home))
 	if err != nil {
 		logger.Warn("log.knowledge.open", "error", err)
-	} else {
-		var emb embedding.Embedder
-		if settings.Embedding != nil {
-			lookup := func(k string) string { return os.Getenv(k) }
-			if creds != nil {
-				lookup = creds.Lookup
-			}
-			emb, err = embedding.New(*settings.Embedding, lookup)
-			if err != nil {
-				logger.Warn("log.embedding.init_failed", "error", err)
-			}
-		}
-		builtin.RegisterKnowledge(reg, knowledge.NewRuntime(kbMgr, emb))
+		return
 	}
+	emb := runtimeEmbedder(settings, creds, logger)
+	builtin.RegisterKnowledge(reg, knowledge.NewRuntime(kbMgr, emb))
+}
+
+func runtimeEmbedder(settings config.Settings, creds *config.CredentialStore, logger *slog.Logger) embedding.Embedder {
+	if settings.Embedding == nil {
+		return nil
+	}
+	lookup := func(k string) string { return os.Getenv(k) }
+	if creds != nil {
+		lookup = creds.Lookup
+	}
+	emb, err := embedding.New(*settings.Embedding, lookup)
+	if err != nil {
+		logger.Warn("log.embedding.init_failed", "error", err)
+		return nil
+	}
+	return emb
 }

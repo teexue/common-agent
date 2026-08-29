@@ -28,7 +28,11 @@ func TestConsumeStreamAggregatesCacheTokens(t *testing.T) {
 
 func TestEmitCancelledCarriesCacheStats(t *testing.T) {
 	out := make(chan event.Event, 4)
-	emitCancelled(out, "sess-1", 2, 100, 50, 80, 20, 128000)
+	emitCancelled(out, doneStats{
+		sessionID: "sess-1", turn: 2,
+		input: 100, output: 50, cacheRead: 80, cacheCreation: 20,
+		window: 128000, totalInput: 300, totalOutput: 120,
+	})
 	close(out)
 
 	var done *event.Event
@@ -42,4 +46,6 @@ func TestEmitCancelledCarriesCacheStats(t *testing.T) {
 	assert.Equal(t, 100, done.InputTokens)
 	assert.Equal(t, 80, done.CacheReadInputTokens)
 	assert.Equal(t, 20, done.CacheCreationInputTokens)
+	assert.Equal(t, 300, done.TotalInputTokens)
+	assert.Equal(t, 120, done.TotalOutputTokens)
 }

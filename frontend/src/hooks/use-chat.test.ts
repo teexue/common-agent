@@ -3,18 +3,6 @@ import { describe, it, expect } from "vitest"
 import { chatReducer } from "@/hooks/use-chat-state"
 import type { ChatState } from "@/hooks/use-chat-state"
 
-// Import the pure functions we want to test.
-// Since parseSSELine and chatReducer are not exported, we'll test them
-// through the exported useChat hook's behavior, or we can extract them.
-// For now, let's test the SSE parsing logic directly by re-implementing
-// the pure function tests.
-
-// ─── SSE Parser Tests ─────────────────────────────────────────────
-
-// We need to extract parseSSELine to test it. Since it's a private function,
-// we'll test the behavior through the hook or create a separate utility.
-// For this test, let's create a minimal version to verify the logic.
-
 interface AgentEvent {
   type: string
   content?: string
@@ -98,6 +86,23 @@ interface BackendMessage {
   name?: string
 }
 
+function pushCompletedTools(
+  msgs: BackendMessage[],
+  toolCalls: ConversationEntry["toolCalls"]
+) {
+  if (!toolCalls) return
+  for (const tc of toolCalls) {
+    if (tc.status !== "completed" || tc.output === undefined) continue
+    msgs.push({
+      role: "tool",
+      tool_call_id: tc.id,
+      name: tc.name,
+      content:
+        typeof tc.output === "string" ? tc.output : JSON.stringify(tc.output),
+    })
+  }
+}
+
 function toBackendMessages(entries: ConversationEntry[]): BackendMessage[] {
   const msgs: BackendMessage[] = []
 
@@ -118,19 +123,7 @@ function toBackendMessages(entries: ConversationEntry[]): BackendMessage[] {
             arguments: tc.input ?? {},
           })),
         })
-        for (const tc of entry.toolCalls) {
-          if (tc.status === "completed" && tc.output !== undefined) {
-            msgs.push({
-              role: "tool",
-              tool_call_id: tc.id,
-              name: tc.name,
-              content:
-                typeof tc.output === "string"
-                  ? tc.output
-                  : JSON.stringify(tc.output),
-            })
-          }
-        }
+        pushCompletedTools(msgs, entry.toolCalls)
       } else if (entry.content) {
         msgs.push({
           role: "assistant",
@@ -229,6 +222,8 @@ function baseState(): ChatState {
     cacheReadTokens: 0,
     cacheCreationTokens: 0,
     contextWindow: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
   }
 }
 
@@ -288,6 +283,37 @@ describe("chatReducer token usage", () => {
     expect(state.contextWindow).toBe(1_000_000)
   })
 
+  it("accumulates run totals across done events", () => {
+    let state = chatReducer(baseState(), {
+      type: "STREAM_DONE",
+      entryId: "a1",
+      status: "completed",
+      turns: 3,
+      totalInputTokens: 1200,
+      totalOutputTokens: 300,
+    })
+    state = chatReducer(state, {
+      type: "STREAM_DONE",
+      entryId: "a2",
+      status: "completed",
+      turns: 2,
+      totalInputTokens: 800,
+      totalOutputTokens: 150,
+    })
+    expect(state.totalInputTokens).toBe(2000)
+    expect(state.totalOutputTokens).toBe(450)
+    // Done events without totals (e.g. the "close previous entry"
+    // dispatch) leave the accumulated totals untouched.
+    state = chatReducer(state, {
+      type: "STREAM_DONE",
+      entryId: "",
+      status: "cancelled",
+      turns: 0,
+    })
+    expect(state.totalInputTokens).toBe(2000)
+    expect(state.totalOutputTokens).toBe(450)
+  })
+
   it("resets totals on clear and load session", () => {
     const used: ChatState = {
       ...baseState(),
@@ -299,6 +325,8 @@ describe("chatReducer token usage", () => {
     expect(cleared.inputTokens).toBe(0)
     expect(cleared.outputTokens).toBe(0)
     expect(cleared.contextWindow).toBe(0)
+    expect(cleared.totalInputTokens).toBe(0)
+    expect(cleared.totalOutputTokens).toBe(0)
 
     const loaded = chatReducer(used, {
       type: "LOAD_SESSION",

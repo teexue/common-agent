@@ -1,9 +1,7 @@
-// Domain types mirroring Go backend structs
-// See: core/event/event.go, server/http/server.go
-
 export type EventType =
   | "text_delta"
   | "reasoning_delta"
+  | "user_prompt"
   | "tool_start"
   | "tool_result"
   | "tool_approval_required"
@@ -30,6 +28,8 @@ export interface AgentEvent {
   context_window?: number // done: effective model context window
   cache_read_input_tokens?: number // done: prompt cache hits across the run
   cache_creation_input_tokens?: number // done: prompt cache writes across the run
+  total_input_tokens?: number // done: cumulative input across all turns of the run
+  total_output_tokens?: number // done: cumulative output across all turns of the run
   session_id?: string // done
 }
 
@@ -52,7 +52,6 @@ export interface AgentInfo {
   systemPrompt?: string
 }
 
-// Full agent detail (from GET /v1/agents/:id)
 export interface AgentDetail {
   id: string
   name: string
@@ -156,8 +155,6 @@ export interface PermissionsConfig {
   always_deny?: string[]
 }
 
-// Frontend-only: accumulated conversation state
-
 export interface ConversationEntry {
   id: string
   role: "user" | "assistant" | "tool" | "system"
@@ -198,8 +195,6 @@ export interface ToolCallEntry {
 
 export type StreamStatus = "idle" | "streaming" | "error" | "done"
 
-// Session persistence types (mirrors Go session.SessionMeta)
-
 export interface SessionMeta {
   id: string
   agent: string
@@ -207,9 +202,9 @@ export interface SessionMeta {
   metadata?: Record<string, string>
   created_at: string
   updated_at: string
+  /** True when a run is known to be in progress (set by the workspace). */
+  running?: boolean
 }
-
-// Provider info types (mirrors Go provider.ProviderInfo)
 
 export interface ProviderInfo {
   name: string
@@ -225,7 +220,6 @@ export interface ProviderInfo {
   context_window?: number
 }
 
-// Built-in vendor preset (mirrors Go provider.VendorInfo)
 export interface VendorInfo {
   name: string
   display_name: string
@@ -241,15 +235,13 @@ export interface VendorInfo {
   supports_thinking: boolean
 }
 
-// Model list entry (mirrors Go provider.ModelInfo)
 export interface ModelInfo {
   id: string
   vision?: boolean
   context_window?: number
 }
 
-// Model detail (mirrors Go provider.ModelDetail). Returned by providers that
-// can introspect a model (e.g. Ollama /api/show).
+/** Returned by providers that can introspect a model (e.g. Ollama /api/show). */
 export interface ModelDetail {
   id: string
   context_window?: number
@@ -262,7 +254,6 @@ export interface ModelDetail {
   capabilities?: string[]
 }
 
-// Skill info (mirrors Go SkillInfo)
 export interface SkillInfo {
   name: string
   version: string
@@ -274,7 +265,6 @@ export interface SkillInfo {
   tools: string[]
 }
 
-// Skill detail (SkillInfo + full body and frontmatter fields)
 export interface SkillDetail extends SkillInfo {
   body: string
   license?: string
@@ -283,7 +273,6 @@ export interface SkillDetail extends SkillInfo {
   allowed_tools?: string
 }
 
-// MCP server info (mirrors Go MCPServerInfo)
 export interface MCPServerInfo {
   name: string
   type: string // "stdio" | "sse"
@@ -294,8 +283,6 @@ export interface MCPServerInfo {
   agent: string // agent name for agent-scoped servers; "" for global
   scope: "global" | "agent"
 }
-
-// Health & metrics types (mirrors Go telemetry)
 
 export interface AgentStatsView {
   runs: number
@@ -325,8 +312,6 @@ export interface HealthStatus {
   details?: ComponentHealth[]
 }
 
-// Kanban task item (mirrors Go kanban item struct)
-
 export type KanbanStatus = "pending" | "running" | "review" | "done" | "failed"
 
 export interface KanbanItem {
@@ -349,16 +334,6 @@ export interface KanbanItem {
   finished_at?: string
 }
 
-// Session replay types (mirrors Go audit.EventRecord)
-
-export interface ReplayEvent {
-  ts: string
-  session_id: string
-  agent: string
-  turn: number
-  event: AgentEvent
-}
-
 /** One audited LLM request/response pair. */
 export interface RequestLogRecord {
   ts: string
@@ -372,4 +347,32 @@ export interface RequestLogRecord {
   error?: string
   input_tokens?: number
   output_tokens?: number
+}
+
+export interface UsageTotals {
+  requests: number
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_creation_tokens: number
+}
+
+export interface UsageDay extends UsageTotals {
+  date: string
+}
+
+export interface UsageModelRow extends UsageTotals {
+  model: string
+}
+
+export interface UsageSessionRow extends UsageTotals {
+  session_id: string
+  agent?: string
+}
+
+export interface UsageSummary {
+  total: UsageTotals
+  days: UsageDay[]
+  by_model: UsageModelRow[]
+  by_session: UsageSessionRow[]
 }

@@ -60,7 +60,7 @@ func Init(ctx context.Context, serviceName string) (*Telemetry, func(context.Con
 		otlpmetricgrpc.WithInsecure(),
 	)
 	if err != nil {
-		tp.Shutdown(ctx)
+		_ = tp.Shutdown(ctx)
 		return nil, nil, err
 	}
 	mp := metricSDK.NewMeterProvider(
@@ -71,8 +71,8 @@ func Init(ctx context.Context, serviceName string) (*Telemetry, func(context.Con
 
 	t, err := New(serviceName)
 	if err != nil {
-		tp.Shutdown(ctx)
-		mp.Shutdown(ctx)
+		_ = tp.Shutdown(ctx)
+		_ = mp.Shutdown(ctx)
 		return nil, nil, err
 	}
 

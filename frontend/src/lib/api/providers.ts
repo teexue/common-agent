@@ -9,8 +9,6 @@ import type {
 
 import { langHeaders } from "./client"
 
-// ─── Providers API ────────────────────────────────────────────────
-
 /** Fetches the list of available LLM providers. */
 export async function fetchProviders(): Promise<ProviderInfo[]> {
   const res = await fetch("/v1/providers", { headers: langHeaders() })

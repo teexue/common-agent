@@ -1,7 +1,5 @@
 import type { ConversationEntry, ToolCallEntry } from "@/types/agent"
 
-// ─── State ────────────────────────────────────────────────────────
-
 export interface ChatState {
   messages: ConversationEntry[]
   isStreaming: boolean
@@ -15,6 +13,9 @@ export interface ChatState {
   cacheCreationTokens: number
   /** Effective model context window in tokens (0 until known). */
   contextWindow: number
+  /** Cumulative input/output tokens across every run of this session. */
+  totalInputTokens: number
+  totalOutputTokens: number
 }
 
 export type ChatAction =
@@ -62,6 +63,9 @@ export type ChatAction =
       cacheReadTokens?: number
       cacheCreationTokens?: number
       contextWindow?: number
+      /** Run-level cumulative usage from the done event; folded into totals. */
+      totalInputTokens?: number
+      totalOutputTokens?: number
     }
   | { type: "STREAM_ERROR"; message: string }
   | { type: "CLEAR" }

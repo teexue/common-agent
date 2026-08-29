@@ -17,6 +17,7 @@ type WriteFile struct {
 
 // Name returns the tool name.
 func (WriteFile) Name() string { return "write_file" }
+
 // Description returns a human-readable description.
 func (WriteFile) Description() string {
 	return "Write content to a file. Creates parent directories if needed. Returns the path and bytes written."

@@ -133,9 +133,9 @@ type simpleTool struct {
 	desc string
 }
 
-func (t *simpleTool) Name() string                             { return t.name }
-func (t *simpleTool) Description() string                      { return t.desc }
-func (t *simpleTool) InputSchema() map[string]any              { return map[string]any{"type": "object"} }
+func (t *simpleTool) Name() string                { return t.name }
+func (t *simpleTool) Description() string         { return t.desc }
+func (t *simpleTool) InputSchema() map[string]any { return map[string]any{"type": "object"} }
 func (t *simpleTool) Execute(_ context.Context, _ json.RawMessage) (tool.Result, error) {
 	return tool.Result{}, nil
 }

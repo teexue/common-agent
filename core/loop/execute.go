@@ -36,7 +36,7 @@ func executeOneTool(tc ToolExecContext) json.RawMessage {
 
 func executeTool(tc ToolExecContext) json.RawMessage {
 	inputJSON := prepareInput(tc.Call.Arguments, tc.Log)
-	emit(tc.Ctx, tc.Out, event.Event{Type: event.TypeToolStart, Tool: tc.Call.Name, Input: json.RawMessage(inputJSON), ToolCallID: tc.Call.ID})
+	emit(tc.Ctx, tc.Out, event.Event{Type: event.TypeToolStart, Tool: tc.Call.Name, Input: inputJSON, ToolCallID: tc.Call.ID})
 
 	if result, denied := checkPermission(tc.Ctx, tc.Pol, tc.Approver, tc.Call, tc.Out); denied {
 		return result
@@ -56,7 +56,7 @@ func executeTool(tc ToolExecContext) json.RawMessage {
 	}
 
 	if tc.Hooks != nil {
-		tc.Hooks.OnToolResult(tc.Ctx, hook.ToolResultInfo{Name: tc.Call.Name, Output: res.Output})
+		_ = tc.Hooks.OnToolResult(tc.Ctx, hook.ToolResultInfo{Name: tc.Call.Name, Output: res.Output})
 	}
 	emit(tc.Ctx, tc.Out, event.Event{Type: event.TypeToolResult, Tool: tc.Call.Name, Output: res.Output, ToolCallID: tc.Call.ID})
 	return res.Output
@@ -117,7 +117,7 @@ func fireOnToolStartHook(hooks *hook.Chain, call provider.ToolCall, log *slog.Lo
 func emitToolNotFound(ctx context.Context, hooks *hook.Chain, call provider.ToolCall, out chan<- event.Event) json.RawMessage {
 	errJSON, _ := json.Marshal(map[string]string{"error": "tool not found"})
 	if hooks != nil {
-		hooks.OnToolResult(ctx, hook.ToolResultInfo{Name: call.Name, Output: errJSON, Error: fmt.Errorf("tool not found")})
+		_ = hooks.OnToolResult(ctx, hook.ToolResultInfo{Name: call.Name, Output: errJSON, Error: fmt.Errorf("tool not found")})
 	}
 	emit(ctx, out, event.Event{Type: event.TypeToolResult, Tool: call.Name, Output: json.RawMessage(errJSON), ToolCallID: call.ID})
 	return json.RawMessage(errJSON)
@@ -151,7 +151,7 @@ func executeWithTelemetry(ctx context.Context, t tool.Tool, call provider.ToolCa
 func emitToolError(ctx context.Context, hooks *hook.Chain, call provider.ToolCall, execErr error, out chan<- event.Event) json.RawMessage {
 	outVal, _ := json.Marshal(map[string]string{"error": execErr.Error()})
 	if hooks != nil {
-		hooks.OnToolResult(ctx, hook.ToolResultInfo{Name: call.Name, Output: outVal, Error: execErr})
+		_ = hooks.OnToolResult(ctx, hook.ToolResultInfo{Name: call.Name, Output: outVal, Error: execErr})
 	}
 	emit(ctx, out, event.Event{Type: event.TypeToolResult, Tool: call.Name, Output: json.RawMessage(outVal), ToolCallID: call.ID})
 	return json.RawMessage(outVal)

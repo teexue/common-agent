@@ -21,6 +21,7 @@ type WebFetch struct{}
 
 // Name returns the tool name.
 func (WebFetch) Name() string { return "web_fetch" }
+
 // Description returns a human-readable description.
 func (WebFetch) Description() string {
 	return "Fetch content from a URL via HTTP GET. Returns the response status, headers, and body."
@@ -104,12 +105,12 @@ func (WebFetch) Execute(ctx context.Context, input json.RawMessage) (tool.Result
 	}
 
 	out, _ := json.Marshal(map[string]any{
-		"url":         args.URL,
-		"status":      resp.StatusCode,
-		"headers":     respHeaders,
-		"body":        string(body),
-		"body_bytes":  len(body),
-		"truncated":   len(body) >= maxBytes,
+		"url":        args.URL,
+		"status":     resp.StatusCode,
+		"headers":    respHeaders,
+		"body":       string(body),
+		"body_bytes": len(body),
+		"truncated":  len(body) >= maxBytes,
 	})
 	return tool.Result{Output: out}, nil
 }

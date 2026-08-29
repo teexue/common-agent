@@ -18,5 +18,25 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      complexity: ["error", 15],
+      "max-depth": ["error", 4],
+      // Provider + hook colocation is the standard React context pattern.
+      // Hook names listed here are the only non-component exports allowed
+      // from a component file; CVA variants must stay unexported.
+      "react-refresh/only-export-components": [
+        "error",
+        {
+          allowConstantExport: true,
+          allowExportNames: [
+            "useTheme",
+            "useAuth",
+            "useToast",
+            "useBackground",
+            "useShell",
+          ],
+        },
+      ],
+    },
   },
 ])

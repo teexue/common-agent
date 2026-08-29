@@ -25,16 +25,14 @@ import (
 
 const defaultScriptTimeout = 30 * time.Second
 
-// ─── Agent Skills Standard (SKILL.md) ────────────────────────────
-
 // SkillFrontmatter represents the YAML frontmatter in SKILL.md.
 type SkillFrontmatter struct {
-	Name           string            `yaml:"name"`
-	Description    string            `yaml:"description"`
-	License        string            `yaml:"license,omitempty"`
-	Compatibility  string            `yaml:"compatibility,omitempty"`
-	Metadata       map[string]string `yaml:"metadata,omitempty"`
-	AllowedTools   string            `yaml:"allowed-tools,omitempty"`
+	Name          string            `yaml:"name"`
+	Description   string            `yaml:"description"`
+	License       string            `yaml:"license,omitempty"`
+	Compatibility string            `yaml:"compatibility,omitempty"`
+	Metadata      map[string]string `yaml:"metadata,omitempty"`
+	AllowedTools  string            `yaml:"allowed-tools,omitempty"`
 }
 
 // SkillManifest represents a loaded skill from SKILL.md.
@@ -60,7 +58,7 @@ func (f *SkillFrontmatter) Validate() error {
 	}
 	// Validate name format: lowercase, numbers, hyphens only.
 	for i, c := range f.Name {
-		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-') {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' {
 			return fmt.Errorf("skill name contains invalid character %q at position %d", c, i)
 		}
 	}
@@ -136,18 +134,16 @@ func parseSkillMD(data []byte) (SkillFrontmatter, string, error) {
 	return fm, body, nil
 }
 
-// ─── Legacy format (skill.yaml) ──────────────────────────────────
-
 // LegacyManifest represents a skill.yaml file (backward compatible).
 type LegacyManifest struct {
-	Name         string           `yaml:"name"`
-	Version      string           `yaml:"version"`
-	Description  string           `yaml:"description"`
-	Author       string           `yaml:"author,omitempty"`
-	Tools        []ToolDef        `yaml:"tools"`
-	Prompt       string           `yaml:"prompt,omitempty"`
-	Dependencies []string         `yaml:"dependencies,omitempty"`
-	MinVersion   string           `yaml:"min_version,omitempty"`
+	Name         string    `yaml:"name"`
+	Version      string    `yaml:"version"`
+	Description  string    `yaml:"description"`
+	Author       string    `yaml:"author,omitempty"`
+	Tools        []ToolDef `yaml:"tools"`
+	Prompt       string    `yaml:"prompt,omitempty"`
+	Dependencies []string  `yaml:"dependencies,omitempty"`
+	MinVersion   string    `yaml:"min_version,omitempty"`
 }
 
 // ToolDef describes a tool provided by a legacy skill.
@@ -155,7 +151,7 @@ type ToolDef struct {
 	Name        string         `yaml:"name"`
 	Description string         `yaml:"description"`
 	InputSchema map[string]any `yaml:"input_schema"`
-	Type        string         `yaml:"type,omitempty"`    // "prompt" | "script"
+	Type        string         `yaml:"type,omitempty"` // "prompt" | "script"
 	Command     string         `yaml:"command,omitempty"`
 	Args        []string       `yaml:"args,omitempty"`
 	Timeout     int            `yaml:"timeout,omitempty"`
@@ -218,8 +214,6 @@ type LegacySkill struct {
 	Dir      string
 }
 
-// ─── Unified Skill ───────────────────────────────────────────────
-
 // Skill is a unified representation that works with both formats.
 type Skill struct {
 	Name        string
@@ -250,12 +244,12 @@ func Load(dir string) (*Skill, error) {
 			version = v
 		}
 		return &Skill{
-			Name:           md.Frontmatter.Name,
-			Description:    md.Frontmatter.Description,
-			Version:        version,
-			Dir:            dir,
-			Format:         "skill.md",
-			MDManifest:     md,
+			Name:        md.Frontmatter.Name,
+			Description: md.Frontmatter.Description,
+			Version:     version,
+			Dir:         dir,
+			Format:      "skill.md",
+			MDManifest:  md,
 		}, nil
 	}
 
@@ -291,8 +285,6 @@ func (s *Skill) ToolNames() []string {
 	// they use allowed-tools to pre-approve existing tools.
 	return nil
 }
-
-// ─── Loader ──────────────────────────────────────────────────────
 
 // Loader loads skills from a directory.
 type Loader struct {
@@ -346,8 +338,6 @@ func (l *Loader) LoadByName(name string) (*Skill, error) {
 	return Load(dir)
 }
 
-// ─── Tool Adapters (legacy) ──────────────────────────────────────
-
 // SkillTool wraps a legacy skill tool definition as a tool.Tool implementation.
 type SkillTool struct {
 	def   ToolDef
@@ -383,7 +373,7 @@ func (t *SkillTool) executePrompt(input json.RawMessage) (tool.Result, error) {
 		"skill":    t.skill.Manifest.Name,
 		"tool":     t.def.Name,
 		"prompt":   t.skill.Manifest.Prompt,
-		"input":    json.RawMessage(input),
+		"input":    input,
 		"executed": true,
 	})
 	return tool.Result{Output: output}, nil

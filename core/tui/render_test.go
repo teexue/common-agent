@@ -43,3 +43,19 @@ func TestRendererToolFlow(t *testing.T) {
 		t.Fatalf("should be quiet done: %q", out)
 	}
 }
+
+func TestRendererCoversAllEventTypes(t *testing.T) {
+	bundle, err := i18n.NewBundle(i18n.LocaleEn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev := i18n.Global()
+	i18n.SetGlobal(bundle)
+	t.Cleanup(func() { i18n.SetGlobal(prev) })
+
+	for _, typ := range event.AllTypes() {
+		var buf bytes.Buffer
+		r := NewRenderer(&buf, DefaultRenderOptions)
+		r.render(event.Event{Type: typ, Tool: "echo", Content: "x", Message: "m"})
+	}
+}

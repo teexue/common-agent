@@ -110,132 +110,120 @@ function yamlIndent(s: string, indent: string): string {
     .join("\n")
 }
 
-function yamlScalar(v: string): string {
-  // Quote if empty or contains characters that would confuse YAML scalars.
-  if (v === "") return '""'
-  if (
-    /["'`#:<>[\]{}(),&*?|=!%\n]/.test(v) ||
-    v.startsWith(" ") ||
-    v.endsWith(" ")
-  ) {
-    return JSON.stringify(v)
+const YAML_SPECIAL = "\"'`#:<>[]{}(),&*?|=!%\n"
+
+function yamlNeedsQuote(v: string): boolean {
+  if (v === "") return true
+  if (v.startsWith(" ") || v.endsWith(" ")) return true
+  for (const ch of v) {
+    if (YAML_SPECIAL.includes(ch)) return true
   }
-  return v
+  return false
+}
+
+function yamlScalar(v: string): string {
+  return yamlNeedsQuote(v) ? JSON.stringify(v) : v
+}
+
+function appendMcpFields(
+  lines: string[],
+  cfg: ReturnType<typeof mcpFormToConfig>
+): void {
+  if (cfg.type === "stdio") {
+    if (cfg.command) lines.push(`    command: ${yamlScalar(cfg.command)}`)
+    if (cfg.args && cfg.args.length > 0) {
+      lines.push(`    args:`)
+      for (const a of cfg.args) lines.push(`      - ${yamlScalar(a)}`)
+    }
+  } else if (cfg.url) {
+    lines.push(`    url: ${yamlScalar(cfg.url)}`)
+  }
+  if (cfg.env && Object.keys(cfg.env).length > 0) {
+    lines.push(`    env:`)
+    for (const [k, v] of Object.entries(cfg.env)) {
+      lines.push(`      ${k}: ${yamlScalar(v)}`)
+    }
+  }
 }
 
 /** Serializes MCP servers into the `mcp_servers:` YAML block. */
 export function mcpServersToYaml(servers: McpServerFormItem[]): string {
   const valid = servers.filter((s) => s.name.trim() !== "")
   if (valid.length === 0) return ""
-
   const lines: string[] = ["mcp_servers:"]
   for (const srv of valid) {
     const cfg = mcpFormToConfig(srv)
     lines.push(`  - name: ${yamlScalar(cfg.name)}`)
     lines.push(`    type: ${cfg.type}`)
-    if (cfg.type === "stdio") {
-      if (cfg.command) lines.push(`    command: ${yamlScalar(cfg.command)}`)
-      if (cfg.args && cfg.args.length > 0) {
-        lines.push(`    args:`)
-        for (const a of cfg.args) lines.push(`      - ${yamlScalar(a)}`)
-      }
-    } else if (cfg.url) {
-      lines.push(`    url: ${yamlScalar(cfg.url)}`)
-    }
-    if (cfg.env && Object.keys(cfg.env).length > 0) {
-      lines.push(`    env:`)
-      for (const [k, v] of Object.entries(cfg.env)) {
-        lines.push(`      ${k}: ${yamlScalar(v)}`)
-      }
-    }
+    appendMcpFields(lines, cfg)
   }
   return lines.join("\n") + "\n"
 }
 
-/** Converts AgentFormData to a YAML string for the backend. */
-export function formDataToYaml(form: AgentFormData): string {
-  const lines: string[] = []
-  if (form.id) {
-    lines.push(`id: ${yamlScalar(form.id)}`)
+function emitPermissions(form: AgentFormData, lines: string[]): void {
+  const hasConfirm = form.tools.some((t) => !form.autoApprove.includes(t))
+  if (form.alwaysDeny.length === 0 && !hasConfirm) return
+  lines.push(`permissions:`)
+  if (form.autoApprove.length > 0) {
+    lines.push(`  auto_approve:`)
+    for (const t of form.autoApprove) lines.push(`    - ${t}`)
+  } else {
+    lines.push(`  auto_approve: []`)
   }
+  if (form.alwaysDeny.length > 0) {
+    lines.push(`  always_deny:`)
+    for (const t of form.alwaysDeny) lines.push(`    - ${t}`)
+  } else {
+    lines.push(`  always_deny: []`)
+  }
+}
+
+function emitKnowledge(form: AgentFormData, lines: string[]): void {
+  if (form.knowledgeBases.length === 0 && form.knowledgeTopK <= 0) return
+  lines.push(`knowledge:`)
+  if (form.knowledgeBases.length > 0) {
+    lines.push(`  bases:`)
+    for (const b of form.knowledgeBases) lines.push(`    - ${yamlScalar(b)}`)
+  }
+  if (form.knowledgeTopK > 0) lines.push(`  top_k: ${form.knowledgeTopK}`)
+}
+
+function emitHeader(form: AgentFormData, lines: string[]): void {
+  if (form.id) lines.push(`id: ${yamlScalar(form.id)}`)
   lines.push(
     `name: ${yamlScalar(form.name)}`,
     `version: 1`,
     `provider: ${yamlScalar(form.provider)}`,
     `model: ${yamlScalar(form.model)}`
   )
-
   if (form.systemPrompt) {
     lines.push(`system_prompt: |`)
     lines.push(yamlIndent(form.systemPrompt, "  "))
   }
-
   lines.push(`tools:`)
-  for (const t of form.tools) {
-    lines.push(`  - ${yamlScalar(t)}`)
-  }
-
+  for (const t of form.tools) lines.push(`  - ${yamlScalar(t)}`)
   lines.push(`max_turns: ${form.maxTurns}`)
-  if (form.maxTokens) {
-    lines.push(`max_tokens: ${form.maxTokens}`)
-  }
-
+  if (form.maxTokens) lines.push(`max_tokens: ${form.maxTokens}`)
   lines.push(`tool_execution:`)
   lines.push(`  mode: ${form.execMode}`)
   lines.push(`  max_parallel: ${form.maxParallel}`)
+}
 
-  // Emit the permissions block whenever the user wants any tool to require
-  // confirmation or be denied — i.e. whenever NOT every selected tool is
-  // auto-approved. An absent permissions block means AllowAll on the backend,
-  // so "all confirm" must persist as an explicit (possibly empty-list) block.
-  const hasConfirm = form.tools.some((t) => !form.autoApprove.includes(t))
-  if (form.alwaysDeny.length > 0 || hasConfirm) {
-    lines.push(`permissions:`)
-    if (form.autoApprove.length > 0) {
-      lines.push(`  auto_approve:`)
-      for (const t of form.autoApprove) {
-        lines.push(`    - ${t}`)
-      }
-    } else {
-      lines.push(`  auto_approve: []`)
-    }
-    if (form.alwaysDeny.length > 0) {
-      lines.push(`  always_deny:`)
-      for (const t of form.alwaysDeny) {
-        lines.push(`    - ${t}`)
-      }
-    } else {
-      lines.push(`  always_deny: []`)
-    }
-  }
-
+/** Converts AgentFormData to a YAML string for the backend. */
+export function formDataToYaml(form: AgentFormData): string {
+  const lines: string[] = []
+  emitHeader(form, lines)
+  emitPermissions(form, lines)
   const mcpBlock = mcpServersToYaml(form.mcpServers)
-  if (mcpBlock) {
-    lines.push(mcpBlock.slice(0, -1)) // trim trailing newline (join adds one)
-  }
-
-  if (form.knowledgeBases.length > 0 || form.knowledgeTopK > 0) {
-    lines.push(`knowledge:`)
-    if (form.knowledgeBases.length > 0) {
-      lines.push(`  bases:`)
-      for (const b of form.knowledgeBases) {
-        lines.push(`    - ${yamlScalar(b)}`)
-      }
-    }
-    if (form.knowledgeTopK > 0) {
-      lines.push(`  top_k: ${form.knowledgeTopK}`)
-    }
-  }
-
+  if (mcpBlock) lines.push(mcpBlock.slice(0, -1))
+  emitKnowledge(form, lines)
   if (form.contextWindow > 0) {
     lines.push(`compaction:`)
     lines.push(`  context_window: ${form.contextWindow}`)
   }
-
   if (form.optimizeUserPrompt) {
     lines.push(`optimize:`)
     lines.push(`  user_prompt: true`)
   }
-
   return lines.join("\n") + "\n"
 }

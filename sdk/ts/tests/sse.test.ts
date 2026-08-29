@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { parseSSELine } from "../src/sse.js"
+import { ALL_EVENT_TYPES } from "../src/types.js"
 
 describe("parseSSELine", () => {
   it("returns null for non-data lines", () => {
@@ -44,14 +45,10 @@ describe("parseSSELine", () => {
     })
   })
 
-  it("parses tool_approval_required event", () => {
-    const event = parseSSELine(
-      'data: {"type":"tool_approval_required","tool":"dangerous","approval_id":"ap1"}',
-    )
-    expect(event).toEqual({
-      type: "tool_approval_required",
-      tool: "dangerous",
-      approval_id: "ap1",
-    })
+  it("parses every EventType", () => {
+    for (const type of ALL_EVENT_TYPES) {
+      const event = parseSSELine(`data: ${JSON.stringify({ type })}`)
+      expect(event?.type).toBe(type)
+    }
   })
 })

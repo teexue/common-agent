@@ -16,6 +16,7 @@ type CreateDirectory struct {
 
 // Name returns the tool name.
 func (CreateDirectory) Name() string { return "create_directory" }
+
 // Description returns a human-readable description.
 func (CreateDirectory) Description() string {
 	return "Create a directory and any necessary parent directories. Returns the created path."

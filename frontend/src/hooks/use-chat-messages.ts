@@ -1,8 +1,4 @@
-import type { ConversationEntry } from "@/types/agent"
-
-// ─── Backend message → ConversationEntry conversion ───────────────
-// Runs are sent with only the latest user message; history flows the other
-// way (backend session → UI) when loading a session.
+import type { AgentEvent, ConversationEntry } from "@/types/agent"
 
 export interface BackendMsg {
   role: string
@@ -67,10 +63,6 @@ function tryParseJSON(s: string): unknown {
     return s
   }
 }
-
-// ─── SSE Parser ───────────────────────────────────────────────────
-
-import type { AgentEvent } from "@/types/agent"
 
 export function parseSSELine(line: string): AgentEvent | null {
   if (!line.startsWith("data: ")) return null

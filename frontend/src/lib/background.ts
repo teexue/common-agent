@@ -95,8 +95,6 @@ export async function removeBackground(): Promise<void> {
   await fetch(BACKGROUND_URL, { method: "DELETE", headers: apiHeaders() })
 }
 
-// ─── Auto-adapt: dominant color extraction + accent injection ──────────────
-
 interface HSL {
   h: number // 0..360
   s: number // 0..1
@@ -159,6 +157,69 @@ function loadVideoFrame(url: string): Promise<HTMLVideoElement | null> {
   })
 }
 
+function sampleCanvas(source: CanvasImageSource): Uint8ClampedArray | null {
+  const size = 64
+  const canvas = document.createElement("canvas")
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext("2d")
+  if (!ctx) return null
+  ctx.drawImage(source, 0, 0, size, size)
+  try {
+    return ctx.getImageData(0, 0, size, size).data
+  } catch {
+    return null
+  }
+}
+
+interface ColorAcc {
+  buckets: { h: number; s: number; l: number; weight: number }[]
+  totalLum: number
+  count: number
+}
+
+function accumulatePixels(data: Uint8ClampedArray): ColorAcc {
+  const buckets = Array.from({ length: 36 }, () => ({
+    h: 0,
+    s: 0,
+    l: 0,
+    weight: 0,
+  }))
+  let totalLum = 0
+  let count = 0
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] === 0) continue
+    const { h, s, l } = rgbToHsl(data[i], data[i + 1], data[i + 2])
+    totalLum += l
+    count++
+    if (s < 0.12) continue
+    const w = buckets[Math.floor(h / 10) % 36]
+    w.h += h
+    w.s += s
+    w.l += l
+    w.weight += s
+  }
+  return { buckets, totalLum, count }
+}
+
+function finishDominant(acc: ColorAcc): AdaptResult | null {
+  if (acc.count === 0) return null
+  let best = acc.buckets[0]
+  for (const b of acc.buckets) if (b.weight > best.weight) best = b
+  const luminance = acc.totalLum / acc.count
+  if (best.weight === 0) {
+    return { hsl: { h: 210, s: 0.1, l: 0.5 }, luminance }
+  }
+  return {
+    hsl: {
+      h: best.h / best.weight,
+      s: Math.min(best.s / best.weight, 0.85),
+      l: best.l / best.weight,
+    },
+    luminance,
+  }
+}
+
 /** Loads the media and extracts its dominant color + average luminance via canvas. */
 export async function extractDominant(
   mediaUrl: string,
@@ -171,56 +232,7 @@ export async function extractDominant(
   if (!source) return null
   if (source instanceof HTMLImageElement && source.naturalWidth === 0)
     return null
-
-  const size = 64
-  const canvas = document.createElement("canvas")
-  canvas.width = size
-  canvas.height = size
-  const ctx = canvas.getContext("2d")
-  if (!ctx) return null
-  ctx.drawImage(source, 0, 0, size, size)
-  let data: Uint8ClampedArray
-  try {
-    data = ctx.getImageData(0, 0, size, size).data
-  } catch {
-    return null
-  }
-
-  const buckets: { h: number; s: number; l: number; weight: number }[] =
-    Array.from({ length: 36 }, () => ({ h: 0, s: 0, l: 0, weight: 0 }))
-  let totalLum = 0
-  let count = 0
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i]
-    const g = data[i + 1]
-    const b = data[i + 2]
-    const a = data[i + 3]
-    if (a === 0) continue
-    const { h, s, l } = rgbToHsl(r, g, b)
-    totalLum += l
-    count++
-    if (s < 0.12) continue // skip near-grey pixels for hue dominance
-    const bucket = Math.floor(h / 10) % 36
-    const w = buckets[bucket]
-    w.h += h
-    w.s += s
-    w.l += l
-    w.weight += s
-  }
-  if (count === 0) return null
-
-  let best = buckets[0]
-  for (const b of buckets) if (b.weight > best.weight) best = b
-  if (best.weight === 0) {
-    // Image is essentially monochrome — still report its luminance for mode.
-    return { hsl: { h: 210, s: 0.1, l: 0.5 }, luminance: totalLum / count }
-  }
-  return {
-    hsl: {
-      h: best.h / best.weight,
-      s: Math.min(best.s / best.weight, 0.85),
-      l: best.l / best.weight,
-    },
-    luminance: totalLum / count,
-  }
+  const data = sampleCanvas(source)
+  if (!data) return null
+  return finishDominant(accumulatePixels(data))
 }

@@ -8,16 +8,16 @@ import (
 
 // mockClient implements Client for testing.
 type mockClient struct {
-	name      string
-	tools     []ToolDefinition
+	name       string
+	tools      []ToolDefinition
 	callResult *CallToolResult
 	callErr    error
 	closed     bool
 }
 
-func (m *mockClient) Connect(_ context.Context) error        { return nil }
-func (m *mockClient) Close() error                           { m.closed = true; return nil }
-func (m *mockClient) Name() string                           { return m.name }
+func (m *mockClient) Connect(_ context.Context) error { return nil }
+func (m *mockClient) Close() error                    { m.closed = true; return nil }
+func (m *mockClient) Name() string                    { return m.name }
 func (m *mockClient) ListTools(_ context.Context) ([]ToolDefinition, error) {
 	return m.tools, nil
 }

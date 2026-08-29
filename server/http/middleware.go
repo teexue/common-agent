@@ -17,7 +17,7 @@ func (s *Server) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		enabled, err := s.authEnabled()
 		if err != nil {
-			respondErrorDetails(c, http.StatusInternalServerError, "auth_error", "api.error.internal", err.Error())
+			respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
 			c.Abort()
 			return
 		}

@@ -46,6 +46,7 @@ type RunCommand struct {
 
 // Name returns the tool name.
 func (RunCommand) Name() string { return "run_command" }
+
 // Description returns a human-readable description.
 func (RunCommand) Description() string {
 	return "Execute a shell command and return its output. Use with caution — commands run in the agent's working directory."
@@ -127,10 +128,10 @@ func (rc RunCommand) Execute(ctx context.Context, input json.RawMessage) (tool.R
 			exitCode = exitErr.ExitCode()
 		} else if ctx.Err() == context.DeadlineExceeded {
 			out, _ := json.Marshal(map[string]any{
-				"stdout":     stdoutOut,
-				"stderr":     "command timed out",
-				"exit_code":  -1,
-				"timed_out":  true,
+				"stdout":    stdoutOut,
+				"stderr":    "command timed out",
+				"exit_code": -1,
+				"timed_out": true,
 			})
 			return tool.Result{Output: out}, nil
 		} else {

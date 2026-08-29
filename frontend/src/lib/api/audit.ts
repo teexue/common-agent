@@ -1,9 +1,7 @@
 import i18n from "@/i18n"
-import type { RequestLogRecord } from "@/types/agent"
+import type { RequestLogRecord, UsageSummary } from "@/types/agent"
 
 import { ensureOK, langHeaders } from "./client"
-
-// ─── Approval API ─────────────────────────────────────────────────
 
 /** Resolves a pending tool approval request. */
 export async function resolveApproval(
@@ -54,5 +52,23 @@ export async function fetchRequestLogDetail(
     headers: langHeaders(),
   })
   await ensureOK(res, "api.fetchRequestLogDetailFailed")
+  return res.json()
+}
+
+/** Fetches the aggregated token usage report built from the request logs.
+ * `days` limits the lookback window (0/undefined = all), `all` lets admins
+ * aggregate across every user. */
+export async function fetchUsageSummary(params?: {
+  days?: number
+  all?: boolean
+}): Promise<UsageSummary> {
+  const qs = new URLSearchParams()
+  if (params?.days) qs.set("days", String(params.days))
+  if (params?.all) qs.set("all", "1")
+  const suffix = qs.size > 0 ? `?${qs.toString()}` : ""
+  const res = await fetch(`/v1/usage/summary${suffix}`, {
+    headers: langHeaders(),
+  })
+  await ensureOK(res, "api.fetchUsageSummaryFailed")
   return res.json()
 }

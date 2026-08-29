@@ -52,37 +52,50 @@ function MatchNav({
   )
 }
 
-export function SearchBar({
-  onSearch,
-  onClear,
-  matchCount,
-  currentMatch,
-  onPrev,
-  onNext,
-}: SearchBarProps) {
+export function SearchBar({ onSearch, ...nav }: SearchBarProps) {
   const { t } = useTranslation()
   const [query, setQuery] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
-
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
-
   useEffect(() => {
     const timer = setTimeout(() => onSearch(query), 200)
     return () => clearTimeout(timer)
   }, [query, onSearch])
+  return (
+    <SearchBarRow
+      query={query}
+      setQuery={setQuery}
+      inputRef={inputRef}
+      placeholder={t("conversation.searchPlaceholder")}
+      props={{ onSearch, ...nav }}
+    />
+  )
+}
 
+function SearchBarRow({
+  query,
+  setQuery,
+  inputRef,
+  placeholder,
+  props,
+}: {
+  query: string
+  setQuery: (q: string) => void
+  inputRef: React.RefObject<HTMLInputElement | null>
+  placeholder: string
+  props: SearchBarProps
+}) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (isComposingEvent(e)) return
     if (e.key === "Enter") {
       e.preventDefault()
-      if (e.shiftKey) onPrev()
-      else onNext()
+      if (e.shiftKey) props.onPrev()
+      else props.onNext()
     }
-    if (e.key === "Escape") onClear()
+    if (e.key === "Escape") props.onClear()
   }
-
   return (
     <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-sm">
       <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -91,19 +104,19 @@ export function SearchBar({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={t("conversation.searchPlaceholder")}
+        placeholder={placeholder}
         className="h-6 flex-1 border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
       />
       {query && (
         <>
-          <MatchNav {...{ matchCount, currentMatch, onPrev, onNext }} />
+          <MatchNav {...props} />
           <Button
             variant="ghost"
             size="icon-xs"
             className="h-5 w-5 rounded-md"
             onClick={() => {
               setQuery("")
-              onClear()
+              props.onClear()
             }}
           >
             <X className="h-3 w-3" />

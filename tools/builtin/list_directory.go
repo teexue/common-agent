@@ -19,6 +19,7 @@ type ListDirectory struct {
 
 // Name returns the tool name.
 func (ListDirectory) Name() string { return "list_directory" }
+
 // Description returns a human-readable description.
 func (ListDirectory) Description() string {
 	return "List the immediate contents of a directory (non-recursive). Returns an array of entries with name, size, type, and modification time."

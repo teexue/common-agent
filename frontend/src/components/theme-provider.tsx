@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import * as React from "react"
 
 export type ThemeMode = "dark" | "light" | "system"
@@ -74,93 +73,104 @@ function toggleMode(current: ThemeMode): ThemeMode {
   return getSystemMode() === "dark" ? "light" : "dark"
 }
 
-export function ThemeProvider({
-  children,
-  defaultMode = "system",
-  defaultPalette = "warm",
-  modeKey = "theme",
-  paletteKey = "theme-palette",
-  disableTransitionOnChange = true,
-  ...props
-}: ThemeProviderProps) {
-  const [mode, setModeState] = React.useState<ThemeMode>(() => {
-    try {
-      const stored = localStorage.getItem(modeKey)
-      return isMode(stored) ? stored : defaultMode
-    } catch {
-      return defaultMode
-    }
-  })
-  const [palette, setPaletteState] = React.useState<ThemePalette>(() => {
-    try {
-      const stored = localStorage.getItem(paletteKey)
-      return isPalette(stored) ? stored : defaultPalette
-    } catch {
-      return defaultPalette
-    }
-  })
+function readStored<T extends string>(
+  key: string,
+  fallback: T,
+  guard: (value: string | null) => value is T
+): T {
+  try {
+    const stored = localStorage.getItem(key)
+    return guard(stored) ? stored : fallback
+  } catch {
+    return fallback
+  }
+}
 
+function writeStored(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    // ignore quota / private mode errors
+  }
+}
+
+function applyTheme(
+  nextMode: ThemeMode,
+  nextPalette: ThemePalette,
+  disableTransition: boolean
+) {
+  const root = document.documentElement
+  const resolved = resolveMode(nextMode)
+  const restore = disableTransition ? disableTransitionsTemporarily() : null
+  root.classList.remove("light", "dark", "theme-slate")
+  if (nextPalette === "slate") root.classList.add("theme-slate")
+  root.classList.add(resolved)
+  restore?.()
+}
+
+function useThemeMode(modeKey: string, defaultMode: ThemeMode) {
+  const [mode, setModeState] = React.useState<ThemeMode>(() =>
+    readStored(modeKey, defaultMode, isMode)
+  )
   const setMode = React.useCallback(
     (next: ThemeMode) => {
-      try {
-        localStorage.setItem(modeKey, next)
-      } catch {
-        // ignore quota / private mode errors
-      }
+      writeStored(modeKey, next)
       setModeState(next)
     },
     [modeKey]
   )
+  return { mode, setMode, setModeState }
+}
+
+function useThemePalette(paletteKey: string, defaultPalette: ThemePalette) {
+  const [palette, setPaletteState] = React.useState<ThemePalette>(() =>
+    readStored(paletteKey, defaultPalette, isPalette)
+  )
   const setPalette = React.useCallback(
     (next: ThemePalette) => {
-      try {
-        localStorage.setItem(paletteKey, next)
-      } catch {
-        // ignore quota / private mode errors
-      }
+      writeStored(paletteKey, next)
       setPaletteState(next)
     },
     [paletteKey]
   )
+  return { palette, setPalette, setPaletteState }
+}
 
-  const applyTheme = React.useCallback(
-    (nextMode: ThemeMode, nextPalette: ThemePalette) => {
-      const root = document.documentElement
-      const resolved = resolveMode(nextMode)
-      const restore = disableTransitionOnChange
-        ? disableTransitionsTemporarily()
-        : null
-      root.classList.remove("light", "dark", "theme-slate")
-      if (nextPalette === "slate") root.classList.add("theme-slate")
-      root.classList.add(resolved)
-      restore?.()
-    },
-    [disableTransitionOnChange]
-  )
-
+function useApplyTheme(
+  mode: ThemeMode,
+  palette: ThemePalette,
+  disableTransitionOnChange: boolean
+) {
   React.useEffect(() => {
-    applyTheme(mode, palette)
+    applyTheme(mode, palette, disableTransitionOnChange)
     if (mode !== "system") return undefined
     const mq = window.matchMedia(COLOR_SCHEME_QUERY)
-    const handler = () => applyTheme("system", palette)
+    const handler = () =>
+      applyTheme("system", palette, disableTransitionOnChange)
     mq.addEventListener("change", handler)
     return () => mq.removeEventListener("change", handler)
-  }, [mode, palette, applyTheme])
+  }, [mode, palette, disableTransitionOnChange])
+}
 
+function shouldIgnoreThemeHotkey(e: KeyboardEvent) {
+  return (
+    e.repeat ||
+    e.metaKey ||
+    e.ctrlKey ||
+    e.altKey ||
+    isEditableTarget(e.target) ||
+    !!document.querySelector('[role="dialog"]') ||
+    e.key.toLowerCase() !== "d"
+  )
+}
+
+function useThemeHotkey(
+  modeKey: string,
+  setModeState: React.Dispatch<React.SetStateAction<ThemeMode>>
+) {
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (
-        e.repeat ||
-        e.metaKey ||
-        e.ctrlKey ||
-        e.altKey ||
-        isEditableTarget(e.target) ||
-        // Let open dialogs / sheets own the keyboard; a bare "d" while a modal
-        // is up must not flip the theme underneath it.
-        document.querySelector('[role="dialog"]') ||
-        e.key.toLowerCase() !== "d"
-      )
-        return
+      if (shouldIgnoreThemeHotkey(e)) return
       setModeState((current) => {
         const next = toggleMode(current)
         localStorage.setItem(modeKey, next)
@@ -169,8 +179,25 @@ export function ThemeProvider({
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [modeKey])
+  }, [modeKey, setModeState])
+}
 
+function useThemeStorageSync(opts: {
+  modeKey: string
+  paletteKey: string
+  defaultMode: ThemeMode
+  defaultPalette: ThemePalette
+  setModeState: React.Dispatch<React.SetStateAction<ThemeMode>>
+  setPaletteState: React.Dispatch<React.SetStateAction<ThemePalette>>
+}) {
+  const {
+    modeKey,
+    paletteKey,
+    defaultMode,
+    defaultPalette,
+    setModeState,
+    setPaletteState,
+  } = opts
   React.useEffect(() => {
     const handler = (e: StorageEvent) => {
       if (e.storageArea !== localStorage) return
@@ -181,8 +208,40 @@ export function ThemeProvider({
     }
     window.addEventListener("storage", handler)
     return () => window.removeEventListener("storage", handler)
-  }, [defaultMode, defaultPalette, modeKey, paletteKey])
+  }, [
+    defaultMode,
+    defaultPalette,
+    modeKey,
+    paletteKey,
+    setModeState,
+    setPaletteState,
+  ])
+}
 
+export function ThemeProvider({
+  children,
+  defaultMode = "system",
+  defaultPalette = "warm",
+  modeKey = "theme",
+  paletteKey = "theme-palette",
+  disableTransitionOnChange = true,
+  ...props
+}: ThemeProviderProps) {
+  const { mode, setMode, setModeState } = useThemeMode(modeKey, defaultMode)
+  const { palette, setPalette, setPaletteState } = useThemePalette(
+    paletteKey,
+    defaultPalette
+  )
+  useApplyTheme(mode, palette, disableTransitionOnChange)
+  useThemeHotkey(modeKey, setModeState)
+  useThemeStorageSync({
+    modeKey,
+    paletteKey,
+    defaultMode,
+    defaultPalette,
+    setModeState,
+    setPaletteState,
+  })
   const value = React.useMemo<ThemeProviderState>(
     () => ({
       theme: mode,
@@ -194,7 +253,6 @@ export function ThemeProvider({
     }),
     [mode, setMode, palette, setPalette]
   )
-
   return (
     <ThemeProviderContext.Provider {...props} value={value}>
       {children}

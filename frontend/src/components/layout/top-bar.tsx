@@ -1,18 +1,6 @@
 import { useTranslation } from "react-i18next"
-import {
-  ChevronDown,
-  Lock,
-  Moon,
-  Sun,
-} from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { Moon, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import {
   Tooltip,
   TooltipContent,
@@ -20,6 +8,7 @@ import {
 } from "@/components/ui/tooltip"
 import { StatusIndicator } from "@/components/shared/status-indicator"
 import { HealthIndicator } from "@/components/monitoring/health-indicator"
+import { AgentSwitcher } from "./agent-switcher"
 import type { AgentInfo, StreamStatus } from "@/types/agent"
 
 interface TopBarProps {
@@ -62,110 +51,6 @@ function TopBarButton({
   )
 }
 
-function AgentSwitcher({
-  agent,
-  agents,
-  locked,
-  onSelectAgent,
-}: {
-  agent: AgentInfo
-  agents: AgentInfo[]
-  locked: boolean
-  onSelectAgent?: (id: string) => void
-}) {
-  const { t } = useTranslation()
-
-  if (!onSelectAgent || agents.length === 0) {
-    return (
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium tracking-tight text-foreground">
-          {agent.name}
-        </span>
-        {agent.model && (
-          <Badge
-            variant="secondary"
-            className="rounded-md px-1.5 py-0 font-mono text-[10px]"
-          >
-            {agent.model}
-          </Badge>
-        )}
-      </div>
-    )
-  }
-
-  if (locked) {
-    return (
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-left"
-            />
-          }
-        >
-          <span className="text-sm font-medium tracking-tight text-foreground">
-            {agent.name}
-          </span>
-          {agent.model && (
-            <Badge
-              variant="secondary"
-              className="rounded-md px-1.5 py-0 font-mono text-[10px]"
-            >
-              {agent.model}
-            </Badge>
-          )}
-          <Lock className="h-3 w-3 text-muted-foreground/60" />
-        </TooltipTrigger>
-        <TooltipContent>{t("layout.agentLockedHint")}</TooltipContent>
-      </Tooltip>
-    )
-  }
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 gap-1.5 px-2 text-foreground hover:bg-muted"
-          />
-        }
-      >
-        <span className="text-sm font-medium tracking-tight">{agent.name}</span>
-        {agent.model && (
-          <Badge
-            variant="secondary"
-            className="rounded-md px-1.5 py-0 font-mono text-[10px]"
-          >
-            {agent.model}
-          </Badge>
-        )}
-        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56 rounded-xl">
-        {agents.map((a) => (
-          <DropdownMenuItem
-            key={a.id || a.name}
-            onClick={() => onSelectAgent(a.id || a.name)}
-            className={`gap-2 text-xs ${(a.id || a.name) === (agent.id || agent.name) ? "bg-primary/8 text-primary" : ""}`}
-          >
-            <div className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{a.name}</span>
-              {a.model && (
-                <span className="block truncate font-mono text-[10px] text-muted-foreground">
-                  {a.model}
-                </span>
-              )}
-            </div>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
 export function TopBar({
   agent,
   agents = [],
@@ -188,8 +73,8 @@ export function TopBar({
         />
         <StatusIndicator status={status} />
       </div>
-
       <div className="flex items-center gap-0.5">
+        <div id="shell-topbar-actions" className="contents" />
         {actions}
         <HealthIndicator />
         <TopBarButton tooltip={t("layout.toggleTheme")} onClick={onToggleTheme}>

@@ -98,8 +98,8 @@ func TestPrepareRun_InjectsMCPTools(t *testing.T) {
 	svc := service.New(service.ServiceConfig{
 		AgentsDir:   agentsDir,
 		Registry:    reg,
-		NewProvider:  func(*agent.Agent) (provider.Provider, error) { return mockProv, nil },
-		Logger:       slog.Default(),
+		NewProvider: func(*agent.Agent) (provider.Provider, error) { return mockProv, nil },
+		Logger:      slog.Default(),
 	})
 
 	result, err := svc.PrepareRun(context.Background(), service.RunRequest{
@@ -155,10 +155,10 @@ tools: [get_time]
 		{{Text: "ok"}},
 	}}
 	svc := service.New(service.ServiceConfig{
-		AgentsDir: agentsDir,
-		Registry:  reg,
+		AgentsDir:   agentsDir,
+		Registry:    reg,
 		NewProvider: func(*agent.Agent) (provider.Provider, error) { return mockProv, nil },
-		Logger:    slog.Default(),
+		Logger:      slog.Default(),
 	})
 
 	result, err := svc.PrepareRun(context.Background(), service.RunRequest{

@@ -11,16 +11,27 @@ import (
 // (member/admin) pass all scope checks. Admin-only routes use requireAdmin.
 func (s *Server) mountAPIRoutes(r *gin.Engine) {
 	v1 := r.Group("/v1", s.authMiddleware())
+	s.mountAuthRoutes(v1)
+	s.mountAdminRoutes(v1)
+	s.mountAgentRoutes(v1)
+	s.mountMCPRoutes(v1)
+	s.mountKnowledgeRoutes(v1)
+	s.mountProviderRoutes(v1)
+	s.mountSkillRoutes(v1)
+	v1.GET("/fs/list", requireScope(auth.ScopeFS), s.handleFSList)
+	s.mountSessionRoutes(v1)
+	s.mountKanbanRoutes(v1)
+}
 
-	// Key management is admin-only; /auth/me is available to any identity.
+func (s *Server) mountAuthRoutes(v1 *gin.RouterGroup) {
 	v1.GET("/auth/keys", requireAdmin(), s.handleAuthKeysList)
 	v1.POST("/auth/keys", requireAdmin(), s.handleAuthKeysCreate)
 	v1.PATCH("/auth/keys/:id", requireAdmin(), s.handleAuthKeysPatch)
 	v1.DELETE("/auth/keys/:id", requireAdmin(), s.handleAuthKeysDelete)
 	v1.GET("/auth/me", s.handleAuthMe)
+}
 
-	// Admin-only: user management, registration setting, provider/embedding
-	// writes, audit export.
+func (s *Server) mountAdminRoutes(v1 *gin.RouterGroup) {
 	admin := v1.Group("", requireAdmin())
 	admin.GET("/admin/users", s.handleAdminUsersList)
 	admin.POST("/admin/users", s.handleAdminUserCreate)
@@ -33,15 +44,14 @@ func (s *Server) mountAPIRoutes(r *gin.Engine) {
 	admin.POST("/providers/models", s.handleProviderModelsTest)
 	admin.POST("/providers/models/detail", s.handleProviderModelDetailTest)
 	admin.PUT("/embedding", s.handleEmbeddingPut)
-	if s.auditStore != nil {
-		admin.GET("/audit/export", s.handleAuditExport)
-	}
 	if s.requestLogger != nil {
 		admin.GET("/audit/requests", s.handleAuditRequests)
 		admin.GET("/audit/requests/detail", s.handleAuditRequestDetail)
+		v1.GET("/usage/summary", s.handleUsageSummary)
 	}
+}
 
-	// Agents scope: runs, agent CRUD, tools, events, background assets.
+func (s *Server) mountAgentRoutes(v1 *gin.RouterGroup) {
 	agents := v1.Group("", requireScope(auth.ScopeAgents))
 	agents.POST("/agents/run", s.handleRun)
 	agents.POST("/agents/approve", s.handleApprove)
@@ -58,12 +68,16 @@ func (s *Server) mountAPIRoutes(r *gin.Engine) {
 	agents.HEAD("/background", s.handleBackgroundGet)
 	agents.POST("/background", s.handleBackgroundUpload)
 	agents.DELETE("/background", s.handleBackgroundDelete)
+}
 
+func (s *Server) mountMCPRoutes(v1 *gin.RouterGroup) {
 	mcp := v1.Group("", requireScope(auth.ScopeMCP))
 	mcp.GET("/mcp", s.handleMCPList)
 	mcp.POST("/mcp/global", s.handleMCPGlobalUpsert)
 	mcp.DELETE("/mcp/global/:name", s.handleMCPGlobalDelete)
+}
 
+func (s *Server) mountKnowledgeRoutes(v1 *gin.RouterGroup) {
 	knowledge := v1.Group("", requireScope(auth.ScopeKnowledge))
 	knowledge.GET("/knowledge", s.handleKnowledgeList)
 	knowledge.POST("/knowledge", s.handleKnowledgeCreate)
@@ -75,7 +89,9 @@ func (s *Server) mountAPIRoutes(r *gin.Engine) {
 	knowledge.POST("/knowledge/:id/documents", s.handleKnowledgeDocUpload)
 	knowledge.DELETE("/knowledge/:id/documents/:docId", s.handleKnowledgeDocDelete)
 	knowledge.POST("/knowledge/:id/reindex", s.handleKnowledgeReindex)
+}
 
+func (s *Server) mountProviderRoutes(v1 *gin.RouterGroup) {
 	providers := v1.Group("", requireScope(auth.ScopeProviders))
 	providers.GET("/vendors", s.handleVendors)
 	providers.GET("/providers", s.handleProvidersList)
@@ -83,7 +99,9 @@ func (s *Server) mountAPIRoutes(r *gin.Engine) {
 	providers.GET("/providers/:name/models/:model/detail", s.handleProviderModelDetail)
 	providers.GET("/embedding", s.handleEmbeddingGet)
 	providers.GET("/embedding/vendors", s.handleEmbeddingVendors)
+}
 
+func (s *Server) mountSkillRoutes(v1 *gin.RouterGroup) {
 	skills := v1.Group("", requireScope(auth.ScopeSkills))
 	skills.GET("/skills", s.handleSkillsList)
 	skills.POST("/skills", s.handleSkillCreate)
@@ -91,30 +109,30 @@ func (s *Server) mountAPIRoutes(r *gin.Engine) {
 	skills.GET("/skills/:name", s.handleSkillGet)
 	skills.PUT("/skills/:name", s.handleSkillUpdate)
 	skills.DELETE("/skills/:name", s.handleSkillDelete)
+}
 
-	v1.GET("/fs/list", requireScope(auth.ScopeFS), s.handleFSList)
-
-	// Conditional endpoints (auth middleware applies via group).
-	if s.store != nil {
-		sessions := v1.Group("", requireScope(auth.ScopeSessions))
-		sessions.GET("/sessions", s.handleSessionsList)
-		sessions.GET("/sessions/:id", s.handleSessionsGet)
-		sessions.PATCH("/sessions/:id", s.handleSessionPatch)
-		sessions.DELETE("/sessions/:id", s.handleSessionsDelete)
-		if s.eventLogger != nil {
-			sessions.GET("/sessions/:id/replay", s.handleSessionReplay)
-		}
+func (s *Server) mountSessionRoutes(v1 *gin.RouterGroup) {
+	if s.store == nil {
+		return
 	}
+	sessions := v1.Group("", requireScope(auth.ScopeSessions))
+	sessions.GET("/sessions", s.handleSessionsList)
+	sessions.GET("/sessions/:id", s.handleSessionsGet)
+	sessions.PATCH("/sessions/:id", s.handleSessionPatch)
+	sessions.DELETE("/sessions/:id", s.handleSessionsDelete)
+}
 
-	// Kanban endpoints (when the state DB is configured).
-	if s.stateDB != nil {
-		kanban := v1.Group("", requireScope(auth.ScopeKanban))
-		kanban.GET("/kanban", s.handleKanbanList)
-		kanban.POST("/kanban", s.handleKanbanCreate)
-		kanban.PATCH("/kanban/:id", s.handleKanbanPatch)
-		kanban.DELETE("/kanban/:id", s.handleKanbanDelete)
-		kanban.POST("/kanban/:id/approve", s.handleKanbanApprove)
-		kanban.POST("/kanban/:id/reject", s.handleKanbanReject)
-		kanban.POST("/kanban/:id/requeue", s.handleKanbanRequeue)
+func (s *Server) mountKanbanRoutes(v1 *gin.RouterGroup) {
+	if s.stateDB == nil {
+		return
 	}
+	kanban := v1.Group("", requireScope(auth.ScopeKanban))
+	kanban.GET("/kanban", s.handleKanbanList)
+	kanban.POST("/kanban", s.handleKanbanCreate)
+	kanban.GET("/kanban/:id", s.handleKanbanGet)
+	kanban.PATCH("/kanban/:id", s.handleKanbanPatch)
+	kanban.DELETE("/kanban/:id", s.handleKanbanDelete)
+	kanban.POST("/kanban/:id/approve", s.handleKanbanApprove)
+	kanban.POST("/kanban/:id/reject", s.handleKanbanReject)
+	kanban.POST("/kanban/:id/requeue", s.handleKanbanRequeue)
 }

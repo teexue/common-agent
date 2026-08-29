@@ -75,13 +75,13 @@ func (s *Server) handleAuthRegister(c *gin.Context) {
 	}
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	role := store.RoleMember
 	n, err := s.stateDB.CountUsersWithPassword()
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "auth_error", "api.error.internal", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
 		return
 	}
 	if n == 0 {
@@ -92,12 +92,12 @@ func (s *Server) handleAuthRegister(c *gin.Context) {
 	}
 	u, err := s.stateDB.CreateUser(req.Username, req.Password, req.Name, role)
 	if err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
 		return
 	}
 	token, err := s.tokens.IssueLogin(u.ID)
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "auth_error", "api.error.internal", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{
@@ -115,7 +115,7 @@ func (s *Server) handleAuthLogin(c *gin.Context) {
 	}
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	u, err := s.stateDB.AuthenticateUser(req.Username, req.Password)
@@ -125,7 +125,7 @@ func (s *Server) handleAuthLogin(c *gin.Context) {
 	}
 	token, err := s.tokens.IssueLogin(u.ID)
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "auth_error", "api.error.internal", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -144,7 +144,7 @@ func (s *Server) handleAuthKeysList(c *gin.Context) {
 	id := identityFromGin(c)
 	keys, err := s.stateDB.ListAPIKeys(id.UserID)
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "auth_error", "api.error.internal", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
 		return
 	}
 	enabled, _ := s.authEnabled()
@@ -160,7 +160,7 @@ func (s *Server) handleAuthKeysCreate(c *gin.Context) {
 	}
 	var req createAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	var expiresAt *time.Time
@@ -174,7 +174,7 @@ func (s *Server) handleAuthKeysCreate(c *gin.Context) {
 	}
 	rawKey, entry, err := s.stateDB.AddAPIKey(userID, req.Name, strings.Join(req.Scopes, ","), expiresAt)
 	if err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
 		return
 	}
 	resp := createAPIKeyResponse{
@@ -198,7 +198,7 @@ func (s *Server) handleAuthKeysPatch(c *gin.Context) {
 	}
 	var req patchAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	patch := store.APIKeyPatch{Name: req.Name, Enabled: req.Enabled}
@@ -213,12 +213,12 @@ func (s *Server) handleAuthKeysPatch(c *gin.Context) {
 			respondError(c, http.StatusNotFound, "not_found", "api.error.auth_key_not_found")
 			return
 		}
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
 		return
 	}
 	key, err := s.stateDB.GetAPIKey(id)
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "auth_error", "api.error.internal", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, store.APIKeyInfo{
@@ -242,7 +242,7 @@ func (s *Server) handleAuthKeysDelete(c *gin.Context) {
 			respondError(c, http.StatusNotFound, "not_found", "api.error.auth_key_not_found")
 			return
 		}
-		respondErrorDetails(c, http.StatusInternalServerError, "delete_error", "api.error.delete_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "delete_error", MsgKey: "api.error.delete_error", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true, "id": id})
@@ -256,12 +256,12 @@ func (s *Server) handleAuthToken(c *gin.Context) {
 	}
 	var req tokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	entry, err := s.stateDB.VerifyAPIKey(req.APIKey)
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "auth_error", "api.error.internal", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
 		return
 	}
 	if entry == nil {
@@ -269,7 +269,7 @@ func (s *Server) handleAuthToken(c *gin.Context) {
 		if id, ok := s.resolveCLIKey(req.APIKey); ok {
 			token, err := s.tokens.Issue(id)
 			if err != nil {
-				respondErrorDetails(c, http.StatusInternalServerError, "auth_error", "api.error.internal", err.Error())
+				respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
 				return
 			}
 			c.JSON(http.StatusOK, gin.H{"token": token, "user_id": id.UserID, "key_id": id.KeyID})
@@ -280,7 +280,7 @@ func (s *Server) handleAuthToken(c *gin.Context) {
 	}
 	token, err := s.tokens.Issue(auth.Identity{UserID: entry.UserID, KeyID: entry.ID})
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "auth_error", "api.error.internal", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"token": token, "user_id": entry.UserID, "key_id": entry.ID})

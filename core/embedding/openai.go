@@ -63,10 +63,10 @@ func NewOpenAI(cfg OpenAIConfig) (*OpenAIEmbedder, error) {
 }
 
 type openAIEmbedRequest struct {
-	Model           string   `json:"model"`
-	Input           []string `json:"input"`
-	Dimensions      int      `json:"dimensions,omitempty"`
-	EncodingFormat  string   `json:"encoding_format,omitempty"`
+	Model          string   `json:"model"`
+	Input          []string `json:"input"`
+	Dimensions     int      `json:"dimensions,omitempty"`
+	EncodingFormat string   `json:"encoding_format,omitempty"`
 }
 
 type openAIEmbedResponse struct {
@@ -133,6 +133,19 @@ func (e *OpenAIEmbedder) embedBatch(ctx context.Context, texts []string) ([][]fl
 	if err != nil {
 		return nil, fmt.Errorf("read embed response: %w", err)
 	}
+	out, err := parseEmbedVectors(raw, resp.StatusCode, len(texts))
+	if err != nil {
+		return nil, err
+	}
+	if len(out[0]) > 0 {
+		e.mu.Lock()
+		e.dims = len(out[0])
+		e.mu.Unlock()
+	}
+	return out, nil
+}
+
+func parseEmbedVectors(raw []byte, status, n int) ([][]float32, error) {
 	var parsed openAIEmbedResponse
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return nil, fmt.Errorf("parse embed response: %w", err)
@@ -140,13 +153,13 @@ func (e *OpenAIEmbedder) embedBatch(ctx context.Context, texts []string) ([][]fl
 	if parsed.Error != nil && parsed.Error.Message != "" {
 		return nil, fmt.Errorf("embed api: %s", parsed.Error.Message)
 	}
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("embed api status %d: %s", resp.StatusCode, truncate(string(raw), 200))
+	if status >= 300 {
+		return nil, fmt.Errorf("embed api status %d: %s", status, truncate(string(raw), 200))
 	}
-	if len(parsed.Data) != len(texts) {
-		return nil, fmt.Errorf("embed api: got %d vectors for %d texts", len(parsed.Data), len(texts))
+	if len(parsed.Data) != n {
+		return nil, fmt.Errorf("embed api: got %d vectors for %d texts", len(parsed.Data), n)
 	}
-	out := make([][]float32, len(texts))
+	out := make([][]float32, n)
 	for _, d := range parsed.Data {
 		if d.Index < 0 || d.Index >= len(out) {
 			return nil, fmt.Errorf("embed api: invalid index %d", d.Index)
@@ -157,11 +170,6 @@ func (e *OpenAIEmbedder) embedBatch(ctx context.Context, texts []string) ([][]fl
 		if v == nil {
 			return nil, fmt.Errorf("embed api: missing vector for index %d", i)
 		}
-	}
-	if len(out[0]) > 0 {
-		e.mu.Lock()
-		e.dims = len(out[0])
-		e.mu.Unlock()
 	}
 	return out, nil
 }

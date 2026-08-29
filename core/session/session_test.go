@@ -145,29 +145,26 @@ func TestLastUsage(t *testing.T) {
 
 func TestUsageTotals(t *testing.T) {
 	s := session.New("demo")
-	in, out, cr, cc, win := s.UsageTotals()
-	if in != 0 || out != 0 || cr != 0 || cc != 0 || win != 0 {
-		t.Fatalf("initial totals = %d/%d/%d/%d/%d, want all zero", in, out, cr, cc, win)
-	}
+	requireUsageTotals(t, s, [5]int{0, 0, 0, 0, 0})
 
-	// First run accumulates and records the window.
 	s.AddUsage(1000, 500, 800, 200, 200000)
-	in, out, cr, cc, win = s.UsageTotals()
-	if in != 1000 || out != 500 || cr != 800 || cc != 200 || win != 200000 {
-		t.Fatalf("totals after first run = %d/%d/%d/%d/%d, want 1000/500/800/200/200000", in, out, cr, cc, win)
-	}
+	requireUsageTotals(t, s, [5]int{1000, 500, 800, 200, 200000})
 
-	// A resumed run adds to the previous totals.
 	s.AddUsage(302, 1400, 57500, 100, 200000)
-	in, out, cr, cc, win = s.UsageTotals()
-	if in != 1302 || out != 1900 || cr != 58300 || cc != 300 || win != 200000 {
-		t.Fatalf("totals after resume = %d/%d/%d/%d/%d, want 1302/1900/58300/300/200000", in, out, cr, cc, win)
-	}
+	requireUsageTotals(t, s, [5]int{1302, 1900, 58300, 300, 200000})
 
-	// A zero-window add keeps the previous window.
 	s.AddUsage(0, 0, 0, 0, 0)
-	_, _, _, _, win = s.UsageTotals()
+	_, _, _, _, win := s.UsageTotals()
 	if win != 200000 {
 		t.Fatalf("window = %d, want 200000 (unchanged)", win)
+	}
+}
+
+func requireUsageTotals(t *testing.T, s *session.Session, want [5]int) {
+	t.Helper()
+	in, out, cr, cc, win := s.UsageTotals()
+	got := [5]int{in, out, cr, cc, win}
+	if got != want {
+		t.Fatalf("totals = %v, want %v", got, want)
 	}
 }

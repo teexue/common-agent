@@ -35,7 +35,7 @@ func (s *Server) handleAdminUsersList(c *gin.Context) {
 	}
 	users, err := s.stateDB.ListUsers()
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "auth_error", "api.error.internal", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
 		return
 	}
 	infos := make([]store.UserInfo, 0, len(users))
@@ -53,12 +53,12 @@ func (s *Server) handleAdminUserCreate(c *gin.Context) {
 	}
 	var req adminCreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	u, err := s.stateDB.CreateUser(req.Username, req.Password, req.Name, req.Role)
 	if err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusCreated, u.ToUserInfo())
@@ -72,7 +72,7 @@ func (s *Server) handleAdminUserPatch(c *gin.Context) {
 	}
 	var req adminPatchUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	id := c.Param("id")
@@ -116,7 +116,7 @@ func (s *Server) respondUserMutationError(c *gin.Context, err error) {
 		respondError(c, http.StatusNotFound, "not_found", "api.error.user_not_found")
 		return
 	}
-	respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request", err.Error())
+	respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
 }
 
 // handleAdminRegistrationGet returns the open-registration setting.
@@ -136,11 +136,11 @@ func (s *Server) handleAdminRegistrationPut(c *gin.Context) {
 	}
 	var req registrationSettingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	if err := s.stateDB.SetAllowRegistration(req.AllowRegistration); err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "auth_error", "api.error.internal", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"allow_registration": s.stateDB.GetAllowRegistration()})

@@ -1,24 +1,107 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import { fetchProviderModelDetail, fetchProviderModels, fetchVendors, upsertProvider } from "@/lib/api"
-import type { ModelDetail, ModelInfo, ProviderInfo, VendorInfo } from "@/types/agent"
+import type { ProviderInfo } from "@/types/agent"
+import { IdentityFields } from "./provider-identity-fields"
 import {
   ApiKeyField,
   AuthStyleField,
   BaseURLField,
-  FormActions,
-  IdentityFields,
-  ModelFields,
-  VendorSelect,
-  VisionToggle,
-} from "./provider-form-fields"
+} from "./provider-connection-fields"
+import { ModelFields } from "./provider-model-fields"
+import { FormActions, VisionToggle } from "./provider-form-actions"
+import { VendorSelect } from "./provider-vendor-select"
 import { ModelDetailCard } from "./model-detail-card"
-import {
-  defaultModelsPath,
-  vendorAuth,
-  vendorBaseURL,
-  vendorRequiresKey,
-  type StyleOption,
-} from "./provider-form-utils"
+import { FormError } from "./form-error"
+import { useProviderForm, type ProviderFormModel } from "./use-provider-form"
+
+function ProviderFormFields({ form }: { form: ProviderFormModel }) {
+  const f = form.fields
+  const v = form.vendors
+  return (
+    <>
+      {!f.isEdit && v.vendors.length > 0 && (
+        <VendorSelect
+          vendors={v.vendors}
+          vendorName={v.vendorName}
+          onApply={form.applyVendor}
+        />
+      )}
+      <IdentityFields
+        isEdit={f.isEdit}
+        name={f.name}
+        onNameChange={f.setName}
+        displayName={f.displayName}
+        onDisplayNameChange={f.setDisplayName}
+        selectedVendor={v.selectedVendor}
+        apiStyle={f.apiStyle}
+        styleOptions={
+          v.selectedVendor?.supported_styles ?? ["openai", "anthropic"]
+        }
+        onStyleChange={form.onStyleChange}
+      />
+      <BaseURLField
+        baseURL={f.baseURL}
+        onBaseURLChange={(url) => {
+          f.setBaseURL(url)
+          f.setBaseURLTouched(true)
+        }}
+      />
+      {f.apiStyle === "anthropic" && (
+        <AuthStyleField
+          authStyle={f.authStyle}
+          onAuthStyleChange={f.setAuthStyle}
+        />
+      )}
+      <ApiKeyField
+        isEdit={f.isEdit}
+        apiKey={f.apiKey}
+        onApiKeyChange={f.setApiKey}
+        optional={!form.requiresKey}
+      />
+    </>
+  )
+}
+
+function ProviderModelSection({ form }: { form: ProviderFormModel }) {
+  const f = form.fields
+  const d = form.detail
+  const m = form.models
+  return (
+    <>
+      <ModelFields
+        defaultModel={f.defaultModel}
+        onDefaultModelChange={(value) => {
+          if (!value.trim()) d.clearDetail()
+          f.setDefaultModel(value)
+        }}
+        modelsPath={f.modelsPath}
+        onModelsPathChange={(path) => {
+          f.setModelsPath(path)
+          f.setModelsPathTouched(true)
+        }}
+        apiStyle={f.apiStyle}
+        models={m.models}
+        fetching={m.fetching}
+        canFetch={form.canFetch}
+        fetchErr={m.fetchErr}
+        showOpenAIHint={
+          f.apiStyle === "anthropic" &&
+          !!form.vendors.selectedVendor?.supported_styles?.includes("openai") &&
+          !m.fetchErr
+        }
+        apiKeyOptional={!form.requiresKey}
+        onFetchModels={m.handleFetchModels}
+      />
+      {d.detailSupported && (
+        <ModelDetailCard
+          detail={d.detail}
+          loading={d.detailLoading}
+          err={d.detailErr}
+          empty={d.detailEmpty}
+          onRefresh={d.loadDetail}
+        />
+      )}
+    </>
+  )
+}
 
 export function ProviderForm({
   provider,
@@ -29,271 +112,19 @@ export function ProviderForm({
   onSaved: () => void
   onCancel: () => void
 }) {
-  const isEdit = !!provider
-  const [vendors, setVendors] = useState<VendorInfo[]>([])
-  const [vendorName, setVendorName] = useState<string>("")
-  const [name, setName] = useState(provider?.name ?? "")
-  const [apiStyle, setApiStyle] = useState<StyleOption>(
-    (provider?.api_style as StyleOption) ?? "openai"
-  )
-  const [authStyle, setAuthStyle] = useState<"x-api-key" | "bearer" | "">(
-    (provider?.auth_style as "x-api-key" | "bearer") ?? ""
-  )
-  const [baseURL, setBaseURL] = useState(provider?.base_url ?? "")
-  const [baseURLTouched, setBaseURLTouched] = useState(false)
-  const [apiKey, setApiKey] = useState("")
-  const [defaultModel, setDefaultModel] = useState(
-    provider?.default_model ?? ""
-  )
-  const [modelsPath, setModelsPath] = useState(provider?.models_path ?? "")
-  const [vision, setVision] = useState(provider?.vision ?? false)
-  const [displayName, setDisplayName] = useState(provider?.display_name ?? "")
-  const [modelsPathTouched, setModelsPathTouched] = useState(false)
-  const [models, setModels] = useState<ModelInfo[] | null>(null)
-  const [fetching, setFetching] = useState(false)
-  const [fetchErr, setFetchErr] = useState<string | null>(null)
-  const [detail, setDetail] = useState<ModelDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [detailErr, setDetailErr] = useState<string | null>(null)
-  const detailReqId = useRef(0)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetchVendors()
-      .then((list) => setVendors(list ?? []))
-      .catch(() => setVendors([]))
-  }, [])
-
-  const selectedVendor = useMemo(
-    () => vendors.find((v) => v.name === vendorName) ?? null,
-    [vendors, vendorName]
-  )
-
-  const styleOptions: StyleOption[] = selectedVendor?.supported_styles ?? [
-    "openai",
-    "anthropic",
-  ]
-
-  // Local Ollama (empty api_key_env on the vendor preset) needs no API key.
-  const requiresKey = vendorRequiresKey(selectedVendor)
-
-  const applyVendor = (v: VendorInfo) => {
-    setVendorName(v.name)
-    setName((prev) => prev || v.name)
-    const style = v.api_style as StyleOption
-    setApiStyle(style)
-    setBaseURL(vendorBaseURL(v, style))
-    setBaseURLTouched(false)
-    setAuthStyle(vendorAuth(v, style))
-    setDefaultModel(v.default_model)
-    setModelsPath(defaultModelsPath(style))
-    setModelsPathTouched(false)
-    setVision(v.vision)
-    setDisplayName(v.display_name)
-  }
-
-  const onStyleChange = (style: StyleOption) => {
-    setApiStyle(style)
-    if (!modelsPathTouched) setModelsPath(defaultModelsPath(style))
-    if (selectedVendor) {
-      if (!baseURLTouched) setBaseURL(vendorBaseURL(selectedVendor, style))
-      setAuthStyle(vendorAuth(selectedVendor, style))
-    }
-  }
-
-  const canFetch = isEdit || !requiresKey || !!apiKey.trim()
-  const canSave =
-    !!name.trim() &&
-    !!defaultModel.trim() &&
-    (isEdit || !requiresKey || !!apiKey.trim())
-
-  const handleFetchModels = async () => {
-    if (!canFetch) return
-    setFetching(true)
-    setFetchErr(null)
-    try {
-      const list = await fetchProviderModels({
-        name: name.trim(),
-        api_style: apiStyle,
-        base_url: baseURL.trim() || undefined,
-        models_path: modelsPath.trim() || undefined,
-        api_version: undefined,
-        auth_style: authStyle || undefined,
-        api_key: apiKey.trim() || undefined,
-      })
-      setModels(list ?? [])
-    } catch (e: unknown) {
-      setFetchErr(e instanceof Error ? e.message : String(e))
-      setModels(null)
-    } finally {
-      setFetching(false)
-    }
-  }
-
-  // Only Ollama exposes model detail via /api/show; other styles have no
-  // introspection endpoint, so the card is hidden for them.
-  const detailSupported = apiStyle === "ollama"
-  const detailEmpty = !defaultModel.trim()
-
-  const loadDetail = async () => {
-    if (!detailSupported || !defaultModel.trim()) return
-    const reqId = ++detailReqId.current
-    setDetailLoading(true)
-    setDetailErr(null)
-    try {
-      const d = await fetchProviderModelDetail({
-        name: name.trim() || undefined,
-        api_style: apiStyle,
-        base_url: baseURL.trim() || undefined,
-        models_path: modelsPath.trim() || undefined,
-        auth_style: authStyle || undefined,
-        api_key: apiKey.trim() || undefined,
-        model: defaultModel.trim(),
-      })
-      if (reqId === detailReqId.current) setDetail(d)
-    } catch (e: unknown) {
-      if (reqId === detailReqId.current) {
-        setDetailErr(e instanceof Error ? e.message : String(e))
-        setDetail(null)
-      }
-    } finally {
-      if (reqId === detailReqId.current) setDetailLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (!detailSupported) {
-      setDetail(null)
-      setDetailErr(null)
-      return
-    }
-    if (!defaultModel.trim()) {
-      setDetail(null)
-      setDetailErr(null)
-      return
-    }
-    const id = setTimeout(loadDetail, 400)
-    return () => clearTimeout(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailSupported, defaultModel, baseURL, modelsPath, apiKey])
-
-  const handleSave = async () => {
-    setSaving(true)
-    setError(null)
-    try {
-      await upsertProvider({
-        name: name.trim(),
-        api_style: apiStyle,
-        base_url: baseURL.trim() || undefined,
-        api_key: apiKey.trim() || undefined,
-        api_key_env:
-          selectedVendor?.api_key_env || provider?.api_key_env || undefined,
-        default_model: defaultModel.trim() || undefined,
-        display_name: displayName.trim() || undefined,
-        models_path: modelsPath.trim() || undefined,
-        auth_style: authStyle || undefined,
-        vision,
-        context_window: detail?.context_window || undefined,
-      })
-      onSaved()
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setSaving(false)
-    }
-  }
-
+  const form = useProviderForm(provider, onSaved)
+  const f = form.fields
   return (
     <div className="space-y-4 rounded-xl border border-primary/30 bg-card p-5">
-      {!isEdit && vendors.length > 0 && (
-        <VendorSelect
-          vendors={vendors}
-          vendorName={vendorName}
-          selectedVendor={selectedVendor}
-          onApply={applyVendor}
-        />
-      )}
-
-      <IdentityFields
-        isEdit={isEdit}
-        name={name}
-        onNameChange={setName}
-        displayName={displayName}
-        onDisplayNameChange={setDisplayName}
-        selectedVendor={selectedVendor}
-        apiStyle={apiStyle}
-        styleOptions={styleOptions}
-        onStyleChange={onStyleChange}
-      />
-
-      <BaseURLField
-        baseURL={baseURL}
-        onBaseURLChange={(v) => {
-          setBaseURL(v)
-          setBaseURLTouched(true)
-        }}
-      />
-
-      {apiStyle === "anthropic" && (
-        <AuthStyleField
-          authStyle={authStyle}
-          onAuthStyleChange={setAuthStyle}
-        />
-      )}
-
-      <ApiKeyField
-        isEdit={isEdit}
-        apiKey={apiKey}
-        onApiKeyChange={setApiKey}
-        optional={!requiresKey}
-      />
-
-      <ModelFields
-        defaultModel={defaultModel}
-        onDefaultModelChange={setDefaultModel}
-        modelsPath={modelsPath}
-        onModelsPathChange={(v) => {
-          setModelsPath(v)
-          setModelsPathTouched(true)
-        }}
-        apiStyle={apiStyle}
-        models={models}
-        fetching={fetching}
-        canFetch={canFetch}
-        fetchErr={fetchErr}
-        showOpenAIHint={
-          apiStyle === "anthropic" &&
-          !!selectedVendor?.supported_styles?.includes("openai") &&
-          !fetchErr
-        }
-        apiKeyOptional={!requiresKey}
-        onFetchModels={handleFetchModels}
-      />
-
-      {detailSupported && (
-        <ModelDetailCard
-          detail={detail}
-          loading={detailLoading}
-          err={detailErr}
-          empty={detailEmpty}
-          onRefresh={loadDetail}
-        />
-      )}
-
-      <VisionToggle vision={vision} onToggle={() => setVision(!vision)} />
-
-      {error && (
-        <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
-        </p>
-      )}
-
+      <ProviderFormFields form={form} />
+      <ProviderModelSection form={form} />
+      <VisionToggle vision={f.vision} onToggle={() => f.setVision(!f.vision)} />
+      <FormError error={form.save.error} />
       <FormActions
-        saving={saving}
-        canSave={canSave}
+        saving={form.save.saving}
+        canSave={form.canSave}
         onCancel={onCancel}
-        onSave={handleSave}
+        onSave={form.save.handleSave}
       />
     </div>
   )

@@ -69,8 +69,6 @@
   "log.mcp.sse.disconnected": "mcp sse server disconnected",
   "log.mcp.sse.connect_failed": "mcp sse connect failed",
   "log.mcp.sse.read_error": "mcp sse read error",
-  "log.workflow.executing_node": "executing workflow node",
-  "log.workflow.node_failed": "workflow node failed",
   "log.kanban.process_failed": "kanban task processing failed",
   "log.kanban.item_processed": "kanban task processed",
   "log.agent.created": "agent created",

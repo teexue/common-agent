@@ -5,6 +5,36 @@ import { Button } from "@/components/ui/button"
 import { ListRow } from "@/components/shared/list-row"
 import type { ProviderInfo } from "@/types/agent"
 
+function ProviderBadges({ provider: p }: { provider: ProviderInfo }) {
+  const { t } = useTranslation()
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <Badge
+        variant="secondary"
+        className="rounded-md px-1.5 py-0.5 font-mono text-[10px]"
+      >
+        {p.api_style}
+      </Badge>
+      {p.default_model && (
+        <Badge
+          variant="outline"
+          className="rounded-md px-1.5 py-0.5 font-mono text-[10px]"
+        >
+          {p.default_model}
+        </Badge>
+      )}
+      {p.vision && (
+        <Badge
+          variant="outline"
+          className="gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
+        >
+          <Eye className="h-2.5 w-2.5" /> {t("settings.providerVision")}
+        </Badge>
+      )}
+    </div>
+  )
+}
+
 export function ProviderCard({
   provider: p,
   onEdit,
@@ -14,7 +44,6 @@ export function ProviderCard({
   onEdit: () => void
   onDelete: () => void
 }) {
-  const { t } = useTranslation()
   return (
     <ListRow className="group flex items-center gap-4">
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -29,30 +58,7 @@ export function ProviderCard({
             {p.name}
           </p>
         )}
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <Badge
-            variant="secondary"
-            className="rounded-md px-1.5 py-0.5 font-mono text-[10px]"
-          >
-            {p.api_style}
-          </Badge>
-          {p.default_model && (
-            <Badge
-              variant="outline"
-              className="rounded-md px-1.5 py-0.5 font-mono text-[10px]"
-            >
-              {p.default_model}
-            </Badge>
-          )}
-          {p.vision && (
-            <Badge
-              variant="outline"
-              className="gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
-            >
-              <Eye className="h-2.5 w-2.5" /> {t("settings.providerVision")}
-            </Badge>
-          )}
-        </div>
+        <ProviderBadges provider={p} />
       </div>
       <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
         <Button

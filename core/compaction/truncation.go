@@ -73,98 +73,110 @@ func (c *TruncationCompactor) trialTokens(trial, messages []provider.Message) in
 
 // Compact drops older messages until under the token/message thresholds.
 // Returns nil if no compaction is needed.
-func (c *TruncationCompactor) Compact(ctx context.Context, messages []provider.Message) (*Result, error) {
+func (c *TruncationCompactor) Compact(_ context.Context, messages []provider.Message) (*Result, error) {
 	if !NeedsCompactionByTokensCount(c.currentUsage(messages), c.tokenLimit) && !NeedsCompaction(messages, c.maxMessages) {
 		return nil, nil
 	}
+	plan := splitTruncationInput(messages, c.keepHead, c.keepRecent)
+	c.cutUntilFit(&plan, messages)
+	return rebuildTruncation(plan), nil
+}
 
-	oldCount := len(messages)
+type truncationPlan struct {
+	systemMsgs           []provider.Message
+	priorFacts           []string
+	head, middle, recent []provider.Message
+	fullHead, fullMiddle []provider.Message
+	oldCount             int
+}
 
-	var systemMsgs []provider.Message
-	var convMsgs []provider.Message
+func splitTruncationInput(messages []provider.Message, keepHead, keepRecent int) truncationPlan {
+	plan := truncationPlan{oldCount: len(messages)}
+	var conv []provider.Message
 	for _, m := range messages {
 		if m.Role == provider.RoleSystem {
-			systemMsgs = append(systemMsgs, m)
+			plan.systemMsgs = append(plan.systemMsgs, m)
 		} else {
-			convMsgs = append(convMsgs, m)
+			conv = append(conv, m)
 		}
 	}
-
-	// Separate prior facts blocks so they are neither re-summarized as noise
-	// nor silently dropped: their content is merged into the new facts so
-	// key context survives across repeated compactions.
-	var priorFacts []string
 	var nonFacts []provider.Message
-	for _, m := range convMsgs {
+	for _, m := range conv {
 		if m.Role == provider.RoleUser && strings.HasPrefix(m.Content, factsMarker) {
-			priorFacts = append(priorFacts, strings.TrimPrefix(m.Content, factsMarker))
+			plan.priorFacts = append(plan.priorFacts, strings.TrimPrefix(m.Content, factsMarker))
 			continue
 		}
 		nonFacts = append(nonFacts, m)
 	}
+	head, middle, recent := splitHeadMiddleRecent(nonFacts, keepHead, keepRecent)
+	plan.head = head
+	plan.middle = middle
+	plan.recent = ensureToolPairs(recent)
+	plan.fullHead = append([]provider.Message{}, head...)
+	plan.fullMiddle = append([]provider.Message{}, middle...)
+	return plan
+}
 
-	head, middle, recent := splitHeadMiddleRecent(nonFacts, c.keepHead, c.keepRecent)
-	fullMiddle := append([]provider.Message{}, middle...)
-	fullHead := append([]provider.Message{}, head...)
-	recent = ensureToolPairs(recent)
+type fitTrial struct {
+	system, head, middle, recent, original []provider.Message
+}
 
-	// fits reports whether system + head + middle + recent is under both the
-	// post-compaction target budget (so compaction leaves headroom) and the
-	// optional message-count threshold. The target is below the trigger line
-	// to avoid re-firing compaction on the very next turn.
-	fits := func(h, m []provider.Message) bool {
-		trial := make([]provider.Message, 0, len(systemMsgs)+len(h)+len(m)+len(recent))
-		trial = append(trial, systemMsgs...)
-		trial = append(trial, h...)
-		trial = append(trial, m...)
-		trial = append(trial, recent...)
-		budget := c.targetTokens
-		if budget <= 0 {
-			budget = c.tokenLimit
-		}
-		overTokens := budget > 0 && c.trialTokens(trial, messages) > budget
-		overMsgs := c.maxMessages > 0 && len(trial) > c.maxMessages
-		return !overTokens && !overMsgs
+func (c *TruncationCompactor) trialFits(t fitTrial) bool {
+	trial := make([]provider.Message, 0, len(t.system)+len(t.head)+len(t.middle)+len(t.recent))
+	trial = append(trial, t.system...)
+	trial = append(trial, t.head...)
+	trial = append(trial, t.middle...)
+	trial = append(trial, t.recent...)
+	budget := c.targetTokens
+	if budget <= 0 {
+		budget = c.tokenLimit
 	}
+	overTokens := budget > 0 && c.trialTokens(trial, t.original) > budget
+	overMsgs := c.maxMessages > 0 && len(trial) > c.maxMessages
+	return !overTokens && !overMsgs
+}
 
-	// Progressive drop: first remove old tool turn pairs (assistant tool call
-	// + matching tool result) so plain dialog survives, then drop the oldest
-	// remaining middle messages, and only as a last resort the head.
-	middle = dropToolTurnPairs(middle, func(m []provider.Message) bool { return fits(head, m) })
-	middle = dropOldestUntilFit(middle, func(m []provider.Message) bool { return fits(head, m) })
-	head = dropOldestUntilFit(head, func(h []provider.Message) bool { return fits(h, middle) })
+func (c *TruncationCompactor) cutUntilFit(plan *truncationPlan, original []provider.Message) {
+	fits := func(h, m []provider.Message) bool {
+		return c.trialFits(fitTrial{
+			system: plan.systemMsgs, head: h, middle: m, recent: plan.recent, original: original,
+		})
+	}
+	plan.middle = dropToolTurnPairs(plan.middle, func(m []provider.Message) bool { return fits(plan.head, m) })
+	plan.middle = dropOldestUntilFit(plan.middle, func(m []provider.Message) bool { return fits(plan.head, m) })
+	plan.head = dropOldestUntilFit(plan.head, func(h []provider.Message) bool { return fits(h, plan.middle) })
+}
 
-	keptConv := make([]provider.Message, 0, len(head)+len(middle)+len(recent))
-	keptConv = append(keptConv, head...)
-	keptConv = append(keptConv, middle...)
-	keptConv = append(keptConv, recent...)
+func rebuildTruncation(plan truncationPlan) *Result {
+	keptConv := make([]provider.Message, 0, len(plan.head)+len(plan.middle)+len(plan.recent))
+	keptConv = append(keptConv, plan.head...)
+	keptConv = append(keptConv, plan.middle...)
+	keptConv = append(keptConv, plan.recent...)
 	keptConv = ensureToolPairs(keptConv)
 
-	// Facts describe everything that did not survive: the full middle segment
-	// plus any head messages dropped by the last-resort head trimming.
-	droppedHead := fullHead[:len(fullHead)-len(head)]
-	factsInput := make([]provider.Message, 0, len(fullMiddle)+len(droppedHead))
-	factsInput = append(factsInput, fullMiddle...)
+	droppedHead := plan.fullHead[:len(plan.fullHead)-len(plan.head)]
+	factsInput := make([]provider.Message, 0, len(plan.fullMiddle)+len(droppedHead))
+	factsInput = append(factsInput, plan.fullMiddle...)
 	factsInput = append(factsInput, droppedHead...)
 	facts := ExtractFacts(factsInput, defaultFactsMaxChars)
-	facts = mergeFacts(priorFacts, facts, defaultFactsMaxChars)
+	facts = mergeFacts(plan.priorFacts, facts, defaultFactsMaxChars)
 	if facts == "" {
-		facts = buildTruncationSummary(oldCount, len(systemMsgs)+len(keptConv))
+		facts = buildTruncationSummary(plan.oldCount, len(plan.systemMsgs)+len(keptConv))
 	}
 
-	compacted := make([]provider.Message, 0, len(systemMsgs)+1+len(keptConv))
-	compacted = append(compacted, systemMsgs...)
-	compacted = append(compacted, head...)
+	compacted := make([]provider.Message, 0, len(plan.systemMsgs)+1+len(keptConv))
+	compacted = append(compacted, plan.systemMsgs...)
+	compacted = append(compacted, plan.head...)
 	compacted = append(compacted, provider.Message{Role: provider.RoleUser, Content: facts})
-	compacted = append(compacted, middle...)
-	compacted = append(compacted, recent...)
+	compacted = append(compacted, plan.middle...)
+	compacted = append(compacted, plan.recent...)
 
 	return &Result{
 		Compacted: compacted,
-		OldCount:  oldCount,
+		OldCount:  plan.oldCount,
 		NewCount:  len(compacted),
 		Summary:   facts,
-	}, nil
+	}
 }
 
 // splitHeadMiddleRecent partitions conversation messages into the oldest head
@@ -203,24 +215,20 @@ func dropToolTurnPairs(msgs []provider.Message, ok func([]provider.Message) bool
 
 // findOldestToolPair locates the oldest assistant message with tool calls and
 // the index of its first matching tool result (or -1 when no result exists).
-func findOldestToolPair(msgs []provider.Message) (callIdx, resultIdx int) {
-	resultIdx = -1
+func findOldestToolPair(msgs []provider.Message) (int, int) {
 	for i := range msgs {
 		m := msgs[i]
 		if m.Role != provider.RoleAssistant || len(m.ToolCalls) == 0 {
 			continue
 		}
-		callIdx = i
 		for _, tc := range m.ToolCalls {
 			for j := i + 1; j < len(msgs); j++ {
 				if msgs[j].Role == provider.RoleTool && msgs[j].ToolCallID == tc.ID {
-					resultIdx = j
-					return callIdx, resultIdx
+					return i, j
 				}
 			}
 		}
-		// Tool call without a matching result: drop the call alone.
-		return callIdx, -1
+		return i, -1
 	}
 	return -1, -1
 }

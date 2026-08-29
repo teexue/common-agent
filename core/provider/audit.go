@@ -74,7 +74,7 @@ func (a *auditedProvider) Stream(ctx context.Context, req Request) (<-chan Chunk
 	meta := RunMetaFrom(ctx)
 	out, err := a.inner.Stream(ctx, req)
 	if err != nil {
-		a.record(ctx, meta, req, nil, err, start)
+		a.record(ctx, recordArgs{meta: meta, req: req, callErr: err, start: start})
 		return nil, err
 	}
 
@@ -105,42 +105,57 @@ func (a *auditedProvider) Stream(ctx context.Context, req Request) (<-chan Chunk
 			case <-ctx.Done():
 				// Record the aborted call too — timeouts/cancellations are
 				// exactly what the audit log is for.
-				a.record(ctx, meta, req, nil, ctx.Err(), start, inTok, outTok, cacheRead, cacheCreation)
+				a.record(ctx, recordArgs{
+					meta: meta, req: req, callErr: ctx.Err(), start: start,
+					inTok: inTok, outTok: outTok, cacheRead: cacheRead, cacheCreation: cacheCreation,
+				})
 				return
 			}
 		}
 		resp.Text = truncateRunes(resp.Text, textTruncateLimit)
 		resp.Reasoning = truncateRunes(resp.Reasoning, textTruncateLimit)
 		data, _ := json.Marshal(resp)
-		a.record(ctx, meta, req, data, nil, start, inTok, outTok, cacheRead, cacheCreation)
+		a.record(ctx, recordArgs{
+			meta: meta, req: req, resp: data, start: start,
+			inTok: inTok, outTok: outTok, cacheRead: cacheRead, cacheCreation: cacheCreation,
+		})
 	}()
 	return tee, nil
 }
 
-func (a *auditedProvider) record(ctx context.Context, meta RunMeta, req Request, resp json.RawMessage, callErr error, start time.Time, tokens ...int) {
-	reqData, _ := json.Marshal(req)
+type recordArgs struct {
+	meta          RunMeta
+	req           Request
+	resp          json.RawMessage
+	callErr       error
+	start         time.Time
+	inTok         int
+	outTok        int
+	cacheRead     int
+	cacheCreation int
+}
+
+func (a *auditedProvider) record(ctx context.Context, args recordArgs) {
+	reqData, _ := json.Marshal(args.req)
 	id := auth.IdentityFromContext(ctx)
 	rec := audit.RequestRecord{
-		Timestamp:  start,
-		SessionID:  meta.SessionID,
-		UserID:     id.UserID,
-		KeyID:      id.KeyID,
-		Agent:      meta.Agent,
-		Source:     meta.Source,
-		Model:      req.Model,
-		DurationMs: time.Since(start).Milliseconds(),
-		Request:    reqData,
-		Response:   resp,
+		Timestamp:                args.start,
+		SessionID:                args.meta.SessionID,
+		UserID:                   id.UserID,
+		KeyID:                    id.KeyID,
+		Agent:                    args.meta.Agent,
+		Source:                   args.meta.Source,
+		Model:                    args.req.Model,
+		DurationMs:               time.Since(args.start).Milliseconds(),
+		Request:                  reqData,
+		Response:                 args.resp,
+		InputTokens:              args.inTok,
+		OutputTokens:             args.outTok,
+		CacheReadInputTokens:     args.cacheRead,
+		CacheCreationInputTokens: args.cacheCreation,
 	}
-	switch len(tokens) {
-	case 2:
-		rec.InputTokens, rec.OutputTokens = tokens[0], tokens[1]
-	case 4:
-		rec.InputTokens, rec.OutputTokens = tokens[0], tokens[1]
-		rec.CacheReadInputTokens, rec.CacheCreationInputTokens = tokens[2], tokens[3]
-	}
-	if callErr != nil {
-		rec.Error = callErr.Error()
+	if args.callErr != nil {
+		rec.Error = args.callErr.Error()
 	}
 	_ = a.logger.Log(rec)
 }

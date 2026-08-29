@@ -47,46 +47,59 @@ export function ConversationActions({
         </TooltipTrigger>
         <TooltipContent>{t("conversation.searchPlaceholder")}</TooltipContent>
       </Tooltip>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
-            />
-          }
-        >
-          <Download className="h-3.5 w-3.5" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40 rounded-xl">
-          <DropdownMenuItem
-            onClick={() =>
-              downloadFile(
-                exportToMarkdown(messages, agentName),
-                `${agentName}-${Date.now()}.md`,
-                "text/markdown"
-              )
-            }
-            className="gap-2 text-xs"
-          >
-            <FileText className="h-3.5 w-3.5" />{" "}
-            {t("conversation.exportMarkdown")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() =>
-              downloadFile(
-                exportToJson(messages, agentName),
-                `${agentName}-${Date.now()}.json`,
-                "application/json"
-              )
-            }
-            className="gap-2 text-xs"
-          >
-            <FileJson className="h-3.5 w-3.5" /> {t("conversation.exportJson")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <ExportMenu messages={messages} agentName={agentName} />
     </div>
+  )
+}
+
+function ExportMenu({
+  messages,
+  agentName,
+}: {
+  messages: ConversationEntry[]
+  agentName: string
+}) {
+  const { t } = useTranslation()
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
+          />
+        }
+      >
+        <Download className="h-3.5 w-3.5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40 rounded-xl">
+        <DropdownMenuItem
+          onClick={() =>
+            downloadFile(
+              exportToMarkdown(messages, agentName),
+              `${agentName}-${Date.now()}.md`,
+              "text/markdown"
+            )
+          }
+          className="gap-2 text-xs"
+        >
+          <FileText className="h-3.5 w-3.5" />{" "}
+          {t("conversation.exportMarkdown")}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() =>
+            downloadFile(
+              exportToJson(messages, agentName),
+              `${agentName}-${Date.now()}.json`,
+              "application/json"
+            )
+          }
+          className="gap-2 text-xs"
+        >
+          <FileJson className="h-3.5 w-3.5" /> {t("conversation.exportJson")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/teexue/common-agent/core/audit"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/kanban"
 	"github.com/teexue/common-agent/core/loop"
@@ -48,6 +47,11 @@ func (s *Service) ListKanbanItems(userID string) ([]store.KanbanRow, error) {
 		return nil, fmt.Errorf("kanban persistence not configured")
 	}
 	return s.StateDB.ListKanban(userID)
+}
+
+// GetKanbanItem returns a single kanban item after verifying ownership.
+func (s *Service) GetKanbanItem(id, userID string) (*store.KanbanRow, error) {
+	return s.loadKanbanForUser(id, userID)
 }
 
 // CreateKanbanItem validates and persists a new pending kanban item.
@@ -239,10 +243,10 @@ func (s *Service) KanbanRunner() kanban.Runner {
 			item.UpdatedAt = time.Now().UTC()
 			_ = s.StateDB.SaveKanban(item)
 		}
-		// Save the session right away (the loop only persists it at run end)
-		// so the replay endpoint's ownership check passes mid-run. Attribute
-		// it to the kanban item's owner rather than the default local user,
-		// and mark it so it stays out of the conversation session list.
+		// Save the session right away (the loop only persists it at run end).
+		// Attribute it to the kanban item's owner rather than the default
+		// local user, and mark it so it stays out of the conversation
+		// session list.
 		if item.UserID != "" {
 			result.Session.UserID = item.UserID
 		}
@@ -257,17 +261,7 @@ func (s *Service) KanbanRunner() kanban.Runner {
 		}
 		var sb strings.Builder
 		var runErr error
-		turn := 0
 		for ev := range events {
-			if s.EventLogger != nil {
-				if ev.Type == event.TypeDone || ev.Type == event.TypeError {
-					turn++
-				}
-				_ = s.EventLogger.Log(audit.EventRecord{
-					Timestamp: time.Now(), SessionID: result.Session.ID,
-					Agent: item.Agent, Turn: turn, Event: ev,
-				})
-			}
 			switch ev.Type {
 			case event.TypeTextDelta:
 				sb.WriteString(ev.Content)

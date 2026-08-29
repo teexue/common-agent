@@ -93,14 +93,15 @@
     "optimizePrompt": "Optimize prompt",
     "optimizing": "Optimizing...",
     "tokenUsageTooltip": "Input {{input}} · Output {{output}} · Context window {{window}} ({{percent}}%)",
+    "sessionTotalTooltip": "Session total: {{total}} tokens",
     "cacheHitTooltip": "Cache hit: {{cached}} ({{pct}}% hit rate)"
   },
   "layout": {
     "expandSidebar": "Expand sidebar",
     "toolsCount": "{{count}} tools · v{{version}}",
     "newSession": "New session",
-    "replaySession": "Replay session",
     "deleteSession": "Delete session",
+    "sessionRunning": "Running…",
     "historySessions": "History",
     "untitledSession": "Untitled session",
     "toggleTheme": "Toggle theme",
@@ -111,7 +112,8 @@
     "admin": "Admin",
     "apiDocs": "API Docs",
     "kanban": "Kanban",
-    "requestLogs": "Request logs"
+    "requestLogs": "Request logs",
+    "usage": "Token Usage"
   },
   "apiDocs": {
     "title": "API Integration",
@@ -245,7 +247,8 @@
     "tabUsers": "Users",
     "tabApiKeys": "API Keys",
     "tabMonitoring": "Monitoring",
-    "tabRequestLogs": "Request logs"
+    "tabRequestLogs": "Request logs",
+    "tabUsage": "Token Usage"
   },
   "audit": {
     "title": "Request logs",
@@ -287,7 +290,6 @@
     "feedbackLabel": "Feedback",
     "feedbackPlaceholder": "Describe what to fix; it will be injected on rerun",
     "rejectSubmit": "Reject with feedback",
-    "viewReplay": "View replay",
     "deleteConfirm": "Delete task \"{{title}}\"?",
     "resultLabel": "Result",
     "attempts": "{{count}} retries",
@@ -338,7 +340,7 @@
     "accountSwitchModeLogin": "Have an account? Sign in",
     "accountSwitchModeRegister": "Need an account? Register",
     "apiKeys": "API Keys",
-    "apiKeyHint": "API keys authenticate third-party access to /v1/ endpoints. Scopes limit what each key can access; the raw key is shown only once at creation.",
+    "apiKeyHint": "Leave empty to keep the existing API key",
     "apiKeyEnabled": "Enabled",
     "apiKeyDisabled": "Disabled",
     "apiKeyCount": "{{count}} key(s)",
@@ -472,7 +474,6 @@
     "cancel": "Cancel",
     "deleteConfirm": "Delete Provider {{name}}? This cannot be undone.",
     "keepExisting": "Leave empty to keep unchanged",
-    "apiKeyHint": "Leave empty to keep the existing API key",
     "apiKeyPlaceholder": "Paste API key",
     "apiKeyEnvHint": "Leave empty to keep the existing environment variable name",
     "apiKeyEnvPlaceholder": "e.g. OPENAI_API_KEY",
@@ -614,28 +615,6 @@
       "knowledge_list": "List available knowledge bases (id, name, document counts)."
     }
   },
-  "replay": {
-    "title": "Session replay",
-    "noEvents": "No replay events",
-    "fromTurn": "From turn",
-    "toTurn": "To turn",
-    "all": "All",
-    "eventCount": "{{count}} events",
-    "noConversation": "No conversation content",
-    "reset": "Reset",
-    "back": "Back",
-    "pause": "Pause",
-    "play": "Play",
-    "forward": "Forward",
-    "turn": "Turn {{turn}}",
-    "compaction": "Context compaction",
-    "subAgentStart": "Sub-agent start",
-    "subAgentEnd": "Sub-agent end",
-    "error": "Error",
-    "done": "Done",
-    "pendingApproval": "Pending approval",
-    "noAudit": "No audit events"
-  },
   "monitoring": {
     "heapAlloc": "Heap (allocated)",
     "heapSys": "Heap (system)",
@@ -670,10 +649,9 @@
     "fetchSessionFailed": "Failed to fetch session: {{status}}",
     "deleteSessionFailed": "Failed to delete session: {{status}}",
     "updateSessionFailed": "Failed to update session: {{status}}",
-    "replayNotFound": "Session replay not found",
-    "fetchReplayFailed": "Failed to fetch session replay: {{status}}",
     "fetchRequestLogsFailed": "Failed to fetch request logs: {{status}}",
     "fetchRequestLogDetailFailed": "Failed to fetch request log detail: {{status}}",
+    "fetchUsageSummaryFailed": "Failed to fetch usage summary: {{status}}",
     "fetchAgentsFailed": "Failed to fetch agents: {{status}}",
     "agentNotFound": "Agent not found",
     "fetchAgentFailed": "Failed to fetch agent: {{status}}",
@@ -732,5 +710,20 @@
     "approveKanbanFailed": "Failed to approve kanban task: {{status}}",
     "rejectKanbanFailed": "Failed to reject kanban task: {{status}}",
     "requeueKanbanFailed": "Failed to requeue kanban task: {{status}}"
+  },
+  "usage": {
+    "title": "Token Usage",
+    "empty": "No usage recorded",
+    "totalTokens": "Total Tokens",
+    "inputTokens": "Input",
+    "outputTokens": "Output",
+    "requests": "Requests",
+    "daily": "Daily usage",
+    "byModel": "By model",
+    "bySession": "By session (top 20)",
+    "days0": "All time",
+    "days1": "Today",
+    "days7": "Last 7 days",
+    "days30": "Last 30 days"
   }
 }

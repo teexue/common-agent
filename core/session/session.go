@@ -32,14 +32,26 @@ const MetadataKeyUsageInputTokens = "usage.input_tokens"
 // recent LLM request, so compaction can estimate only the delta appended since.
 const MetadataKeyUsageMsgCount = "usage.message_count"
 
-// MetadataKeyUsageTotalInputTokens and friends store the cumulative provider
-// token usage across every run of this session (unlike MetadataKeyUsageInputTokens
-// which only holds the most recent single request for compaction). The UI reads
-// these to restore the token-usage indicator after reloading a session.
+// MetadataKeyUsageTotalInputTokens stores cumulative prompt tokens across every
+// run of this session (unlike MetadataKeyUsageInputTokens, which only holds the
+// most recent request for compaction). The UI reads it to restore the
+// token-usage indicator after reloading a session.
 const MetadataKeyUsageTotalInputTokens = "usage.total_input_tokens"
+
+// MetadataKeyUsageTotalOutputTokens stores cumulative completion tokens across
+// every run of this session, paired with MetadataKeyUsageTotalInputTokens.
 const MetadataKeyUsageTotalOutputTokens = "usage.total_output_tokens"
+
+// MetadataKeyUsageCacheReadTokens stores cumulative prompt-cache hits reported
+// by the provider, so the UI can show cache savings after a reload.
 const MetadataKeyUsageCacheReadTokens = "usage.cache_read_tokens"
+
+// MetadataKeyUsageCacheCreationTokens stores cumulative tokens written into the
+// provider prompt cache across runs of this session.
 const MetadataKeyUsageCacheCreationTokens = "usage.cache_creation_tokens"
+
+// MetadataKeyUsageContextWindow stores the model's effective context window
+// (replaced, not accumulated, because it is a model property not a running total).
 const MetadataKeyUsageContextWindow = "usage.context_window"
 
 // MetadataKeyUsageOutputTokens stores the real output token count of the most

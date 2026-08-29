@@ -88,7 +88,7 @@ func (idx *indexDB) deleteDocument(docID string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.Exec(`DELETE FROM chunks WHERE doc_id = ?`, docID); err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func (idx *indexDB) upsertDocument(doc Document, chunks []chunkRow) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.Exec(`DELETE FROM chunks WHERE doc_id = ?`, doc.ID); err != nil {
 		return err
 	}

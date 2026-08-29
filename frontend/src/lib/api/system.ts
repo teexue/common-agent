@@ -3,8 +3,6 @@ import type { MetricsData, HealthStatus } from "@/types/agent"
 
 import { langHeaders } from "./client"
 
-// ─── Tools API ────────────────────────────────────────────────────
-
 /** Fetches the list of registered tools with their schemas. */
 export async function fetchTools(): Promise<
   Array<{
@@ -18,8 +16,6 @@ export async function fetchTools(): Promise<
     throw new Error(i18n.t("api.fetchToolsFailed", { status: res.status }))
   return (await res.json()) ?? []
 }
-
-// ─── Health & Metrics API ─────────────────────────────────────────
 
 /** Fetches the server build version (injected at release time). */
 export async function fetchVersion(): Promise<string> {
@@ -55,8 +51,6 @@ export async function fetchHealth(): Promise<HealthStatus> {
   }
   return data
 }
-
-// ─── Filesystem API ───────────────────────────────────────────────
 
 export interface DirEntryInfo {
   name: string

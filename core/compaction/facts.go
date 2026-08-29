@@ -33,130 +33,153 @@ func ExtractFacts(messages []provider.Message, maxChars int) string {
 	if maxChars <= 0 {
 		maxChars = defaultFactsMaxChars
 	}
-
-	var userMsgs []string
-	var toolFacts []string
-	seenUser := map[string]bool{}
-	seenTool := map[string]bool{}
-	pathSeen := map[string]bool{}
-	var pathFacts []string
-
-	// Walk from newest to oldest so the most recent intents win the limited
-	// space, then reverse for chronological display.
-	collectPaths := func(s string) {
-		if len(pathFacts) >= maxPathFacts {
-			return
-		}
-		for _, m := range filePathRe.FindAllString(s, -1) {
-			if len(pathFacts) >= maxPathFacts {
-				break
-			}
-			key := strings.ToLower(m)
-			if pathSeen[key] {
-				continue
-			}
-			pathSeen[key] = true
-			pathFacts = append(pathFacts, m)
-		}
+	c := newFactCollector()
+	c.ingest(messages)
+	block := c.format()
+	if block == "" {
+		return ""
 	}
+	return c.trimToBudget(block, maxChars)
+}
 
+type factCollector struct {
+	userMsgs  []string
+	toolFacts []string
+	pathFacts []string
+	seenUser  map[string]bool
+	seenTool  map[string]bool
+	pathSeen  map[string]bool
+}
+
+func newFactCollector() *factCollector {
+	return &factCollector{
+		seenUser: map[string]bool{},
+		seenTool: map[string]bool{},
+		pathSeen: map[string]bool{},
+	}
+}
+
+func (c *factCollector) ingest(messages []provider.Message) {
 	for i := len(messages) - 1; i >= 0; i-- {
 		m := messages[i]
 		switch m.Role {
 		case provider.RoleUser:
-			text := strings.TrimSpace(m.Content)
-			if text == "" {
-				continue
-			}
-			collectPaths(text)
-			if seenUser[text] || len(userMsgs) >= maxUserFacts {
-				continue
-			}
-			seenUser[text] = true
-			userMsgs = append(userMsgs, truncateRunes(text, maxUserFactRunes))
+			c.collectUser(m.Content)
 		case provider.RoleAssistant:
-			if len(m.ToolCalls) > 0 {
-				for _, tc := range m.ToolCalls {
-					if len(toolFacts) >= maxToolFacts {
-						break
-					}
-					key := tc.Name
-					if seenTool[key] {
-						continue
-					}
-					seenTool[key] = true
-					toolFacts = append(toolFacts, "工具: "+tc.Name)
-				}
-			}
-			collectPaths(m.Content)
+			c.collectAssistant(m)
 		case provider.RoleTool:
-			collectPaths(m.Content)
-			if len(toolFacts) >= maxToolFacts {
-				continue
-			}
-			key := "result:" + m.Name
-			if seenTool[key] {
-				continue
-			}
-			seenTool[key] = true
-			body := strings.TrimSpace(m.Content)
-			if body == "" {
-				continue
-			}
-			toolFacts = append(toolFacts, "工具 "+m.Name+" 返回: "+truncateRunes(body, maxToolFactChars))
+			c.collectToolResult(m)
 		}
 	}
+}
 
-	var sb strings.Builder
-	if len(userMsgs) == 0 && len(pathFacts) == 0 && len(toolFacts) == 0 {
+func (c *factCollector) collectPaths(s string) {
+	if len(c.pathFacts) >= maxPathFacts {
+		return
+	}
+	for _, m := range filePathRe.FindAllString(s, -1) {
+		if len(c.pathFacts) >= maxPathFacts {
+			break
+		}
+		key := strings.ToLower(m)
+		if c.pathSeen[key] {
+			continue
+		}
+		c.pathSeen[key] = true
+		c.pathFacts = append(c.pathFacts, m)
+	}
+}
+
+func (c *factCollector) collectUser(text string) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return
+	}
+	c.collectPaths(text)
+	if c.seenUser[text] || len(c.userMsgs) >= maxUserFacts {
+		return
+	}
+	c.seenUser[text] = true
+	c.userMsgs = append(c.userMsgs, truncateRunes(text, maxUserFactRunes))
+}
+
+func (c *factCollector) collectAssistant(m provider.Message) {
+	for _, tc := range m.ToolCalls {
+		if len(c.toolFacts) >= maxToolFacts {
+			break
+		}
+		if c.seenTool[tc.Name] {
+			continue
+		}
+		c.seenTool[tc.Name] = true
+		c.toolFacts = append(c.toolFacts, "工具: "+tc.Name)
+	}
+	c.collectPaths(m.Content)
+}
+
+func (c *factCollector) collectToolResult(m provider.Message) {
+	c.collectPaths(m.Content)
+	if len(c.toolFacts) >= maxToolFacts {
+		return
+	}
+	key := "result:" + m.Name
+	if c.seenTool[key] {
+		return
+	}
+	c.seenTool[key] = true
+	body := strings.TrimSpace(m.Content)
+	if body == "" {
+		return
+	}
+	c.toolFacts = append(c.toolFacts, "工具 "+m.Name+" 返回: "+truncateRunes(body, maxToolFactChars))
+}
+
+func (c *factCollector) writeUsers(sb *strings.Builder) {
+	for i := len(c.userMsgs) - 1; i >= 0; i-- {
+		sb.WriteString("\n用户: ")
+		sb.WriteString(c.userMsgs[i])
+	}
+}
+
+func (c *factCollector) format() string {
+	if len(c.userMsgs) == 0 && len(c.pathFacts) == 0 && len(c.toolFacts) == 0 {
 		return ""
 	}
+	var sb strings.Builder
 	sb.WriteString(factsMarker)
-	// Newest first, then reversed to chronological order.
-	for i := len(userMsgs) - 1; i >= 0; i-- {
-		sb.WriteString("\n用户: ")
-		sb.WriteString(userMsgs[i])
-	}
-	for _, p := range pathFacts {
+	c.writeUsers(&sb)
+	for _, p := range c.pathFacts {
 		sb.WriteString("\n文件: ")
 		sb.WriteString(p)
 	}
-	for i := len(toolFacts) - 1; i >= 0; i-- {
+	for i := len(c.toolFacts) - 1; i >= 0; i-- {
 		sb.WriteString("\n")
-		sb.WriteString(toolFacts[i])
+		sb.WriteString(c.toolFacts[i])
 	}
+	return sb.String()
+}
 
-	// If over budget, drop whole groups in priority order — tool results
-	// first, then paths — before truncating the most valuable user intents.
-	userBlock := sb.String()
-	if len(userBlock) > maxChars && len(toolFacts) > 0 {
-		sb.Reset()
+func (c *factCollector) trimToBudget(block string, maxChars int) string {
+	if len(block) > maxChars && len(c.toolFacts) > 0 {
+		var sb strings.Builder
 		sb.WriteString(factsMarker)
-		for i := len(userMsgs) - 1; i >= 0; i-- {
-			sb.WriteString("\n用户: ")
-			sb.WriteString(userMsgs[i])
-		}
-		for _, p := range pathFacts {
+		c.writeUsers(&sb)
+		for _, p := range c.pathFacts {
 			sb.WriteString("\n文件: ")
 			sb.WriteString(p)
 		}
-		userBlock = sb.String()
+		block = sb.String()
 	}
-	if len(userBlock) > maxChars && len(pathFacts) > 0 {
-		sb.Reset()
+	if len(block) > maxChars && len(c.pathFacts) > 0 {
+		var sb strings.Builder
 		sb.WriteString(factsMarker)
-		for i := len(userMsgs) - 1; i >= 0; i-- {
-			sb.WriteString("\n用户: ")
-			sb.WriteString(userMsgs[i])
-		}
-		userBlock = sb.String()
+		c.writeUsers(&sb)
+		block = sb.String()
 	}
-	if len(userBlock) > maxChars {
-		// Keep the newest content: user intents are appended chronologically,
-		// so the tail holds the most recent instructions. Budget is in bytes.
-		userBlock = truncateTailBytes(userBlock, maxChars)
+	if len(block) > maxChars {
+		block = truncateTailBytes(block, maxChars)
 	}
-	return userBlock
+	return block
 }
 
 // truncateRunes returns s truncated to at most max runes (with an ellipsis

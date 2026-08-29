@@ -10,11 +10,11 @@ import (
 // the lightest intervention to the heaviest, mirroring Claude Code's design:
 //
 //  1. Trim   — shrink verbose tool results in place (no LLM, no data loss
-//              beyond chatty output).
+//     beyond chatty output).
 //  2. Snip   — progressively drop oldest middle turns into a key-facts block
-//              (no LLM, LRU-style archival).
+//     (no LLM, LRU-style archival).
 //  3. Collapse — LLM-summarize older turns when snip alone cannot fit the
-//              budget (falls back to snip when no provider is configured).
+//     budget (falls back to snip when no provider is configured).
 //
 // Each tier runs only if the previous one did not bring estimated tokens
 // down to the target budget, so the conversation degrades gracefully rather
@@ -68,7 +68,7 @@ func (c *CascadeCompactor) Compact(ctx context.Context, messages []provider.Mess
 		if EstimateTokens(msgs) <= c.targetTokens {
 			return &Result{
 				Compacted: msgs, OldCount: oldCount, NewCount: len(msgs),
-				Summary:   "[compaction: trimmed verbose tool outputs]",
+				Summary: "[compaction: trimmed verbose tool outputs]",
 			}, nil
 		}
 	}

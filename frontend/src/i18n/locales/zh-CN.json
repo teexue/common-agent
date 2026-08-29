@@ -92,14 +92,15 @@
     "optimizePrompt": "优化提示词",
     "optimizing": "优化中...",
     "tokenUsageTooltip": "输入 {{input}} · 输出 {{output}} · 上下文窗口 {{window}}（{{percent}}%）",
+    "sessionTotalTooltip": "本次会话累计消耗 {{total}} tokens",
     "cacheHitTooltip": "缓存命中：{{cached}}（命中率 {{pct}}%）"
   },
   "layout": {
     "expandSidebar": "展开侧边栏",
     "toolsCount": "{{count}} 工具 · v{{version}}",
     "newSession": "新建会话",
-    "replaySession": "回放会话",
     "deleteSession": "删除会话",
+    "sessionRunning": "执行中…",
     "historySessions": "历史会话",
     "untitledSession": "未命名会话",
     "toggleTheme": "切换主题",
@@ -110,7 +111,8 @@
     "admin": "管理后台",
     "apiDocs": "API 文档",
     "kanban": "看板",
-    "requestLogs": "请求日志"
+    "requestLogs": "请求日志",
+    "usage": "Token 消耗"
   },
   "apiDocs": {
     "title": "API 对接文档",
@@ -244,7 +246,8 @@
     "tabUsers": "用户",
     "tabApiKeys": "API Key",
     "tabMonitoring": "监控",
-    "tabRequestLogs": "请求日志"
+    "tabRequestLogs": "请求日志",
+    "tabUsage": "Token 消耗"
   },
   "audit": {
     "title": "请求日志",
@@ -286,7 +289,6 @@
     "feedbackLabel": "反馈",
     "feedbackPlaceholder": "说明需要修改的内容，重跑时会注入给 Agent",
     "rejectSubmit": "拒绝并退回",
-    "viewReplay": "查看回放",
     "deleteConfirm": "确定删除任务「{{title}}」？",
     "resultLabel": "结果",
     "attempts": "已重试 {{count}} 次",
@@ -337,7 +339,7 @@
     "accountSwitchModeLogin": "已有账户？去登录",
     "accountSwitchModeRegister": "没有账户？去注册",
     "apiKeys": "API Key",
-    "apiKeyHint": "API Key 用于第三方访问 /v1/ 接口。scope 限制每个密钥可访问的范围；明文密钥仅在创建时展示一次。",
+    "apiKeyHint": "留空则保持现有 API Key 不变",
     "apiKeyEnabled": "已启用",
     "apiKeyDisabled": "已停用",
     "apiKeyCount": "共 {{count}} 个",
@@ -471,7 +473,6 @@
     "cancel": "取消",
     "deleteConfirm": "确定要删除 Provider {{name}} 吗？",
     "keepExisting": "留空保持不变",
-    "apiKeyHint": "留空则保持现有 API Key 不变",
     "apiKeyPlaceholder": "粘贴 API Key",
     "apiKeyEnvHint": "留空则保持现有环境变量名不变",
     "apiKeyEnvPlaceholder": "例如 OPENAI_API_KEY",
@@ -613,28 +614,6 @@
       "knowledge_list": "列出可用知识库（id、名称、文档数）。"
     }
   },
-  "replay": {
-    "title": "会话回放",
-    "noEvents": "暂无回放事件",
-    "fromTurn": "起始轮次",
-    "toTurn": "结束轮次",
-    "all": "全部",
-    "eventCount": "共 {{count}} 条事件",
-    "noConversation": "暂无对话内容",
-    "reset": "重置",
-    "back": "后退",
-    "pause": "暂停",
-    "play": "播放",
-    "forward": "前进",
-    "turn": "轮次 {{turn}}",
-    "compaction": "上下文压缩",
-    "subAgentStart": "子 Agent 启动",
-    "subAgentEnd": "子 Agent 结束",
-    "error": "错误",
-    "done": "完成",
-    "pendingApproval": "待审批",
-    "noAudit": "暂无审计事件"
-  },
   "monitoring": {
     "heapAlloc": "堆内存 (已分配)",
     "heapSys": "堆内存 (系统)",
@@ -669,10 +648,9 @@
     "fetchSessionFailed": "获取会话失败: {{status}}",
     "deleteSessionFailed": "删除会话失败: {{status}}",
     "updateSessionFailed": "更新会话失败: {{status}}",
-    "replayNotFound": "会话回放不存在",
-    "fetchReplayFailed": "获取会话回放失败: {{status}}",
     "fetchRequestLogsFailed": "获取请求日志失败: {{status}}",
     "fetchRequestLogDetailFailed": "获取请求日志详情失败: {{status}}",
+    "fetchUsageSummaryFailed": "获取消耗统计失败: {{status}}",
     "fetchAgentsFailed": "获取 Agent 列表失败: {{status}}",
     "agentNotFound": "Agent 不存在",
     "fetchAgentFailed": "获取 Agent 失败: {{status}}",
@@ -731,5 +709,20 @@
     "approveKanbanFailed": "通过看板任务失败: {{status}}",
     "rejectKanbanFailed": "拒绝看板任务失败: {{status}}",
     "requeueKanbanFailed": "重新排队失败: {{status}}"
+  },
+  "usage": {
+    "title": "Token 消耗",
+    "empty": "暂无消耗记录",
+    "totalTokens": "总 Token",
+    "inputTokens": "输入",
+    "outputTokens": "输出",
+    "requests": "请求数",
+    "daily": "每日消耗",
+    "byModel": "按模型",
+    "bySession": "按会话（前 20）",
+    "days0": "全部时间",
+    "days1": "今天",
+    "days7": "近 7 天",
+    "days30": "近 30 天"
   }
 }

@@ -43,9 +43,12 @@ type ConfigView struct {
 	HasAPIKey  bool   `json:"has_api_key"`
 }
 
-// Backend names.
 const (
+	// BackendOpenAI selects an OpenAI-compatible /embeddings HTTP API (API key,
+	// base URL, and model required). Used when backend is empty.
 	BackendOpenAI = "openai"
+	// BackendOllama selects a local Ollama embeddings endpoint (no API key;
+	// defaults to http://127.0.0.1:11434).
 	BackendOllama = "ollama"
 )
 
@@ -81,21 +84,7 @@ func (c Config) Normalize() Config {
 	}
 	if c.Vendor != "" {
 		if v, ok := LookupVendor(c.Vendor); ok {
-			if c.Backend == "" {
-				c.Backend = v.Backend
-			}
-			if c.BaseURL == "" {
-				c.BaseURL = v.BaseURL
-			}
-			if c.APIKeyEnv == "" {
-				c.APIKeyEnv = v.APIKeyEnv
-			}
-			if c.Model == "" {
-				c.Model = v.DefaultModel
-			}
-			if c.Dimensions == 0 && v.DefaultDimensions > 0 {
-				c.Dimensions = v.DefaultDimensions
-			}
+			c = c.applyVendor(v)
 		}
 	}
 	if c.Backend == "" {
@@ -103,6 +92,25 @@ func (c Config) Normalize() Config {
 	}
 	if c.Backend == BackendOllama && c.BaseURL == "" {
 		c.BaseURL = "http://127.0.0.1:11434"
+	}
+	return c
+}
+
+func (c Config) applyVendor(v Vendor) Config {
+	if c.Backend == "" {
+		c.Backend = v.Backend
+	}
+	if c.BaseURL == "" {
+		c.BaseURL = v.BaseURL
+	}
+	if c.APIKeyEnv == "" {
+		c.APIKeyEnv = v.APIKeyEnv
+	}
+	if c.Model == "" {
+		c.Model = v.DefaultModel
+	}
+	if c.Dimensions == 0 && v.DefaultDimensions > 0 {
+		c.Dimensions = v.DefaultDimensions
 	}
 	return c
 }

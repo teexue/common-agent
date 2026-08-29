@@ -37,11 +37,9 @@ type Server struct {
 	store         session.Store           // optional session persistence; nil disables session endpoints
 	svc           *service.Service        // shared business logic
 	approver      *HTTPApprover           // handles tool approval flow
-	eventLogger   *audit.EventLogger      // optional event logging; nil disables replay
 	requestLogger *audit.RequestLogger    // optional LLM request audit; nil disables request logs
 	catalog       *provider.Catalog       // optional provider catalog; nil disables provider listing
 	creds         *config.CredentialStore // optional credentials for provider upsert/reload
-	auditStore    *audit.AuditStore       // optional audit store; nil disables audit export
 	health        *telemetry.HealthServer
 	watcher       *agent.Watcher  // watches agents dir for changes
 	shutdownCtx   context.Context // cancelled on server shutdown; nil = no shutdown propagation
@@ -116,13 +114,6 @@ func (s *Server) Service() *service.Service {
 func (s *Server) SetStore(store session.Store) {
 	s.store = store
 	s.svc.Store = store
-}
-
-// SetEventLogger sets the event logger for session replay. Background runs
-// (e.g. the kanban worker) log through the service as well.
-func (s *Server) SetEventLogger(el *audit.EventLogger) {
-	s.eventLogger = el
-	s.svc.EventLogger = el
 }
 
 // SetRequestLogger sets the LLM request audit logger on the service.
@@ -351,11 +342,6 @@ func (s *Server) StopWatcher() {
 	if s.watcher != nil {
 		s.watcher.Stop()
 	}
-}
-
-// SetAuditStore sets the audit store for audit export.
-func (s *Server) SetAuditStore(as *audit.AuditStore) {
-	s.auditStore = as
 }
 
 // Health returns the health server for adding custom checkers.

@@ -131,39 +131,47 @@ func runSkillsInfo(args []string) {
 	fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.format"), s.Format)
 	fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.description"), s.Description)
 	fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.directory"), s.Dir)
+	printMDSkillInfo(s)
+	printLegacySkillInfo(s)
+}
 
-	if s.MDManifest != nil {
-		fm := s.MDManifest.Frontmatter
-		if fm.License != "" {
-			fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.license"), fm.License)
-		}
-		if fm.Compatibility != "" {
-			fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.compat"), fm.Compatibility)
-		}
-		if len(fm.Metadata) > 0 {
-			fmt.Printf("%-12s %v\n", i18n.T("cli.skills.info.metadata"), fm.Metadata)
-		}
-		if fm.AllowedTools != "" {
-			fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.allowed"), fm.AllowedTools)
-		}
-		if s.Body() != "" {
-			fmt.Printf("\n%s\n%s\n", i18n.T("cli.skills.info.instructions"), s.Body())
-		}
+func printMDSkillInfo(s *skill.Skill) {
+	if s.MDManifest == nil {
+		return
 	}
+	fm := s.MDManifest.Frontmatter
+	if fm.License != "" {
+		fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.license"), fm.License)
+	}
+	if fm.Compatibility != "" {
+		fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.compat"), fm.Compatibility)
+	}
+	if len(fm.Metadata) > 0 {
+		fmt.Printf("%-12s %v\n", i18n.T("cli.skills.info.metadata"), fm.Metadata)
+	}
+	if fm.AllowedTools != "" {
+		fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.allowed"), fm.AllowedTools)
+	}
+	if s.Body() != "" {
+		fmt.Printf("\n%s\n%s\n", i18n.T("cli.skills.info.instructions"), s.Body())
+	}
+}
 
-	if s.LegacyManifest != nil {
-		m := s.LegacyManifest
-		if m.Author != "" {
-			fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.author"), m.Author)
+func printLegacySkillInfo(s *skill.Skill) {
+	if s.LegacyManifest == nil {
+		return
+	}
+	m := s.LegacyManifest
+	if m.Author != "" {
+		fmt.Printf("%-12s %s\n", i18n.T("cli.skills.info.author"), m.Author)
+	}
+	fmt.Println(i18n.T("cli.skills.info.tools_header", "count", len(m.Tools)))
+	for _, t := range m.Tools {
+		typ := t.Type
+		if typ == "" {
+			typ = i18n.T("cli.skills.tool_type_prompt")
 		}
-		fmt.Println(i18n.T("cli.skills.info.tools_header", "count", len(m.Tools)))
-		for _, t := range m.Tools {
-			typ := t.Type
-			if typ == "" {
-				typ = i18n.T("cli.skills.tool_type_prompt")
-			}
-			fmt.Printf("  %-20s [%s] %s\n", t.Name, typ, t.Description)
-		}
+		fmt.Printf("  %-20s [%s] %s\n", t.Name, typ, t.Description)
 	}
 }
 

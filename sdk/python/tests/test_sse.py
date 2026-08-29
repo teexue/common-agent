@@ -52,8 +52,8 @@ class TestParseSSELine:
     def test_returns_none_for_invalid_json(self):
         assert parse_sse_line("data: {invalid json}") is None
 
-    def test_parses_sub_agent_events(self):
-        event = parse_sse_line('data: {"type":"sub_agent_start","tool":"worker","content":"task"}')
-        assert event is not None
-        assert event.type == EventType.SUB_AGENT_START
-        assert event.tool == "worker"
+    def test_parses_every_event_type(self):
+        for typ in EventType:
+            event = parse_sse_line(f'data: {{"type":"{typ.value}"}}')
+            assert event is not None
+            assert event.type == typ

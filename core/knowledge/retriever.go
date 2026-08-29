@@ -22,9 +22,9 @@ func NewRetriever(mgr *Manager, emb embedding.Embedder) *Retriever {
 
 // SearchOptions controls retrieval.
 type SearchOptions struct {
-	Query  string
-	KBIDs  []string // empty = all bases
-	TopK   int
+	Query string
+	KBIDs []string // empty = all bases
+	TopK  int
 }
 
 // Search embeds the query and returns top-k hits across selected bases.
@@ -101,4 +101,3 @@ func (r *Retriever) searchKB(kbID string, queryVec []float32) ([]Hit, error) {
 	}
 	return hits, nil
 }
-

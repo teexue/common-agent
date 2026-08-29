@@ -22,10 +22,10 @@ func EventToProto(ev event.Event) *commonagentv1.AgentEvent {
 		Turns:      int32(ev.Turns),
 	}
 	if ev.Input != nil {
-		pb.Input = json.RawMessage(ev.Input)
+		pb.Input = ev.Input
 	}
 	if ev.Output != nil {
-		pb.Output = json.RawMessage(ev.Output)
+		pb.Output = ev.Output
 	}
 	return pb
 }

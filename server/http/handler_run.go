@@ -9,7 +9,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/teexue/common-agent/core/audit"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/provider"
@@ -35,7 +34,7 @@ type RunRequest struct {
 func (s *Server) handleRun(c *gin.Context) {
 	var req RunRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 
@@ -69,7 +68,7 @@ func (s *Server) handleRun(c *gin.Context) {
 			msgKey = "api.error.provider_error"
 			status = http.StatusInternalServerError
 		}
-		respondErrorDetails(c, status, code, msgKey, err.Error())
+		respondErrorDetails(c, errorDetails{Status: status, Code: code, MsgKey: msgKey, Details: err.Error()})
 		return
 	}
 
@@ -86,7 +85,7 @@ func (s *Server) handleRun(c *gin.Context) {
 
 	events, err := loop.Run(runCtx, result.Config)
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "run_error", "api.error.run_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "run_error", MsgKey: "api.error.run_error", Details: err.Error()})
 		return
 	}
 
@@ -98,7 +97,7 @@ func (s *Server) streamEvents(c *gin.Context, events <-chan event.Event, agentNa
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 	// Expose the session id before the first data frame so the client can
-	// update its URL and reconnect via replay immediately on a refresh,
+	// update its URL immediately and recover its place after a refresh,
 	// without waiting for the trailing `done` event.
 	c.Header("X-Session-Id", sessionID)
 	// Disable proxy buffering (e.g. nginx) so SSE frames flush immediately.
@@ -114,27 +113,24 @@ func (s *Server) streamEvents(c *gin.Context, events <-chan event.Event, agentNa
 	runStart := time.Now()
 	s.health.AgentMetrics.RecordRunStart(agentName)
 
-	turn := 0
 	runSuccess := false
 	for ev := range events {
-		if s.eventLogger != nil {
-			if ev.Type == event.TypeDone || ev.Type == event.TypeError {
-				turn++
-			}
-			_ = s.eventLogger.Log(audit.EventRecord{
-				Timestamp: time.Now(), SessionID: sessionID,
-				Agent: agentName, Turn: turn, Event: ev,
-			})
-		}
 		if ev.Type == event.TypeDone && ev.Status == "completed" {
 			runSuccess = true
 		}
-		data, _ := json.Marshal(ev)
-		fmt.Fprintf(c.Writer, "data: %s\n\n", data)
+		fmt.Fprint(c.Writer, encodeRunSSE(ev))
 		flusher.Flush()
 	}
 
 	s.health.AgentMetrics.RecordRunEnd(agentName, time.Since(runStart), runSuccess)
+}
+
+func encodeRunSSE(ev event.Event) string {
+	data, err := json.Marshal(ev)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("data: %s\n\n", data)
 }
 
 // mergeContext returns a context that is cancelled when either a or b is done.

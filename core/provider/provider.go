@@ -11,10 +11,16 @@ import (
 type Role string
 
 const (
-	RoleSystem    Role = "system"
-	RoleUser      Role = "user"
+	// RoleSystem is prompt/instruction text sent as the provider's system
+	// channel (Anthropic system parts; OpenAI "system" messages).
+	RoleSystem Role = "system"
+	// RoleUser is a human (or injected) turn that the model should answer.
+	RoleUser Role = "user"
+	// RoleAssistant is a model turn, including text and any requested tool calls.
 	RoleAssistant Role = "assistant"
-	RoleTool      Role = "tool"
+	// RoleTool is a tool-result message bound to a prior assistant tool call
+	// (OpenAI "tool"; Anthropic tool_result blocks).
+	RoleTool Role = "tool"
 )
 
 // ToolCall is a model-requested tool invocation.

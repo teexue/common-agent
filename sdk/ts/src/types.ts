@@ -1,15 +1,21 @@
 /**
  * Event types emitted by the agent stream.
- * Mirrors core/event/event.go and frontend/src/types/agent.ts.
+ * Mirrors core/event.AllTypes. Adding a Go type requires appending here.
  */
-export type EventType =
-  | "text_delta"
-  | "reasoning_delta"
-  | "tool_start"
-  | "tool_result"
-  | "tool_approval_required"
-  | "error"
-  | "done"
+export const ALL_EVENT_TYPES = [
+  "text_delta",
+  "reasoning_delta",
+  "tool_start",
+  "tool_result",
+  "tool_approval_required",
+  "compaction",
+  "sub_agent_start",
+  "sub_agent_end",
+  "error",
+  "done",
+] as const
+
+export type EventType = (typeof ALL_EVENT_TYPES)[number]
 
 /**
  * A single agent stream event.

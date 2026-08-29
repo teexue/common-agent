@@ -32,7 +32,7 @@ func (s *Server) handleKnowledgeCreate(c *gin.Context) {
 		Description string `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	meta, err := s.svc.CreateKnowledge(req.ID, req.Name, req.Description)
@@ -58,7 +58,7 @@ func (s *Server) handleKnowledgeUpdate(c *gin.Context) {
 		Description string `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	meta, err := s.svc.UpdateKnowledge(c.Param("id"), req.Name, req.Description)
@@ -92,18 +92,18 @@ func (s *Server) handleKnowledgeDocsList(c *gin.Context) {
 func (s *Server) handleKnowledgeDocUpload(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	f, err := file.Open()
 	if err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
 		return
 	}
 	defer f.Close()
 	content, err := io.ReadAll(f)
 	if err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
 		return
 	}
 	doc, err := s.svc.AddKnowledgeDocument(c.Request.Context(), c.Param("id"), file.Filename, content)
@@ -137,7 +137,7 @@ func (s *Server) handleKnowledgeSearch(c *gin.Context) {
 		TopK  int      `json:"top_k"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	hits, err := s.svc.SearchKnowledge(c.Request.Context(), req.Query, req.KBIDs, req.TopK)
@@ -154,7 +154,7 @@ func (s *Server) handleKnowledgeSearch(c *gin.Context) {
 func (s *Server) handleEmbeddingGet(c *gin.Context) {
 	view, err := s.svc.GetEmbeddingSettings()
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "config_error", "api.error.config_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "config_error", MsgKey: "api.error.config_error", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, view)
@@ -167,7 +167,7 @@ func (s *Server) handleEmbeddingVendors(c *gin.Context) {
 func (s *Server) handleEmbeddingPut(c *gin.Context) {
 	var req service.SaveEmbeddingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	if err := s.svc.SaveEmbeddingSettings(req); err != nil {
@@ -176,7 +176,7 @@ func (s *Server) handleEmbeddingPut(c *gin.Context) {
 	}
 	view, err := s.svc.GetEmbeddingSettings()
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "config_error", "api.error.config_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "config_error", MsgKey: "api.error.config_error", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, view)
@@ -185,21 +185,21 @@ func (s *Server) handleEmbeddingPut(c *gin.Context) {
 func respondKnowledgeErr(c *gin.Context, err error) {
 	var arg *service.ArgError
 	if errors.As(err, &arg) {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request", arg.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: arg.Error()})
 		return
 	}
 	var srv *service.ServerError
 	if errors.As(err, &srv) {
-		respondErrorDetails(c, http.StatusServiceUnavailable, "knowledge_error", "api.error.knowledge_error", srv.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusServiceUnavailable, Code: "knowledge_error", MsgKey: "api.error.knowledge_error", Details: srv.Error()})
 		return
 	}
 	if errors.Is(err, os.ErrNotExist) || strings.Contains(err.Error(), "not exist") {
-		respondErrorDetails(c, http.StatusNotFound, "not_found", "api.error.not_found", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusNotFound, Code: "not_found", MsgKey: "api.error.not_found", Details: err.Error()})
 		return
 	}
 	if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "unsupported") || strings.Contains(err.Error(), "invalid id") {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
 		return
 	}
-	respondErrorDetails(c, http.StatusInternalServerError, "knowledge_error", "api.error.knowledge_error", err.Error())
+	respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "knowledge_error", MsgKey: "api.error.knowledge_error", Details: err.Error()})
 }

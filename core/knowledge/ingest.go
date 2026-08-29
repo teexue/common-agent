@@ -13,8 +13,8 @@ import (
 )
 
 var allowedExts = map[string]bool{
-	".md":   true,
-	".txt":  true,
+	".md":       true,
+	".txt":      true,
 	".markdown": true,
 }
 

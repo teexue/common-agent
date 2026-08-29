@@ -92,7 +92,7 @@ func (db *DB) Close() error {
 }
 
 func (db *DB) autoMigrate() error {
-	if err := db.DB.AutoMigrate(
+	if err := db.AutoMigrate(
 		&User{},
 		&APIKey{},
 		&Meta{},

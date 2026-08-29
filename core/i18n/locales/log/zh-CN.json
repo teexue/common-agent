@@ -69,8 +69,6 @@
   "log.mcp.sse.disconnected": "MCP SSE 服务已断开",
   "log.mcp.sse.connect_failed": "MCP SSE 连接失败",
   "log.mcp.sse.read_error": "MCP SSE 读取错误",
-  "log.workflow.executing_node": "正在执行工作流节点",
-  "log.workflow.node_failed": "工作流节点失败",
   "log.kanban.process_failed": "看板任务处理失败",
   "log.kanban.item_processed": "看板任务处理完成",
   "log.agent.created": "创建 Agent",

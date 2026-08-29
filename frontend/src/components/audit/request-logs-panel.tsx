@@ -1,31 +1,15 @@
 import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Loader2, RefreshCw } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Loader2 } from "lucide-react"
 import { EmptyState } from "@/components/shared/empty-state"
 import { RequestLogRow } from "./request-logs-list"
+import { RequestLogsFilters } from "./request-logs-filters"
 import { fetchRequestLogs } from "@/lib/api"
-import { isComposingEvent } from "@/lib/keys"
 import type { RequestLogRecord } from "@/types/agent"
 
-const SOURCES = ["http", "kanban", "optimize", "cli"] as const
-
-/** Filterable list of audited LLM requests (no page shell; embed inside a hub tab). */
-export function RequestLogsPanel() {
-  const { t } = useTranslation()
+function useRequestLogs(source: string, sessionFilter: string) {
   const [records, setRecords] = useState<RequestLogRecord[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [source, setSource] = useState("")
-  const [sessionInput, setSessionInput] = useState("")
-  const [sessionFilter, setSessionFilter] = useState("")
 
   const load = useCallback(async () => {
     try {
@@ -54,64 +38,19 @@ export function RequestLogsPanel() {
     }
   }, [load])
 
-  const sourceOptions = [
-    { value: "", label: t("audit.sourceAll") },
-    ...SOURCES.map((s) => ({ value: s, label: s })),
-  ]
+  return { records, error, load }
+}
 
+function LogsBody({
+  records,
+  error,
+}: {
+  records: RequestLogRecord[] | null
+  error: string | null
+}) {
+  const { t } = useTranslation()
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Select
-          value={{
-            value: source,
-            label:
-              sourceOptions.find((o) => o.value === source)?.label ?? source,
-          }}
-          onValueChange={(v) => {
-            if (v && typeof v === "object" && "value" in v)
-              setSource((v as { value: string }).value)
-          }}
-        >
-          <SelectTrigger className="h-8 w-32 rounded-xl text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="rounded-xl">
-            {sourceOptions.map((o) => (
-              <SelectItem key={o.value || "all"} value={o}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Input
-          value={sessionInput}
-          onChange={(e) => setSessionInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (isComposingEvent(e)) return
-            if (e.key === "Enter") setSessionFilter(sessionInput.trim())
-          }}
-          placeholder={t("audit.filterSession")}
-          className="h-8 w-48 rounded-xl font-mono text-xs"
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 gap-1.5 text-xs"
-          onClick={() => setSessionFilter(sessionInput.trim())}
-        >
-          {t("audit.applyFilter")}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="h-8 w-8"
-          onClick={() => void load()}
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-
+    <>
       {error && (
         <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {error}
@@ -130,6 +69,34 @@ export function RequestLogsPanel() {
           <RequestLogRow key={`${rec.ts}-${i}`} rec={rec} />
         ))}
       </div>
+    </>
+  )
+}
+
+/** Filterable list of audited LLM requests (no page shell; embed inside a hub tab).
+ * `initialSession` seeds the session filter (used by deep links like
+ * /request-logs?session=...). */
+export function RequestLogsPanel({
+  initialSession,
+}: {
+  initialSession?: string
+}) {
+  const [source, setSource] = useState("")
+  const [sessionInput, setSessionInput] = useState(initialSession ?? "")
+  const [sessionFilter, setSessionFilter] = useState(initialSession ?? "")
+  const { records, error, load } = useRequestLogs(source, sessionFilter)
+
+  return (
+    <div className="space-y-3">
+      <RequestLogsFilters
+        source={source}
+        onSourceChange={setSource}
+        sessionInput={sessionInput}
+        onSessionInput={setSessionInput}
+        onApply={() => setSessionFilter(sessionInput.trim())}
+        onRefresh={() => void load()}
+      />
+      <LogsBody records={records} error={error} />
     </div>
   )
 }

@@ -248,12 +248,8 @@ func convertTools(tools []ToolDefinition) []openAITool {
 	result := make([]openAITool, 0, len(tools))
 	for _, t := range tools {
 		result = append(result, openAITool{
-			Type: "function",
-			Function: openAIFunction{
-				Name:        t.Name,
-				Description: t.Description,
-				Parameters:  t.Parameters,
-			},
+			Type:     "function",
+			Function: openAIFunction(t),
 		})
 	}
 	return result
@@ -317,18 +313,7 @@ func (o *OpenAI) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
 			continue
 		}
 		if data == "[DONE]" {
-			doneChunk := Chunk{Done: true}
-			if lastUsage != nil {
-				doneChunk.InputTokens = lastUsage.PromptTokens
-				doneChunk.OutputTokens = lastUsage.CompletionTokens
-				if lastUsage.PromptTokensDetails != nil {
-					doneChunk.CacheReadInputTokens = lastUsage.PromptTokensDetails.CachedTokens
-				}
-				if lastUsage.PromptCacheHitTokens > 0 {
-					doneChunk.CacheReadInputTokens = lastUsage.PromptCacheHitTokens
-				}
-			}
-			ch <- doneChunk
+			ch <- doneChunkFromUsage(lastUsage)
 			return
 		}
 
@@ -360,6 +345,22 @@ func (o *OpenAI) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
 		}
 	}
 	flushToolCalls(toolAcc, ch, ctx)
+}
+
+func doneChunkFromUsage(u *openAIUsage) Chunk {
+	done := Chunk{Done: true}
+	if u == nil {
+		return done
+	}
+	done.InputTokens = u.PromptTokens
+	done.OutputTokens = u.CompletionTokens
+	if u.PromptTokensDetails != nil {
+		done.CacheReadInputTokens = u.PromptTokensDetails.CachedTokens
+	}
+	if u.PromptCacheHitTokens > 0 {
+		done.CacheReadInputTokens = u.PromptCacheHitTokens
+	}
+	return done
 }
 
 // openAIStreamChoice represents a single choice in an OpenAI stream response.

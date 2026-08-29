@@ -7,12 +7,13 @@ interface UseAgentManagerOptions {
   onAgentsChanged?: () => void
 }
 
+let globalAgents: AgentInfo[] = []
+
 /** Manages agent list, file-change events, and agent CRUD UI state. */
 export function useAgentManager({
   onAgentsChanged,
 }: UseAgentManagerOptions = {}) {
-  const [agents, setAgents] = useState<AgentInfo[]>([])
-  const [agentDetailName, setAgentDetailName] = useState<string | null>(null)
+  const [agents, setAgents] = useState<AgentInfo[]>(globalAgents)
   const [agentEditorName, setAgentEditorName] = useState<string | null>(null)
   const [agentEditorOpen, setAgentEditorOpen] = useState(false)
   const [agentToDelete, setAgentToDelete] = useState<string | null>(null)
@@ -20,10 +21,13 @@ export function useAgentManager({
   const refreshAgents = useCallback(() => {
     fetchAgents()
       .then((raw) => {
-        setAgents(raw ?? [])
+        globalAgents = raw ?? []
+        setAgents(globalAgents)
         onAgentsChanged?.()
       })
-      .catch(() => setAgents([]))
+      .catch(() => {
+        if (globalAgents.length === 0) setAgents([])
+      })
   }, [onAgentsChanged])
 
   useEffect(() => {
@@ -33,10 +37,6 @@ export function useAgentManager({
     onAgentChange: useCallback(() => refreshAgents(), [refreshAgents]),
   })
 
-  const handleViewAgent = useCallback(
-    (id: string) => setAgentDetailName(id),
-    []
-  )
   const handleEditAgent = useCallback((id: string) => {
     setAgentEditorName(id)
     setAgentEditorOpen(true)
@@ -54,15 +54,12 @@ export function useAgentManager({
 
   return {
     agents,
-    agentDetailName,
-    setAgentDetailName,
     agentEditorName,
     agentEditorOpen,
     setAgentEditorOpen,
     agentToDelete,
     setAgentToDelete,
     refreshAgents,
-    handleViewAgent,
     handleEditAgent,
     handleCreateAgent,
     handleDeleteAgent,

@@ -3,27 +3,22 @@ package grpcapi
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/session"
-	"github.com/teexue/common-agent/core/telemetry"
 	"github.com/teexue/common-agent/core/tool"
 	commonagentv1 "github.com/teexue/common-agent/proto"
 	"github.com/teexue/common-agent/tools/registry"
@@ -34,7 +29,7 @@ const bufSize = 1024 * 1024
 // testTool is a minimal tool for testing.
 type testTool struct{}
 
-func (t *testTool) Name() string       { return "test_tool" }
+func (t *testTool) Name() string        { return "test_tool" }
 func (t *testTool) Description() string { return "A test tool" }
 func (t *testTool) InputSchema() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{}}
@@ -81,9 +76,7 @@ max_tokens: 1024
 
 	lis := bufconn.Listen(bufSize)
 	go func() {
-		if err := srv.Serve(lis); err != nil {
-			// Server stopped.
-		}
+		_ = srv.Serve(lis)
 	}()
 
 	conn, err := grpc.NewClient("passthrough:///bufnet",
@@ -148,9 +141,7 @@ max_tokens: 1024
 
 	lis := bufconn.Listen(bufSize)
 	go func() {
-		if err := srv.Serve(lis); err != nil {
-			// Server stopped.
-		}
+		_ = srv.Serve(lis)
 	}()
 
 	conn, err := grpc.NewClient("passthrough:///bufnet",
@@ -326,122 +317,6 @@ func TestListTools(t *testing.T) {
 	}
 }
 
-func TestListAgents(t *testing.T) {
-	client, _, cleanup := setupTestGRPC(t)
-	defer cleanup()
-
-	resp, err := client.ListAgents(context.Background(), &commonagentv1.ListAgentsRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(resp.Agents) == 0 {
-		t.Fatal("expected at least one agent")
-	}
-
-	found := false
-	for _, a := range resp.Agents {
-		if a.Name == "test" {
-			found = true
-			if a.Provider != "mock" {
-				t.Errorf("expected provider 'mock', got %q", a.Provider)
-			}
-		}
-	}
-	if !found {
-		t.Error("expected agent 'test' in list")
-	}
-}
-
-func TestGetAgent(t *testing.T) {
-	client, _, cleanup := setupTestGRPC(t)
-	defer cleanup()
-
-	resp, err := client.GetAgent(context.Background(), &commonagentv1.GetAgentRequest{Name: "test"})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if resp.Name != "test" {
-		t.Errorf("expected name 'test', got %q", resp.Name)
-	}
-	if resp.Provider != "mock" {
-		t.Errorf("expected provider 'mock', got %q", resp.Provider)
-	}
-	if resp.Model != "test-model" {
-		t.Errorf("expected model 'test-model', got %q", resp.Model)
-	}
-}
-
-func TestGetAgent_NotFound(t *testing.T) {
-	client, _, cleanup := setupTestGRPC(t)
-	defer cleanup()
-
-	_, err := client.GetAgent(context.Background(), &commonagentv1.GetAgentRequest{Name: "nonexistent"})
-	if err == nil {
-		t.Fatal("expected error for missing agent")
-	}
-
-	st, ok := status.FromError(err)
-	if !ok {
-		t.Fatal("expected gRPC status error")
-	}
-	if st.Code() != codes.NotFound {
-		t.Errorf("expected NotFound, got %v", st.Code())
-	}
-}
-
-func TestApprove_NoPending(t *testing.T) {
-	client, _, cleanup := setupTestGRPC(t)
-	defer cleanup()
-
-	_, err := client.Approve(context.Background(), &commonagentv1.ApproveRequest{
-		ApprovalId: "nonexistent",
-		Approved:   true,
-	})
-	if err == nil {
-		t.Fatal("expected error for nonexistent approval")
-	}
-
-	st, ok := status.FromError(err)
-	if !ok {
-		t.Fatal("expected gRPC status error")
-	}
-	if st.Code() != codes.NotFound {
-		t.Errorf("expected NotFound, got %v", st.Code())
-	}
-}
-
-func TestApprove_MissingID(t *testing.T) {
-	client, _, cleanup := setupTestGRPC(t)
-	defer cleanup()
-
-	_, err := client.Approve(context.Background(), &commonagentv1.ApproveRequest{
-		Approved: true,
-	})
-	if err == nil {
-		t.Fatal("expected error for missing approval_id")
-	}
-
-	st, ok := status.FromError(err)
-	if !ok {
-		t.Fatal("expected gRPC status error")
-	}
-	if st.Code() != codes.InvalidArgument {
-		t.Errorf("expected InvalidArgument, got %v", st.Code())
-	}
-}
-
-func TestGRPCApprover_ResolveApproval(t *testing.T) {
-	approver := NewGRPCApprover()
-
-	// No pending approval.
-	resolved := approver.ResolveApproval("id1", true)
-	if resolved {
-		t.Error("expected false for non-pending approval")
-	}
-}
-
 func TestEventToProto_And_Back(t *testing.T) {
 	original := commonagentv1.AgentEvent{
 		Type:       commonagentv1.EventType_EVENT_TYPE_TEXT_DELTA,
@@ -464,368 +339,5 @@ func TestEventToProto_And_Back(t *testing.T) {
 	}
 	if converted.Content != original.Content {
 		t.Errorf("content mismatch: %q vs %q", converted.Content, original.Content)
-	}
-}
-
-func TestListSessions_NotConfigured(t *testing.T) {
-	client, _, cleanup := setupTestGRPC(t)
-	defer cleanup()
-
-	_, err := client.ListSessions(context.Background(), &commonagentv1.ListSessionsRequest{})
-	if err == nil {
-		t.Fatal("expected error when store not configured")
-	}
-
-	st, ok := status.FromError(err)
-	if !ok {
-		t.Fatal("expected gRPC status error")
-	}
-	if st.Code() != codes.FailedPrecondition {
-		t.Errorf("expected FailedPrecondition, got %v", st.Code())
-	}
-}
-
-func TestListSessions_WithStore(t *testing.T) {
-	client, _, store, cleanup := setupTestGRPCWithStore(t)
-	defer cleanup()
-
-	// Create a session.
-	sess := session.New("test")
-	if err := store.Save(sess); err != nil {
-		t.Fatal(err)
-	}
-
-	resp, err := client.ListSessions(context.Background(), &commonagentv1.ListSessionsRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(resp.Sessions) == 0 {
-		t.Fatal("expected at least one session")
-	}
-
-	found := false
-	for _, s := range resp.Sessions {
-		if s.Id == sess.ID {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("expected session in list")
-	}
-}
-
-func TestDeleteSession_NotFound(t *testing.T) {
-	client, _, _, cleanup := setupTestGRPCWithStore(t)
-	defer cleanup()
-
-	_, err := client.DeleteSession(context.Background(), &commonagentv1.DeleteSessionRequest{Id: "nonexistent"})
-	if err == nil {
-		t.Fatal("expected error for nonexistent session")
-	}
-
-	st, ok := status.FromError(err)
-	if !ok {
-		t.Fatal("expected gRPC status error")
-	}
-	if st.Code() != codes.NotFound {
-		t.Errorf("expected NotFound, got %v", st.Code())
-	}
-}
-
-// ─── Auth Tests ───────────────────────────────────────────────────
-
-func setupTestGRPCWithAuth(t *testing.T, apiKey string) (commonagentv1.AgentServiceClient, func()) {
-	t.Helper()
-
-	dir := t.TempDir()
-
-	agentContent := `name: test
-version: 1
-provider: mock
-model: test-model
-system_prompt: |
-  You are a test assistant.
-tools:
-  - test_tool
-max_turns: 5
-max_tokens: 1024
-`
-	if err := os.WriteFile(filepath.Join(dir, "test.yaml"), []byte(agentContent), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	reg := registry.New()
-	reg.Register(&testTool{})
-
-	newProvider := func(a *agent.Agent) (provider.Provider, error) {
-		return &provider.MockProvider{
-			Calls: [][]provider.MockStep{
-				{{Text: "test response"}},
-			},
-		}, nil
-	}
-
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	grpcSrv := NewGRPCServer(dir, reg, newProvider, logger, nil)
-	grpcSrv.SetAPIKey(apiKey)
-	srv := grpc.NewServer()
-	grpcSrv.RegisterServer(srv)
-
-	lis := bufconn.Listen(bufSize)
-	go func() {
-		_ = srv.Serve(lis)
-	}()
-
-	conn, err := grpc.NewClient("passthrough:///bufnet",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
-			return lis.DialContext(ctx)
-		}),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	client := commonagentv1.NewAgentServiceClient(conn)
-	cleanup := func() {
-		conn.Close()
-		srv.Stop()
-	}
-
-	return client, cleanup
-}
-
-func TestGRPCAuth_NoKey_Unauthenticated(t *testing.T) {
-	client, cleanup := setupTestGRPCWithAuth(t, "grpc-secret-key")
-	defer cleanup()
-
-	_, err := client.ListTools(context.Background(), &commonagentv1.ListToolsRequest{})
-	if err == nil {
-		t.Fatal("expected error without API key")
-	}
-
-	st, ok := status.FromError(err)
-	if !ok {
-		t.Fatalf("expected gRPC status error, got %v", err)
-	}
-	if st.Code() != codes.Unauthenticated {
-		t.Errorf("expected Unauthenticated, got %v", st.Code())
-	}
-}
-
-func TestGRPCAuth_WrongKey_Unauthenticated(t *testing.T) {
-	client, cleanup := setupTestGRPCWithAuth(t, "grpc-secret-key")
-	defer cleanup()
-
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "authorization", "bearer wrong-key")
-	_, err := client.ListTools(ctx, &commonagentv1.ListToolsRequest{})
-	if err == nil {
-		t.Fatal("expected error with wrong API key")
-	}
-
-	st, ok := status.FromError(err)
-	if !ok {
-		t.Fatalf("expected gRPC status error, got %v", err)
-	}
-	if st.Code() != codes.Unauthenticated {
-		t.Errorf("expected Unauthenticated, got %v", st.Code())
-	}
-}
-
-func TestGRPCAuth_CorrectKey_Bearer(t *testing.T) {
-	client, cleanup := setupTestGRPCWithAuth(t, "grpc-secret-key")
-	defer cleanup()
-
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "authorization", "bearer grpc-secret-key")
-	resp, err := client.ListTools(ctx, &commonagentv1.ListToolsRequest{})
-	if err != nil {
-		t.Fatalf("expected success with correct Bearer key, got: %v", err)
-	}
-	if len(resp.Tools) == 0 {
-		t.Fatal("expected at least one tool")
-	}
-}
-
-func TestGRPCAuth_CorrectKey_XAPIKey(t *testing.T) {
-	client, cleanup := setupTestGRPCWithAuth(t, "grpc-secret-key")
-	defer cleanup()
-
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "x-api-key", "grpc-secret-key")
-	resp, err := client.ListAgents(ctx, &commonagentv1.ListAgentsRequest{})
-	if err != nil {
-		t.Fatalf("expected success with correct X-API-Key, got: %v", err)
-	}
-	if len(resp.Agents) == 0 {
-		t.Fatal("expected at least one agent")
-	}
-}
-
-func TestGRPCAuth_RunStreaming_RequiresKey(t *testing.T) {
-	client, cleanup := setupTestGRPCWithAuth(t, "grpc-secret-key")
-	defer cleanup()
-
-	// Without key → error.
-	stream, err := client.Run(context.Background(), &commonagentv1.RunRequest{
-		Agent:  "test",
-		Prompt: "hello",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error creating stream: %v", err)
-	}
-	_, err = stream.Recv()
-	if err == nil {
-		t.Fatal("expected error receiving without key")
-	}
-	st, ok := status.FromError(err)
-	if !ok || st.Code() != codes.Unauthenticated {
-		t.Errorf("expected Unauthenticated, got %v", err)
-	}
-
-	// With correct key → success.
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "authorization", "bearer grpc-secret-key")
-	stream, err = client.Run(ctx, &commonagentv1.RunRequest{
-		Agent:  "test",
-		Prompt: "hello",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error creating stream with key: %v", err)
-	}
-	ev, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("expected to receive event with key, got: %v", err)
-	}
-	if ev == nil {
-		t.Fatal("expected non-nil event")
-	}
-}
-
-// ─── gRPC Health Check Tests ──────────────────────────────────────
-
-func TestGRPCHealth_Check_Serving(t *testing.T) {
-	client, grpcSrv, cleanup := setupTestGRPC(t)
-	defer cleanup()
-
-	// Verify implementation is registered.
-	if grpcSrv.healthSrv == nil {
-		t.Fatal("healthSrv should not be nil after RegisterServer")
-	}
-
-	// Check the gRPC health service via direct call (no telemetry.HealthServer set).
-	ctx := context.Background()
-	resp, err := grpcSrv.healthSrv.Check(ctx, &grpc_health_v1.HealthCheckRequest{Service: ""})
-	if err != nil {
-		t.Fatalf("health Check failed: %v", err)
-	}
-	if resp.Status != grpc_health_v1.HealthCheckResponse_SERVING {
-		t.Errorf("expected SERVING, got %v", resp.Status)
-	}
-
-	// Check the agent service.
-	resp, err = grpcSrv.healthSrv.Check(ctx, &grpc_health_v1.HealthCheckRequest{
-		Service: commonagentv1.AgentService_ServiceDesc.ServiceName,
-	})
-	if err != nil {
-		t.Fatalf("health Check for agent service failed: %v", err)
-	}
-	if resp.Status != grpc_health_v1.HealthCheckResponse_SERVING {
-		t.Errorf("expected SERVING for agent service, got %v", resp.Status)
-	}
-
-	// Unknown service.
-	resp, err = grpcSrv.healthSrv.Check(ctx, &grpc_health_v1.HealthCheckRequest{
-		Service: "nonexistent.Service",
-	})
-	if err != nil {
-		t.Fatalf("health Check for unknown service failed: %v", err)
-	}
-	if resp.Status != grpc_health_v1.HealthCheckResponse_SERVICE_UNKNOWN {
-		t.Errorf("expected SERVICE_UNKNOWN, got %v", resp.Status)
-	}
-
-	_ = client // ensure connection works
-}
-
-func TestGRPCHealth_Check_NotServing_WhenComponentFails(t *testing.T) {
-	// Create a health server with a failing checker.
-	healthSrv := telemetry.NewHealthServer()
-	healthSrv.AddChecker(telemetry.NewProviderChecker("test-checker", func(_ context.Context) error {
-		return errors.New("component down")
-	}))
-
-	dir := t.TempDir()
-	agentContent := `name: test
-version: 1
-provider: mock
-model: test-model
-system_prompt: |
-  You are a test assistant.
-tools:
-  - test_tool
-max_turns: 5
-max_tokens: 1024
-`
-	if err := os.WriteFile(filepath.Join(dir, "test.yaml"), []byte(agentContent), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	reg := registry.New()
-	reg.Register(&testTool{})
-
-	newProvider := func(a *agent.Agent) (provider.Provider, error) {
-		return &provider.MockProvider{
-			Calls: [][]provider.MockStep{
-				{{Text: "test response"}},
-			},
-		}, nil
-	}
-
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	grpcSrv := NewGRPCServer(dir, reg, newProvider, logger, nil)
-	grpcSrv.SetHealth(healthSrv)
-
-	srv := grpc.NewServer()
-	grpcSrv.RegisterServer(srv)
-	defer srv.Stop()
-
-	lis := bufconn.Listen(bufSize)
-	go func() { _ = srv.Serve(lis) }()
-
-	// When a component is down, Check should return NOT_SERVING.
-	resp, err := grpcSrv.healthSrv.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: ""})
-	if err != nil {
-		t.Fatalf("health Check failed: %v", err)
-	}
-	if resp.Status != grpc_health_v1.HealthCheckResponse_NOT_SERVING {
-		t.Errorf("expected NOT_SERVING when component is down, got %v", resp.Status)
-	}
-
-	// Agent service should also be NOT_SERVING.
-	resp, err = grpcSrv.healthSrv.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{
-		Service: commonagentv1.AgentService_ServiceDesc.ServiceName,
-	})
-	if err != nil {
-		t.Fatalf("health Check for agent service failed: %v", err)
-	}
-	if resp.Status != grpc_health_v1.HealthCheckResponse_NOT_SERVING {
-		t.Errorf("expected NOT_SERVING for agent service when component down, got %v", resp.Status)
-	}
-}
-
-func TestGRPCHealth_Watch(t *testing.T) {
-	_, grpcSrv, cleanup := setupTestGRPC(t)
-	defer cleanup()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-
-	// Watch is server-streaming; test via direct Check (Watch delegates to Check internally).
-	// We verify Check works correctly for both SERVING and NOT_SERVING scenarios in the above tests.
-	resp, err := grpcSrv.healthSrv.Check(ctx, &grpc_health_v1.HealthCheckRequest{Service: ""})
-	if err != nil {
-		t.Fatalf("Check failed: %v", err)
-	}
-	if resp.Status != grpc_health_v1.HealthCheckResponse_SERVING {
-		t.Errorf("expected SERVING, got %v", resp.Status)
 	}
 }

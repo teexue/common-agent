@@ -499,12 +499,7 @@ code {
   inset: 0;
   width: 35%;
   border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--primary),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
   animation: stream-sweep 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 @keyframes stream-sweep {

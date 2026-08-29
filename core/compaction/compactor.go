@@ -13,9 +13,16 @@ import (
 type Strategy string
 
 const (
+	// StrategyTruncation drops oldest middle messages (keeping system, head,
+	// and recent) until the list fits the token budget, without an LLM call.
 	StrategyTruncation Strategy = "truncation"
-	StrategySliding    Strategy = "sliding_window"
-	StrategySummarize  Strategy = "summarize"
+	// StrategySliding keeps only the most recent KeepRecent conversation
+	// messages plus system prompts; older turns are discarded, not summarized.
+	StrategySliding Strategy = "sliding_window"
+	// StrategySummarize replaces older turns with an LLM-written summary so
+	// long-running context is retained. Falls back to truncation when no
+	// Provider is configured.
+	StrategySummarize Strategy = "summarize"
 	// StrategyCascade runs a tiered cascade (trim → snip → collapse) and is
 	// the recommended default. It supersedes the single-strategy modes.
 	StrategyCascade Strategy = "cascade"
@@ -96,8 +103,8 @@ const (
 	// window. Trim verbose tool results once usage passes trimRatio, snip
 	// (archive) oldest messages past snipRatio, and full-collapse past the
 	// trigger line.
-	trimRatio    = 0.6
-	snipRatio    = 0.75
+	trimRatio     = 0.6
+	snipRatio     = 0.75
 	collapseRatio = 0.9
 )
 

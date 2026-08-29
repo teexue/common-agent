@@ -17,6 +17,7 @@ type EditFile struct {
 
 // Name returns the tool name.
 func (EditFile) Name() string { return "edit_file" }
+
 // Description returns a human-readable description.
 func (EditFile) Description() string {
 	return "Replace text in a file using exact string matching. Safer than write_file for targeted changes. Returns the number of replacements made."

@@ -1,7 +1,5 @@
 import type { ConversationEntry, ToolCallEntry } from "@/types/agent"
 
-// ─── Helpers ──────────────────────────────────────────────────────
-
 export function matchesToolCall(
   tc: ToolCallEntry,
   toolName: string,

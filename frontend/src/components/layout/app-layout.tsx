@@ -10,13 +10,13 @@ interface AppLayoutProps {
   onOpenManage?: () => void
   onOpenKanban?: () => void
   onOpenApiDocs?: () => void
+  onOpenUsage?: () => void
   onOpenAdmin?: () => void
   onNewSession?: () => void
   sessions?: SessionMeta[]
   activeSessionId?: string | null
   onResumeSession?: (id: string) => void
   onDeleteSession?: (id: string) => void
-  onReplaySession?: (id: string) => void
   agent: AgentInfo
   agents?: AgentInfo[]
   agentLocked?: boolean

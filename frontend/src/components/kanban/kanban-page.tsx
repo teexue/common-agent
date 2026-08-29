@@ -1,21 +1,14 @@
 import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { useNavigate } from "react-router"
 import { KanbanSquare, Plus } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { EmptyState } from "@/components/shared/empty-state"
 import { PageHeader } from "@/components/shared/page-header"
 import { PageMain, PageShell } from "@/components/shared/page-shell"
-import { KanbanCard } from "./kanban-card"
-import { KanbanCreateDialog } from "./kanban-create-dialog"
-import { KanbanDetailDialog } from "./kanban-detail-dialog"
-import { SessionConversationDialog } from "@/components/sessions/session-conversation"
+import { KanbanColumn } from "./kanban-column"
 import {
   approveKanbanItem,
-  deleteKanbanItem,
   fetchKanbanItems,
-  rejectKanbanItem,
   requeueKanbanItem,
 } from "@/lib/api"
 import type { KanbanItem, KanbanStatus } from "@/types/agent"
@@ -28,15 +21,57 @@ const COLUMNS: { status: KanbanStatus; labelKey: string }[] = [
   { status: "failed", labelKey: "kanban.colFailed" },
 ]
 
-/** Five-column kanban board with polling refresh. */
 export function KanbanPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const board = useKanbanBoard()
+
+  return (
+    <PageShell>
+      <PageHeader
+        icon={KanbanSquare}
+        title={t("kanban.title")}
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => navigate("/kanban/new")}
+          >
+            <Plus className="h-3.5 w-3.5" /> {t("kanban.newTask")}
+          </Button>
+        }
+      />
+      <PageMain contentClassName="flex h-full min-w-max gap-3">
+        {COLUMNS.map((col) => (
+          <KanbanColumn
+            key={col.status}
+            label={t(col.labelKey)}
+            items={board.items.filter((i) => i.status === col.status)}
+            loading={board.loading}
+            now={board.now}
+            onOpen={(it) => navigate(`/kanban/${encodeURIComponent(it.id)}`)}
+            onApprove={board.handleApprove}
+            onReject={(id) => navigate(`/kanban/${encodeURIComponent(id)}`)}
+            onRequeue={board.handleRequeue}
+            onViewProgress={(it) =>
+              it.session_id
+                ? navigate(
+                    `/sessions/${encodeURIComponent(it.session_id)}?live=1`
+                  )
+                : navigate(`/kanban/${encodeURIComponent(it.id)}`)
+            }
+          />
+        ))}
+      </PageMain>
+    </PageShell>
+  )
+}
+
+function useKanbanBoard() {
   const [items, setItems] = useState<KanbanItem[]>([])
   const [now, setNow] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [createOpen, setCreateOpen] = useState(false)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [progressItemId, setProgressItemId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -75,132 +110,11 @@ export function KanbanPage() {
     [refresh]
   )
 
-  const handleApprove = useCallback(
-    (id: string) => void runAction(() => approveKanbanItem(id)),
-    [runAction]
-  )
-  const handleRequeue = useCallback(
-    (id: string) => void runAction(() => requeueKanbanItem(id)),
-    [runAction]
-  )
-  const handleReject = useCallback(
-    (id: string, feedback: string) =>
-      void runAction(() => rejectKanbanItem(id, feedback)),
-    [runAction]
-  )
-  const handleDelete = useCallback(
-    (id: string) => {
-      const target = items.find((i) => i.id === id)
-      if (
-        !window.confirm(
-          t("kanban.deleteConfirm", { title: target?.title ?? id })
-        )
-      )
-        return
-      setSelectedId(null)
-      void runAction(() => deleteKanbanItem(id))
-    },
-    [items, runAction, t]
-  )
-
-  const selectedItem = selectedId
-    ? (items.find((i) => i.id === selectedId) ?? null)
-    : null
-  // Derived from the polled list so session_id flows in as soon as the
-  // worker publishes it, even if the dialog was opened earlier.
-  const progressItem = progressItemId
-    ? (items.find((i) => i.id === progressItemId) ?? null)
-    : null
-
-  return (
-    <PageShell>
-      <PageHeader
-        icon={KanbanSquare}
-        title={t("kanban.title")}
-        actions={
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus className="h-3.5 w-3.5" /> {t("kanban.newTask")}
-          </Button>
-        }
-      />
-
-      <PageMain contentClassName="flex h-full min-w-max gap-3">
-        {COLUMNS.map((col) => {
-          const columnItems = items.filter((i) => i.status === col.status)
-          return (
-            <section
-              key={col.status}
-              className="flex w-64 shrink-0 flex-col gap-2"
-            >
-              <div className="flex items-center gap-2 px-1">
-                <span className="text-xs font-medium text-foreground">
-                  {t(col.labelKey)}
-                </span>
-                <Badge
-                  variant="secondary"
-                  className="rounded-md px-1.5 py-0 text-[10px]"
-                >
-                  {columnItems.length}
-                </Badge>
-              </div>
-              <ScrollArea className="min-h-0 flex-1">
-                <div className="flex flex-col gap-2 pr-1">
-                  {columnItems.length === 0 ? (
-                    <EmptyState
-                      title={loading ? t("common.loading") : t("kanban.empty")}
-                    />
-                  ) : (
-                    columnItems.map((item) => (
-                      <KanbanCard
-                        key={item.id}
-                        item={item}
-                        now={now}
-                        onOpen={(it) => setSelectedId(it.id)}
-                        onApprove={handleApprove}
-                        onReject={(id) => setSelectedId(id)}
-                        onRequeue={handleRequeue}
-                        onViewProgress={(it) => setProgressItemId(it.id)}
-                      />
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
-            </section>
-          )
-        })}
-      </PageMain>
-
-      <KanbanCreateDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={() => void refresh()}
-      />
-      <SessionConversationDialog
-        open={progressItemId !== null}
-        onOpenChange={(o) => {
-          if (!o) setProgressItemId(null)
-        }}
-        sessionId={progressItem?.session_id ?? null}
-        title={progressItem?.title}
-        prompt={progressItem?.prompt}
-        live
-      />
-      <KanbanDetailDialog
-        item={selectedItem}
-        open={selectedItem !== null}
-        onOpenChange={(o) => {
-          if (!o) setSelectedId(null)
-        }}
-        onApprove={handleApprove}
-        onReject={handleReject}
-        onRequeue={handleRequeue}
-        onDelete={handleDelete}
-      />
-    </PageShell>
-  )
+  return {
+    items,
+    now,
+    loading,
+    handleApprove: (id: string) => void runAction(() => approveKanbanItem(id)),
+    handleRequeue: (id: string) => void runAction(() => requeueKanbanItem(id)),
+  }
 }

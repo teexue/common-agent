@@ -1,28 +1,38 @@
-import { useCallback, useEffect, useRef } from "react"
+import { useCallback, useLayoutEffect, useRef } from "react"
+
+interface AutoScrollOptions {
+  behavior?: ScrollBehavior
+  /** When this changes (e.g. session id), stick to bottom and jump without animating. */
+  resetKey?: string | null
+}
 
 export function useAutoScroll<T>(
   dependency: T,
-  behavior: ScrollBehavior = "smooth"
+  { behavior = "smooth", resetKey }: AutoScrollOptions = {}
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
   const shouldAutoScroll = useRef(true)
+  const prevResetKey = useRef(resetKey)
 
   const handleScroll = useCallback(() => {
     const el = containerRef.current
     if (!el) return
-    const threshold = 100
     shouldAutoScroll.current =
-      el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+      el.scrollHeight - el.scrollTop - el.clientHeight < 100
   }, [])
 
-  useEffect(() => {
-    if (shouldAutoScroll.current && containerRef.current) {
-      containerRef.current.scrollTo({
-        top: containerRef.current.scrollHeight,
-        behavior,
-      })
+  useLayoutEffect(() => {
+    if (prevResetKey.current !== resetKey) {
+      prevResetKey.current = resetKey
+      shouldAutoScroll.current = true
     }
-  }, [dependency, behavior])
+    const el = containerRef.current
+    if (!shouldAutoScroll.current || !el) return
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: behavior === "smooth" ? "smooth" : "auto",
+    })
+  }, [dependency, behavior, resetKey])
 
   return { containerRef, handleScroll }
 }

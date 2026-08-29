@@ -28,7 +28,7 @@ export function ToolDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg rounded-2xl border-border bg-card">
+      <DialogContent className="rounded-2xl border-border bg-card sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-muted">

@@ -162,12 +162,12 @@ func TestCascadeCompactor_TrimsBeforeSnip(t *testing.T) {
 
 	c := NewCascadeCompactor(Config{
 		Strategy:      StrategyCascade,
-		TokenLimit:     6000,
-		TargetTokens:   3000,
-		ContextWindow:  10000,
-		KeepRecent:     4,
-		KeepHead:       0,
-		CurrentTokens:  30000,
+		TokenLimit:    6000,
+		TargetTokens:  3000,
+		ContextWindow: 10000,
+		KeepRecent:    4,
+		KeepHead:      0,
+		CurrentTokens: 30000,
 	})
 	res, err := c.Compact(context.Background(), msgs)
 	require.NoError(t, err)

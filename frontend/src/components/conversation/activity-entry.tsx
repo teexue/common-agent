@@ -37,50 +37,61 @@ function GeneratingPulse() {
   )
 }
 
-export function ActivityEntry({
-  entry,
-  selectedToolCallId,
-  onSelectToolCall,
-  onApproveTool,
-  onDenyTool,
-  isActive,
-}: ActivityEntryProps) {
+export function ActivityEntry(props: ActivityEntryProps) {
+  const { entry, isActive } = props
   const [thinkingExpanded, setThinkingExpanded] = useState(false)
-
   if (entry.compactionSummary)
     return <CompactionBanner summary={entry.compactionSummary} />
   if (entry.role === "user") return <UserMessage entry={entry} />
+  return (
+    <AssistantBody
+      props={props}
+      thinkingExpanded={thinkingExpanded}
+      onToggleThinking={() => setThinkingExpanded((v) => !v)}
+      isWaiting={
+        !!isActive &&
+        !entry.content &&
+        !entry.reasoningContent &&
+        !(entry.toolCalls && entry.toolCalls.length > 0)
+      }
+    />
+  )
+}
 
-  const hasThinking = !!entry.reasoningContent
+function AssistantBody({
+  props,
+  thinkingExpanded,
+  onToggleThinking,
+  isWaiting,
+}: {
+  props: ActivityEntryProps
+  thinkingExpanded: boolean
+  onToggleThinking: () => void
+  isWaiting: boolean
+}) {
+  const { entry, isActive } = props
   const hasToolCalls = entry.toolCalls && entry.toolCalls.length > 0
-  const hasContent = !!entry.content
-  const isWaiting =
-    !!isActive && !hasContent && !hasThinking && !hasToolCalls
-
   return (
     <div className="flex flex-col gap-1.5">
       {isActive && <GeneratingPulse />}
-
-      {hasThinking && (
+      {entry.reasoningContent && (
         <ThinkingBlock
-          content={entry.reasoningContent!}
+          content={entry.reasoningContent}
           isStreaming={!!isActive}
           isExpanded={thinkingExpanded}
-          onToggle={() => setThinkingExpanded((v) => !v)}
+          onToggle={onToggleThinking}
         />
       )}
-
       {hasToolCalls && (
         <ToolCallGroup
           toolCalls={entry.toolCalls!}
-          selectedToolCallId={selectedToolCallId}
-          onSelectToolCall={onSelectToolCall}
-          onApproveTool={onApproveTool}
-          onDenyTool={onDenyTool}
+          selectedToolCallId={props.selectedToolCallId}
+          onSelectToolCall={props.onSelectToolCall}
+          onApproveTool={props.onApproveTool}
+          onDenyTool={props.onDenyTool}
         />
       )}
-
-      {hasContent && (
+      {entry.content && (
         <div className="text-[13px] leading-relaxed">
           <MarkdownRenderer
             content={entry.content}
@@ -88,7 +99,6 @@ export function ActivityEntry({
           />
         </div>
       )}
-
       {isWaiting && (
         <div className="flex flex-col gap-1.5" aria-hidden>
           <div className="shimmer-line" />

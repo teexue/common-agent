@@ -1,4 +1,5 @@
 .PHONY: all build frontend backend clean release \
+	lint check check-standards test test-integration \
 	build-darwin-amd64 build-darwin-arm64 \
 	build-linux-amd64 build-linux-arm64 \
 	build-windows-amd64 build-windows-arm64
@@ -17,7 +18,25 @@ LDFLAGS := -s -w -X github.com/teexue/common-agent/core/version.Version=$(VERSIO
 
 all: build
 
-build: frontend backend
+# After check-standards is green, build must depend on check.
+build: check frontend backend
+
+lint:
+	go vet ./...
+	pnpm --dir frontend exec eslint src --max-warnings 0
+	pnpm --dir frontend run format:check
+
+check-standards:
+	python3 scripts/check-standards.py --quick
+
+check: lint check-standards
+
+test:
+	go test ./...
+	pnpm --dir frontend test
+
+test-integration:
+	go test -tags=integration ./test/integration/...
 
 frontend:
 	pnpm --dir frontend run build
@@ -57,7 +76,7 @@ build-windows-arm64:
 # ── Cross-compile all platforms (frontend once) ───────────────────
 # Usage: make release VERSION=v1.2.3
 
-release: frontend \
+release: check frontend \
 	build-darwin-amd64 build-darwin-arm64 \
 	build-linux-amd64 build-linux-arm64 \
 	build-windows-amd64 build-windows-arm64

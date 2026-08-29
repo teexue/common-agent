@@ -6,8 +6,6 @@ function dateLocale(): string {
   return i18n.language?.startsWith("zh") ? "zh-CN" : "en"
 }
 
-// ─── Markdown Export ──────────────────────────────────────────────
-
 function formatToolCall(
   tc: ConversationEntry["toolCalls"] extends (infer T)[] | undefined ? T : never
 ): string[] {
@@ -111,8 +109,6 @@ export function exportToMarkdown(
   return lines.join("\n")
 }
 
-// ─── JSON Export ──────────────────────────────────────────────────
-
 export function exportToJson(
   entries: ConversationEntry[],
   agentName: string
@@ -138,8 +134,6 @@ export function exportToJson(
   }
   return JSON.stringify(data, null, 2)
 }
-
-// ─── Download helper ──────────────────────────────────────────────
 
 export function downloadFile(
   content: string,

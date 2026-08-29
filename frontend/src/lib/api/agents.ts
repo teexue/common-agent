@@ -3,8 +3,6 @@ import type { AgentInfo, AgentDetail } from "@/types/agent"
 
 import { ensureOK, langHeaders } from "./client"
 
-// ─── Agents API ───────────────────────────────────────────────────
-
 /** Fetches the list of all configured agents. */
 export async function fetchAgents(): Promise<AgentInfo[]> {
   const res = await fetch("/v1/agents", { headers: langHeaders() })
@@ -90,8 +88,6 @@ export async function deleteAgent(id: string): Promise<void> {
     )
   }
 }
-
-// ─── Optimize API ────────────────────────────────────────────────
 
 /** Options selecting which model performs the optimization. */
 export interface OptimizeOptions {

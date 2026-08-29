@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import * as React from "react"
 import { useTheme } from "@/components/theme-provider"
 import {
@@ -27,30 +26,37 @@ const BackgroundContext = React.createContext<
   BackgroundContextValue | undefined
 >(undefined)
 
-export function BackgroundProvider({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const { setMode } = useTheme()
-  const [settings, setSettings] = React.useState<BackgroundSettings>(() =>
-    loadBackgroundSettings()
-  )
-  const [imageUrl, setImageUrl] = React.useState<string | null>(null)
-  const [mediaKind, setMediaKind] = React.useState<BackgroundMediaKind | null>(
-    null
-  )
-  const [uploading, setUploading] = React.useState(false)
+interface ProbeApply {
+  kind: BackgroundMediaKind | null
+  runAdapt: (url: string, kind: BackgroundMediaKind) => Promise<void>
+  setImageUrl: (url: string | null) => void
+  setMediaKind: (kind: BackgroundMediaKind | null) => void
+  setSettings: React.Dispatch<React.SetStateAction<BackgroundSettings>>
+}
 
-  const persist = React.useCallback((s: BackgroundSettings) => {
-    saveBackgroundSettings(s)
-    setSettings(s)
-  }, [])
+function applyProbeResult(opts: ProbeApply) {
+  if (!opts.kind) {
+    opts.setSettings((prev) => {
+      const next = { ...prev, hasImage: false }
+      saveBackgroundSettings(next)
+      return next
+    })
+    return
+  }
+  const url = backgroundImageURL(Date.now())
+  const kind = opts.kind
+  opts.setImageUrl(url)
+  opts.setMediaKind(kind)
+  opts.setSettings((prev) => {
+    const next = { ...prev, hasImage: true }
+    saveBackgroundSettings(next)
+    if (next.autoAdapt && next.enabled) void opts.runAdapt(url, kind)
+    return next
+  })
+}
 
-  // Auto-adapt: switch light/dark based on the media's average luminance only.
-  // A complex (non-solid) image's dominant hue makes an arbitrary accent, so
-  // we no longer recolor the theme — only the mode adapts.
-  const runAdapt = React.useCallback(
+function useAdaptToMedia(setMode: (mode: "dark" | "light") => void) {
+  return React.useCallback(
     async (url: string, kind: BackgroundMediaKind) => {
       const result = await extractDominant(url, kind)
       if (!result) return
@@ -58,45 +64,54 @@ export function BackgroundProvider({
     },
     [setMode]
   )
+}
 
-  // On mount: probe backend for an existing background image or video.
+function useBackgroundProbe(opts: Omit<ProbeApply, "kind">) {
+  const { runAdapt, setImageUrl, setMediaKind, setSettings } = opts
   React.useEffect(() => {
     let active = true
     probeBackground().then((kind) => {
       if (!active) return
-      if (kind) {
-        const url = backgroundImageURL(Date.now())
-        setImageUrl(url)
-        setMediaKind(kind)
-        setSettings((prev) => {
-          const next = { ...prev, hasImage: true }
-          saveBackgroundSettings(next)
-          if (next.autoAdapt && next.enabled) void runAdapt(url, kind)
-          return next
-        })
-      } else {
-        setSettings((prev) => {
-          const next = { ...prev, hasImage: false }
-          saveBackgroundSettings(next)
-          return next
-        })
-      }
+      applyProbeResult({
+        kind,
+        runAdapt,
+        setImageUrl,
+        setMediaKind,
+        setSettings,
+      })
     })
     return () => {
       active = false
     }
-  }, [runAdapt])
+  }, [runAdapt, setImageUrl, setMediaKind, setSettings])
+}
 
-  // Toggle a root class so CSS can make major surfaces translucent over the
-  // background image (sidebar, cards, menus, input area, etc.).
+function useHasBgClass(settings: BackgroundSettings) {
   React.useEffect(() => {
     document.documentElement.classList.toggle(
       "has-bg",
       settings.enabled && settings.hasImage
     )
   }, [settings.enabled, settings.hasImage])
+}
 
-  const upload = React.useCallback(
+function useUploadBackground(opts: {
+  settings: BackgroundSettings
+  persist: (s: BackgroundSettings) => void
+  runAdapt: (url: string, kind: BackgroundMediaKind) => Promise<void>
+  setImageUrl: (url: string | null) => void
+  setMediaKind: (kind: BackgroundMediaKind | null) => void
+  setUploading: (v: boolean) => void
+}) {
+  const {
+    settings,
+    persist,
+    runAdapt,
+    setImageUrl,
+    setMediaKind,
+    setUploading,
+  } = opts
+  return React.useCallback(
     async (file: File) => {
       setUploading(true)
       try {
@@ -114,36 +129,101 @@ export function BackgroundProvider({
         setUploading(false)
       }
     },
-    [settings, persist, runAdapt]
+    [settings, persist, runAdapt, setImageUrl, setMediaKind, setUploading]
   )
+}
 
-  const remove = React.useCallback(async () => {
+function useRemoveBackground(opts: {
+  settings: BackgroundSettings
+  persist: (s: BackgroundSettings) => void
+  setImageUrl: (url: string | null) => void
+  setMediaKind: (kind: BackgroundMediaKind | null) => void
+}) {
+  const { settings, persist, setImageUrl, setMediaKind } = opts
+  return React.useCallback(async () => {
     await removeBackground()
     setImageUrl(null)
     setMediaKind(null)
     persist({ ...settings, hasImage: false, enabled: false })
-  }, [settings, persist])
+  }, [settings, persist, setImageUrl, setMediaKind])
+}
 
-  const update = React.useCallback(
+function useUpdateBackground(opts: {
+  imageUrl: string | null
+  mediaKind: BackgroundMediaKind | null
+  runAdapt: (url: string, kind: BackgroundMediaKind) => Promise<void>
+}) {
+  const { imageUrl, mediaKind, runAdapt } = opts
+  return React.useCallback(
     (partial: Partial<BackgroundSettings>) => {
-      setSettings((prev) => {
-        const next = { ...prev, ...partial }
-        saveBackgroundSettings(next)
-        if (
-          partial.autoAdapt === true &&
-          next.enabled &&
-          imageUrl &&
-          mediaKind
-        ) {
-          void runAdapt(imageUrl, mediaKind)
-        }
-        return next
-      })
+      return applyUpdate(partial, { imageUrl, mediaKind, runAdapt })
     },
     [imageUrl, mediaKind, runAdapt]
   )
+}
 
-  const value = React.useMemo<BackgroundContextValue>(
+function applyUpdate(
+  partial: Partial<BackgroundSettings>,
+  ctx: {
+    imageUrl: string | null
+    mediaKind: BackgroundMediaKind | null
+    runAdapt: (url: string, kind: BackgroundMediaKind) => Promise<void>
+  }
+) {
+  return (prev: BackgroundSettings) => {
+    const next = { ...prev, ...partial }
+    saveBackgroundSettings(next)
+    if (
+      partial.autoAdapt === true &&
+      next.enabled &&
+      ctx.imageUrl &&
+      ctx.mediaKind
+    ) {
+      void ctx.runAdapt(ctx.imageUrl, ctx.mediaKind)
+    }
+    return next
+  }
+}
+
+function useBackgroundModel(): BackgroundContextValue {
+  const { setMode } = useTheme()
+  const [settings, setSettings] = React.useState<BackgroundSettings>(() =>
+    loadBackgroundSettings()
+  )
+  const [imageUrl, setImageUrl] = React.useState<string | null>(null)
+  const [mediaKind, setMediaKind] = React.useState<BackgroundMediaKind | null>(
+    null
+  )
+  const [uploading, setUploading] = React.useState(false)
+  const persist = React.useCallback((s: BackgroundSettings) => {
+    saveBackgroundSettings(s)
+    setSettings(s)
+  }, [])
+  const runAdapt = useAdaptToMedia(setMode)
+  useBackgroundProbe({ runAdapt, setImageUrl, setMediaKind, setSettings })
+  useHasBgClass(settings)
+  const upload = useUploadBackground({
+    settings,
+    persist,
+    runAdapt,
+    setImageUrl,
+    setMediaKind,
+    setUploading,
+  })
+  const remove = useRemoveBackground({
+    settings,
+    persist,
+    setImageUrl,
+    setMediaKind,
+  })
+  const updater = useUpdateBackground({ imageUrl, mediaKind, runAdapt })
+  const update = React.useCallback(
+    (partial: Partial<BackgroundSettings>) => {
+      setSettings(updater(partial))
+    },
+    [updater]
+  )
+  return React.useMemo(
     () => ({
       settings,
       imageUrl,
@@ -155,7 +235,14 @@ export function BackgroundProvider({
     }),
     [settings, imageUrl, mediaKind, uploading, upload, remove, update]
   )
+}
 
+export function BackgroundProvider({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const value = useBackgroundModel()
   return (
     <BackgroundContext.Provider value={value}>
       {children}

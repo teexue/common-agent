@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/teexue/common-agent/core/audit"
 	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/store"
 )
 
 func (s *Server) handleSessionsList(c *gin.Context) {
@@ -20,7 +20,7 @@ func (s *Server) handleSessionsList(c *gin.Context) {
 	userID := identityFromGin(c).UserID
 	metas, err := s.svc.ListSessions(userID)
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "session_error", "api.error.session_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "session_error", MsgKey: "api.error.session_error", Details: err.Error()})
 		return
 	}
 	if metas == nil {
@@ -42,7 +42,7 @@ func (s *Server) handleSessionsGet(c *gin.Context) {
 			respondError(c, http.StatusNotFound, "not_found", "api.error.session_not_found")
 			return
 		}
-		respondErrorDetails(c, http.StatusInternalServerError, "session_error", "api.error.session_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "session_error", MsgKey: "api.error.session_error", Details: err.Error()})
 		return
 	}
 
@@ -77,20 +77,20 @@ func (s *Server) handleSessionPatch(c *gin.Context) {
 			respondError(c, http.StatusNotFound, "not_found", "api.error.session_not_found")
 			return
 		}
-		respondErrorDetails(c, http.StatusInternalServerError, "session_error", "api.error.session_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "session_error", MsgKey: "api.error.session_error", Details: err.Error()})
 		return
 	}
 
 	var req SessionPatchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondErrorDetails(c, http.StatusBadRequest, "invalid_json", "api.error.invalid_json", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
 	if req.WorkDir != nil {
 		sess.SetMetadata(session.MetadataKeyWorkdir, *req.WorkDir)
 	}
 	if err := s.store.Save(sess); err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "session_error", "api.error.session_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "session_error", MsgKey: "api.error.session_error", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"id": sess.ID, "metadata": sess.GetMetadata()})
@@ -108,11 +108,31 @@ func (s *Server) handleSessionsDelete(c *gin.Context) {
 			respondError(c, http.StatusNotFound, "not_found", "api.error.session_not_found")
 			return
 		}
-		respondErrorDetails(c, http.StatusInternalServerError, "delete_error", "api.error.delete_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "delete_error", MsgKey: "api.error.delete_error", Details: err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"deleted": id})
+}
+
+// handleUsageSummary returns the aggregated token consumption report built
+// from the LLM request audit logs. Query params: days (lookback window),
+// all (1 = admin cross-user report, default: own usage only).
+func (s *Server) handleUsageSummary(c *gin.Context) {
+	days := 0
+	if v := c.Query("days"); v != "" {
+		_, _ = fmt.Sscanf(v, "%d", &days)
+	}
+	userID := identityFromGin(c).UserID
+	if c.Query("all") == "1" && identityFromGin(c).Role == store.RoleAdmin {
+		userID = "" // admins may aggregate across all users
+	}
+	summary, err := s.requestLogger.UsageSummary(audit.UsageQuery{Days: days, UserID: userID})
+	if err != nil {
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "usage_error", MsgKey: "api.error.audit_error", Details: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, summary)
 }
 
 // handleAuditRequests returns recent LLM request audit records, newest
@@ -122,7 +142,7 @@ func (s *Server) handleSessionsDelete(c *gin.Context) {
 func (s *Server) handleAuditRequests(c *gin.Context) {
 	limit := 0
 	if v := c.Query("limit"); v != "" {
-		fmt.Sscanf(v, "%d", &limit)
+		_, _ = fmt.Sscanf(v, "%d", &limit)
 	}
 	records, err := s.requestLogger.Query(audit.RequestFilter{
 		SessionID: c.Query("session_id"),
@@ -130,7 +150,7 @@ func (s *Server) handleAuditRequests(c *gin.Context) {
 		Limit:     limit,
 	})
 	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "audit_error", "api.error.audit_error", err.Error())
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "audit_error", MsgKey: "api.error.audit_error", Details: err.Error()})
 		return
 	}
 	out := make([]audit.RequestSummary, 0, len(records))
@@ -155,47 +175,4 @@ func (s *Server) handleAuditRequestDetail(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, rec)
-}
-
-func (s *Server) handleSessionReplay(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.session_id_required")
-		return
-	}
-	userID := identityFromGin(c).UserID
-	if _, err := s.svc.LoadSession(id, userID); err != nil {
-		if errors.Is(err, session.ErrNotFound) {
-			respondError(c, http.StatusNotFound, "not_found", "api.error.session_not_found")
-			return
-		}
-		respondErrorDetails(c, http.StatusInternalServerError, "session_error", "api.error.session_error", err.Error())
-		return
-	}
-
-	fromTurn := 0
-	toTurn := 0
-	if v := c.Query("from_turn"); v != "" {
-		fmt.Sscanf(v, "%d", &fromTurn)
-	}
-	if v := c.Query("to_turn"); v != "" {
-		fmt.Sscanf(v, "%d", &toTurn)
-	}
-
-	records, err := s.eventLogger.Replay(id, fromTurn, toTurn)
-	if err != nil {
-		respondErrorDetails(c, http.StatusInternalServerError, "replay_error", "api.error.replay_error", err.Error())
-		return
-	}
-
-	if records == nil {
-		records = []audit.EventRecord{}
-	}
-
-	c.Header("Content-Type", "application/x-ndjson")
-	for _, rec := range records {
-		data, _ := json.Marshal(rec)
-		c.Writer.Write(data)
-		c.Writer.Write([]byte("\n"))
-	}
 }

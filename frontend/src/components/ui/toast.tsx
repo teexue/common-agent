@@ -1,9 +1,7 @@
-/* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useRef,
   useState,
   type ReactNode,
@@ -67,7 +65,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (variant: ToastVariant, input: ToastInput | string) => {
       const { title, description, duration = 4000 } = normalize(input)
       const id = ++seqRef.current
-      setToasts((prev) => [...prev, { id, variant, title, description, duration }])
+      setToasts((prev) => [
+        ...prev,
+        { id, variant, title, description, duration },
+      ])
       if (duration > 0) {
         window.setTimeout(() => dismiss(id), duration)
       }
@@ -99,7 +100,7 @@ function Toaster({
   onDismiss: (id: number) => void
 }) {
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-full max-w-sm flex-col gap-2">
+    <div className="pointer-events-none fixed right-4 bottom-4 z-[100] flex w-full max-w-sm flex-col gap-2">
       {toasts.map((t) => (
         <ToastCard key={t.id} toast={t} onDismiss={onDismiss} />
       ))}
@@ -121,7 +122,7 @@ function ToastCard({
     >
       <span className="mt-0.5 shrink-0">{VARIANT_ICON[toast.variant]}</span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium leading-5">{toast.title}</p>
+        <p className="text-sm leading-5 font-medium">{toast.title}</p>
         {toast.description && (
           <p className="mt-0.5 text-xs leading-4 text-muted-foreground">
             {toast.description}
@@ -145,14 +146,4 @@ export function useToast(): ToastApi {
   const ctx = useContext(ToastContext)
   if (!ctx) throw new Error("useToast must be used within ToastProvider")
   return ctx
-}
-
-/** Convenience hook for one-shot effects that need toast without re-subscribing. */
-export function useToastEffect(
-  effect: (toast: ToastApi) => void,
-  deps: unknown[]
-): void {
-  const toast = useToast()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => effect(toast), deps)
 }

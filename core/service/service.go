@@ -27,8 +27,6 @@ type Service struct {
 	Store       session.Store
 	StateDB     *store.DB
 	Creds       *config.CredentialStore
-	// EventLogger, when set, records run events for session replay. Optional.
-	EventLogger *audit.EventLogger
 	// RequestLogger, when set, audits every LLM request/response. Optional.
 	RequestLogger *audit.RequestLogger
 

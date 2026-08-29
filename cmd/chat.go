@@ -120,7 +120,7 @@ func newChatState(catalog *provider.Catalog, mock bool, paths runtimePaths, agen
 		paths:    paths,
 		agent:    a,
 		provider: p,
-		sess:     session.New(a.Name),
+		sess:     session.New(a.ID),
 		reg:      newRegistry(""), // uses current working directory
 		store:    sessStore,
 	}, nil
@@ -196,7 +196,7 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 				fmt.Println(tui.Muted(i18n.T("tui.chat.session_saved", "id", state.sess.ID)))
 			}
 		}
-		state.sess = session.New(state.agent.Name)
+		state.sess = session.New(state.agent.ID)
 		fmt.Println(tui.Success(i18n.T("tui.chat.session_cleared")))
 		return false
 	case "/agent":
@@ -243,7 +243,7 @@ func handleAgentCommand(parts []string, state *chatState) bool {
 	}
 	state.agent = loaded
 	state.provider = p
-	state.sess = session.New(loaded.Name)
+	state.sess = session.New(loaded.ID)
 	fmt.Println(tui.Success(i18n.T("tui.chat.agent_switched", "agent", loaded.Name, "provider", loaded.Provider, "model", loaded.Model)))
 	return false
 }

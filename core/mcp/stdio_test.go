@@ -98,46 +98,11 @@ func TestStdioClient_WithMockServer(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping on windows")
 	}
-
-	// Create a mock MCP server script that speaks JSON-RPC over stdin/stdout.
-	dir := t.TempDir()
-	script := filepath.Join(dir, "mock-mcp.sh")
-
-	scriptContent := `#!/bin/sh
-# Read lines from stdin, respond to JSON-RPC requests.
-while IFS= read -r line; do
-  # Parse the method from the JSON line.
-  method=$(echo "$line" | python3 -c "import sys,json; print(json.load(sys.stdin).get('method',''))" 2>/dev/null)
-  id=$(echo "$line" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',0))" 2>/dev/null)
-
-  case "$method" in
-    initialize)
-      echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"mock\",\"version\":\"0.1\"}}}"
-      ;;
-    notifications/initialized)
-      # No response for notifications.
-      ;;
-    tools/list)
-      echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"tools\":[{\"name\":\"echo\",\"description\":\"Echo tool\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"msg\":{\"type\":\"string\"}}}}]}}"
-      ;;
-    tools/call)
-      echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"echo result\"}]}}"
-      ;;
-    *)
-      echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"error\":{\"code\":-32601,\"message\":\"method not found\"}}"
-      ;;
-  esac
-done
-`
-	if err := os.WriteFile(script, []byte(scriptContent), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	// Check if python3 is available (needed by the mock script).
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 not available for mock MCP server")
 	}
 
+	script := writeMockMCPScript(t)
 	client := NewStdioClient(StdioConfig{
 		Name:    "mock",
 		Command: "/bin/sh",
@@ -149,8 +114,25 @@ done
 		t.Fatalf("connect: %v", err)
 	}
 	defer client.Close()
+	assertMockEchoTool(t, ctx, client)
+}
 
-	// Test ListTools.
+func writeMockMCPScript(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	script := filepath.Join(dir, "mock-mcp.sh")
+	src, err := os.ReadFile(filepath.Join("testdata", "mock-mcp.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(script, src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return script
+}
+
+func assertMockEchoTool(t *testing.T, ctx context.Context, client *StdioClient) {
+	t.Helper()
 	tools, err := client.ListTools(ctx)
 	if err != nil {
 		t.Fatalf("list tools: %v", err)
@@ -165,7 +147,6 @@ done
 		t.Errorf("expected description 'Echo tool', got %q", tools[0].Description)
 	}
 
-	// Test CallTool.
 	result, err := client.CallTool(ctx, "echo", map[string]any{"msg": "hello"})
 	if err != nil {
 		t.Fatalf("call tool: %v", err)
@@ -176,8 +157,6 @@ done
 	if result.Content[0].Text != "echo result" {
 		t.Errorf("expected 'echo result', got %q", result.Content[0].Text)
 	}
-
-	// Test Close.
 	if err := client.Close(); err != nil {
 		t.Fatalf("close: %v", err)
 	}

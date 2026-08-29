@@ -19,6 +19,7 @@ type DelegateTask struct {
 
 // Name returns the tool name.
 func (d *DelegateTask) Name() string { return "delegate_task" }
+
 // Description returns a human-readable description.
 func (d *DelegateTask) Description() string {
 	return "Delegate a task to a sub-agent. The sub-agent will execute the task independently and return the result."

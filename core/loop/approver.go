@@ -2,8 +2,6 @@ package loop
 
 import (
 	"context"
-
-	"github.com/teexue/common-agent/core/permission"
 )
 
 // ApprovalRequest is sent to an Approver when a tool requires confirmation.
@@ -36,9 +34,4 @@ type DenyAllApprover struct{}
 // Approve always returns false.
 func (DenyAllApprover) Approve(_ context.Context, _ ApprovalRequest) bool {
 	return false
-}
-
-// decisionNeedsApproval checks if a permission decision requires interactive approval.
-func decisionNeedsApproval(d permission.Decision) bool {
-	return d == permission.Confirm
 }

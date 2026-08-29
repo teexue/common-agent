@@ -268,60 +268,65 @@ func defaultBaseURLHint(style provider.APIStyle) string {
 // UpsertProvider adds or updates a provider (SQLite when bound, else providers.yaml).
 // For updates, empty APIKeyEnv preserves the existing value.
 func UpsertProvider(home string, spec ProviderSpec) error {
-	providers := map[string]provider.ProfileEntry{}
-	if stateDB != nil {
-		var err error
-		providers, err = stateDB.ListProviderEntries()
-		if err != nil {
-			return err
-		}
-	} else {
-		if err := ensureHome(home); err != nil {
-			return err
-		}
-		path := ProvidersFile(home)
-		if data, err := os.ReadFile(path); err == nil {
-			var file provider.CatalogFile
-			if err := yaml.Unmarshal(data, &file); err != nil {
-				return fmt.Errorf("parse providers: %w", err)
-			}
-			providers = file.Providers
-			if providers == nil {
-				providers = map[string]provider.ProfileEntry{}
-			}
-		} else if !os.IsNotExist(err) {
-			return fmt.Errorf("read providers: %w", err)
-		}
+	providers, err := loadProvidersForUpsert(home)
+	if err != nil {
+		return err
 	}
-
-	// For updates, preserve existing fields if not provided.
-	var existing provider.ProfileEntry
-	if e, ok := providers[spec.Name]; ok {
-		existing = e
-		if spec.APIKeyEnv == "" {
-			spec.APIKeyEnv = existing.APIKeyEnv
-		}
-		if spec.APIStyle == "" {
-			spec.APIStyle = existing.APIStyle
-		}
-		if spec.DefaultModel == "" {
-			spec.DefaultModel = existing.DefaultModel
-		}
-		if spec.BaseURL == "" {
-			spec.BaseURL = existing.BaseURL
-		}
-		if spec.ModelsPath == "" {
-			spec.ModelsPath = existing.ModelsPath
-		}
-		if spec.APIVersion == "" {
-			spec.APIVersion = existing.APIVersion
-		}
-	}
-
+	existing := providers[spec.Name]
+	spec.applyDefaults(existing)
 	if err := spec.validate(); err != nil {
 		return err
 	}
+	return writeProviderEntry(home, spec.Name, spec.toEntry(existing), providers)
+}
 
+func loadProvidersForUpsert(home string) (map[string]provider.ProfileEntry, error) {
+	if stateDB != nil {
+		return stateDB.ListProviderEntries()
+	}
+	if err := ensureHome(home); err != nil {
+		return nil, err
+	}
+	providers := map[string]provider.ProfileEntry{}
+	data, err := os.ReadFile(ProvidersFile(home))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return providers, nil
+		}
+		return nil, fmt.Errorf("read providers: %w", err)
+	}
+	var file provider.CatalogFile
+	if err := yaml.Unmarshal(data, &file); err != nil {
+		return nil, fmt.Errorf("parse providers: %w", err)
+	}
+	if file.Providers != nil {
+		providers = file.Providers
+	}
+	return providers, nil
+}
+
+func (spec *ProviderSpec) applyDefaults(existing provider.ProfileEntry) {
+	if spec.APIKeyEnv == "" {
+		spec.APIKeyEnv = existing.APIKeyEnv
+	}
+	if spec.APIStyle == "" {
+		spec.APIStyle = existing.APIStyle
+	}
+	if spec.DefaultModel == "" {
+		spec.DefaultModel = existing.DefaultModel
+	}
+	if spec.BaseURL == "" {
+		spec.BaseURL = existing.BaseURL
+	}
+	if spec.ModelsPath == "" {
+		spec.ModelsPath = existing.ModelsPath
+	}
+	if spec.APIVersion == "" {
+		spec.APIVersion = existing.APIVersion
+	}
+}
+
+func (spec ProviderSpec) toEntry(existing provider.ProfileEntry) provider.ProfileEntry {
 	entry := provider.ProfileEntry{
 		APIStyle:     spec.APIStyle,
 		BaseURL:      spec.BaseURL,
@@ -340,16 +345,37 @@ func UpsertProvider(home string, spec ProviderSpec) error {
 	} else {
 		entry.Thinking = existing.Thinking
 	}
+	return entry
+}
 
+func writeProviderEntry(home, name string, entry provider.ProfileEntry, providers map[string]provider.ProfileEntry) error {
 	if stateDB != nil {
-		return stateDB.UpsertProviderEntry(spec.Name, entry)
+		return stateDB.UpsertProviderEntry(name, entry)
 	}
-	providers[spec.Name] = entry
+	providers[name] = entry
 	data, err := yaml.Marshal(provider.CatalogFile{Providers: providers})
 	if err != nil {
 		return fmt.Errorf("marshal providers: %w", err)
 	}
 	return os.WriteFile(ProvidersFile(home), data, 0o644)
+}
+
+func loadProviderEntries(home string) (map[string]provider.ProfileEntry, error) {
+	if stateDB != nil {
+		return stateDB.ListProviderEntries()
+	}
+	data, err := os.ReadFile(ProvidersFile(home))
+	if err != nil {
+		return nil, fmt.Errorf("read providers: %w", err)
+	}
+	var file provider.CatalogFile
+	if err := yaml.Unmarshal(data, &file); err != nil {
+		return nil, fmt.Errorf("parse providers: %w", err)
+	}
+	if file.Providers == nil {
+		return map[string]provider.ProfileEntry{}, nil
+	}
+	return file.Providers, nil
 }
 
 // MergeProviderModelWindow records a discovered context window for one model
@@ -359,27 +385,9 @@ func MergeProviderModelWindow(home, name, model string, window int) (bool, error
 	if name == "" || model == "" || window <= 0 {
 		return false, nil
 	}
-	providers := map[string]provider.ProfileEntry{}
-	if stateDB != nil {
-		var err error
-		providers, err = stateDB.ListProviderEntries()
-		if err != nil {
-			return false, err
-		}
-	} else {
-		path := ProvidersFile(home)
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return false, fmt.Errorf("read providers: %w", err)
-		}
-		var file provider.CatalogFile
-		if err := yaml.Unmarshal(data, &file); err != nil {
-			return false, fmt.Errorf("parse providers: %w", err)
-		}
-		providers = file.Providers
-		if providers == nil {
-			return false, fmt.Errorf("provider %q not found", name)
-		}
+	providers, err := loadProviderEntries(home)
+	if err != nil {
+		return false, err
 	}
 	entry, ok := providers[name]
 	if !ok {

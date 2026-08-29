@@ -9,26 +9,28 @@ import {
 import { fetchHealth } from "@/lib/api"
 import type { HealthStatus } from "@/types/agent"
 
+function applyHealth(
+  mounted: boolean,
+  data: HealthStatus,
+  setHealth: (status: HealthStatus) => void
+) {
+  if (!mounted) return
+  setHealth(data)
+}
+
 export function HealthIndicator() {
   const { t } = useTranslation()
   const [health, setHealth] = useState<HealthStatus | null>(null)
 
   useEffect(() => {
     let mounted = true
-
     const load = () => {
       fetchHealth()
-        .then((data) => {
-          if (mounted) setHealth(data)
-        })
-        .catch(() => {
-          if (mounted) setHealth({ status: "down" })
-        })
+        .then((data) => applyHealth(mounted, data, setHealth))
+        .catch(() => applyHealth(mounted, { status: "down" }, setHealth))
     }
-
     load()
     const interval = setInterval(load, 30000)
-
     return () => {
       mounted = false
       clearInterval(interval)

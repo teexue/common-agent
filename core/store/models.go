@@ -2,9 +2,12 @@ package store
 
 import "time"
 
-// User roles for RBAC.
 const (
-	RoleAdmin  = "admin"
+	// RoleAdmin may manage users, providers, embedding writes, and audit
+	// export. At least one admin must remain (last-admin protection).
+	RoleAdmin = "admin"
+	// RoleMember is the default account role: password sessions pass scope
+	// checks but cannot hit requireAdmin routes.
 	RoleMember = "member"
 )
 

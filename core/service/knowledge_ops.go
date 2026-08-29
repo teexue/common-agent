@@ -180,30 +180,12 @@ func (s *Service) SaveEmbeddingSettings(req SaveEmbeddingRequest) error {
 		Model:      req.Model,
 		Dimensions: req.Dimensions,
 	}.Normalize()
-
-	if req.APIKey != "" {
-		if cfg.APIKeyEnv == "" {
-			return &ArgError{Field: "api_key_env", Message: "api_key_env is required when setting api_key"}
-		}
-		if s.Creds == nil {
-			return &ServerError{Message: "credential store is not configured"}
-		}
-		if err := s.Creds.Set(cfg.APIKeyEnv, req.APIKey); err != nil {
-			return fmt.Errorf("store api key: %w", err)
-		}
+	if err := s.storeEmbeddingKey(cfg, req.APIKey); err != nil {
+		return err
 	}
-
-	// Soft-validate shape before persist (key may already exist in store/env).
-	if cfg.Model == "" {
-		return &ArgError{Field: "model", Message: "embedding.model is required"}
+	if err := validateEmbeddingCfg(cfg); err != nil {
+		return err
 	}
-	if cfg.Backend == embedding.BackendOpenAI && cfg.BaseURL == "" {
-		return &ArgError{Field: "base_url", Message: "embedding.base_url is required"}
-	}
-	if cfg.Backend == embedding.BackendOpenAI && cfg.APIKeyEnv == "" {
-		return &ArgError{Field: "api_key_env", Message: "embedding.api_key_env is required"}
-	}
-
 	settings, err := config.LoadSettings(home)
 	if err != nil {
 		return err
@@ -213,8 +195,40 @@ func (s *Service) SaveEmbeddingSettings(req SaveEmbeddingRequest) error {
 	if err := config.SaveSettings(home, settings); err != nil {
 		return err
 	}
+	return s.applyEmbedder(cfg)
+}
 
-	var lookup embedding.KeyLookup = os.Getenv
+func (s *Service) storeEmbeddingKey(cfg embedding.Config, apiKey string) error {
+	if apiKey == "" {
+		return nil
+	}
+	if cfg.APIKeyEnv == "" {
+		return &ArgError{Field: "api_key_env", Message: "api_key_env is required when setting api_key"}
+	}
+	if s.Creds == nil {
+		return &ServerError{Message: "credential store is not configured"}
+	}
+	if err := s.Creds.Set(cfg.APIKeyEnv, apiKey); err != nil {
+		return fmt.Errorf("store api key: %w", err)
+	}
+	return nil
+}
+
+func validateEmbeddingCfg(cfg embedding.Config) error {
+	if cfg.Model == "" {
+		return &ArgError{Field: "model", Message: "embedding.model is required"}
+	}
+	if cfg.Backend == embedding.BackendOpenAI && cfg.BaseURL == "" {
+		return &ArgError{Field: "base_url", Message: "embedding.base_url is required"}
+	}
+	if cfg.Backend == embedding.BackendOpenAI && cfg.APIKeyEnv == "" {
+		return &ArgError{Field: "api_key_env", Message: "embedding.api_key_env is required"}
+	}
+	return nil
+}
+
+func (s *Service) applyEmbedder(cfg embedding.Config) error {
+	lookup := embedding.KeyLookup(os.Getenv)
 	if s.Creds != nil {
 		lookup = s.Creds.Lookup
 	}

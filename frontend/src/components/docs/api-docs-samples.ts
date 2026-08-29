@@ -1,22 +1,17 @@
 /** Builds runnable API samples against the current origin. */
-export function buildRunSamples(base: string) {
-  return [
-    {
-      id: "curl",
-      label: "cURL",
-      code: `curl -N -X POST "${base}/v1/agents/run" \\
+function curlRunCode(base: string): string {
+  return `curl -N -X POST "${base}/v1/agents/run" \\
   -H "Authorization: Bearer <JWT>" \\
   -H "Content-Type: application/json" \\
   -H "Accept: text/event-stream" \\
   -d '{
     "agent": "agt_demo01",
     "prompt": "你好，介绍一下你自己"
-  }'`,
-    },
-    {
-      id: "js",
-      label: "JavaScript",
-      code: `const res = await fetch("${base}/v1/agents/run", {
+  }'`
+}
+
+function jsRunCode(base: string): string {
+  return `const res = await fetch("${base}/v1/agents/run", {
   method: "POST",
   headers: {
     Authorization: "Bearer <JWT>",
@@ -44,12 +39,11 @@ while (true) {
     const event = JSON.parse(line.slice(6))
     console.log(event.type, event)
   }
-}`,
-    },
-    {
-      id: "python",
-      label: "Python",
-      code: `import json, requests
+}`
+}
+
+function pythonRunCode(base: string): string {
+  return `import json, requests
 
 url = "${base}/v1/agents/run"
 headers = {
@@ -65,8 +59,14 @@ with requests.post(url, headers=headers, json=payload, stream=True) as r:
         if not line or not line.startswith("data: "):
             continue
         event = json.loads(line[6:])
-        print(event["type"], event)`,
-    },
+        print(event["type"], event)`
+}
+
+export function buildRunSamples(base: string) {
+  return [
+    { id: "curl", label: "cURL", code: curlRunCode(base) },
+    { id: "js", label: "JavaScript", code: jsRunCode(base) },
+    { id: "python", label: "Python", code: pythonRunCode(base) },
   ]
 }
 

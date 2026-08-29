@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next"
+import type { TFunction } from "i18next"
 import {
   CodeBlock,
   DocsSection,
@@ -6,6 +7,7 @@ import {
   EndpointRow,
   FieldTable,
   SampleTabs,
+  type FieldRow,
 } from "@/components/docs/api-docs-ui"
 import {
   buildRunSamples,
@@ -26,6 +28,70 @@ export function OverviewSection() {
   )
 }
 
+function authHeaderRows(t: TFunction): FieldRow[] {
+  return [
+    {
+      name: "Authorization",
+      type: "header",
+      required: true,
+      desc: t("apiDocs.authHeaderBearer"),
+    },
+    { name: "X-API-Key", type: "header", desc: t("apiDocs.authHeaderKey") },
+    { name: "access_token", type: "query", desc: t("apiDocs.authQuery") },
+  ]
+}
+
+function loginFieldRows(t: TFunction): FieldRow[] {
+  return [
+    {
+      name: "username",
+      type: "string",
+      required: true,
+      desc: t("apiDocs.fieldUsername"),
+    },
+    {
+      name: "password",
+      type: "string",
+      required: true,
+      desc: t("apiDocs.fieldPassword"),
+    },
+  ]
+}
+
+function AuthEndpoints() {
+  const { t } = useTranslation()
+  return (
+    <div className="space-y-8">
+      <EndpointCard
+        method="POST"
+        path="/v1/auth/login"
+        title={t("apiDocs.authLoginTitle")}
+      >
+        <FieldTable rows={loginFieldRows(t)} />
+      </EndpointCard>
+      <EndpointCard
+        method="POST"
+        path="/v1/auth/token"
+        title={t("apiDocs.authTokenTitle")}
+      >
+        <FieldTable
+          rows={[
+            {
+              name: "api_key",
+              type: "string",
+              required: true,
+              desc: t("apiDocs.fieldApiKey"),
+            },
+          ]}
+        />
+      </EndpointCard>
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        {t("apiDocs.authKeysHint")}
+      </p>
+    </div>
+  )
+}
+
 export function AuthSection({
   samples,
 }: {
@@ -39,75 +105,35 @@ export function AuthSection({
       hint={t("apiDocs.authHint")}
     >
       <div className="max-w-2xl">
-        <FieldTable
-          rows={[
-            {
-              name: "Authorization",
-              type: "header",
-              required: true,
-              desc: t("apiDocs.authHeaderBearer"),
-            },
-            {
-              name: "X-API-Key",
-              type: "header",
-              desc: t("apiDocs.authHeaderKey"),
-            },
-            {
-              name: "access_token",
-              type: "query",
-              desc: t("apiDocs.authQuery"),
-            },
-          ]}
-        />
+        <FieldTable rows={authHeaderRows(t)} />
       </div>
       <div className="grid gap-8 lg:grid-cols-2">
-        <div className="space-y-8">
-          <EndpointCard
-            method="POST"
-            path="/v1/auth/login"
-            title={t("apiDocs.authLoginTitle")}
-          >
-            <FieldTable
-              rows={[
-                {
-                  name: "username",
-                  type: "string",
-                  required: true,
-                  desc: t("apiDocs.fieldUsername"),
-                },
-                {
-                  name: "password",
-                  type: "string",
-                  required: true,
-                  desc: t("apiDocs.fieldPassword"),
-                },
-              ]}
-            />
-          </EndpointCard>
-          <EndpointCard
-            method="POST"
-            path="/v1/auth/token"
-            title={t("apiDocs.authTokenTitle")}
-          >
-            <FieldTable
-              rows={[
-                {
-                  name: "api_key",
-                  type: "string",
-                  required: true,
-                  desc: t("apiDocs.fieldApiKey"),
-                },
-              ]}
-            />
-          </EndpointCard>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            {t("apiDocs.authKeysHint")}
-          </p>
-        </div>
+        <AuthEndpoints />
         <SampleTabs samples={samples} />
       </div>
     </DocsSection>
   )
+}
+
+function runFieldRows(t: TFunction): FieldRow[] {
+  return [
+    {
+      name: "agent",
+      type: "string",
+      required: true,
+      desc: t("apiDocs.fieldAgent"),
+    },
+    {
+      name: "prompt",
+      type: "string",
+      required: true,
+      desc: t("apiDocs.fieldPrompt"),
+    },
+    { name: "session_id", type: "string", desc: t("apiDocs.fieldSessionId") },
+    { name: "workdir", type: "string", desc: t("apiDocs.fieldWorkdir") },
+    { name: "images", type: "array", desc: t("apiDocs.fieldImages") },
+    { name: "messages", type: "array", desc: t("apiDocs.fieldMessages") },
+  ]
 }
 
 export function RunSection({
@@ -131,42 +157,7 @@ export function RunSection({
           <p className="text-sm leading-relaxed text-muted-foreground">
             {t("apiDocs.runResponseHint")}
           </p>
-          <FieldTable
-            rows={[
-              {
-                name: "agent",
-                type: "string",
-                required: true,
-                desc: t("apiDocs.fieldAgent"),
-              },
-              {
-                name: "prompt",
-                type: "string",
-                required: true,
-                desc: t("apiDocs.fieldPrompt"),
-              },
-              {
-                name: "session_id",
-                type: "string",
-                desc: t("apiDocs.fieldSessionId"),
-              },
-              {
-                name: "workdir",
-                type: "string",
-                desc: t("apiDocs.fieldWorkdir"),
-              },
-              {
-                name: "images",
-                type: "array",
-                desc: t("apiDocs.fieldImages"),
-              },
-              {
-                name: "messages",
-                type: "array",
-                desc: t("apiDocs.fieldMessages"),
-              },
-            ]}
-          />
+          <FieldTable rows={runFieldRows(t)} />
         </EndpointCard>
         <SampleTabs samples={samples} />
       </div>
@@ -193,10 +184,7 @@ export function EventsSection() {
             { name: "reasoning_delta", desc: t("apiDocs.evReasoning") },
             { name: "tool_start", desc: t("apiDocs.evToolStart") },
             { name: "tool_result", desc: t("apiDocs.evToolResult") },
-            {
-              name: "tool_approval_required",
-              desc: t("apiDocs.evApproval"),
-            },
+            { name: "tool_approval_required", desc: t("apiDocs.evApproval") },
             { name: "error", desc: t("apiDocs.evError") },
             { name: "done", desc: t("apiDocs.evDone") },
           ]}
@@ -204,6 +192,23 @@ export function EventsSection() {
       </div>
     </DocsSection>
   )
+}
+
+function approveFieldRows(t: TFunction): FieldRow[] {
+  return [
+    {
+      name: "approval_id",
+      type: "string",
+      required: true,
+      desc: t("apiDocs.fieldApprovalId"),
+    },
+    {
+      name: "approved",
+      type: "boolean",
+      required: true,
+      desc: t("apiDocs.fieldApproved"),
+    },
+  ]
 }
 
 export function ApproveSection({ base }: { base: string }) {
@@ -220,22 +225,7 @@ export function ApproveSection({ base }: { base: string }) {
           path="/v1/agents/approve"
           title={t("apiDocs.approveEndpointTitle")}
         >
-          <FieldTable
-            rows={[
-              {
-                name: "approval_id",
-                type: "string",
-                required: true,
-                desc: t("apiDocs.fieldApprovalId"),
-              },
-              {
-                name: "approved",
-                type: "boolean",
-                required: true,
-                desc: t("apiDocs.fieldApproved"),
-              },
-            ]}
-          />
+          <FieldTable rows={approveFieldRows(t)} />
         </EndpointCard>
         <CodeBlock
           label="cURL"

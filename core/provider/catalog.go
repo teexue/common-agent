@@ -153,17 +153,7 @@ func (e ProfileEntry) resolve(name string, credLookup func(string) string) (Prof
 	}
 
 	vendor, hasVendor := LookupVendor(name)
-
-	baseURL := e.BaseURL
-	if baseURL == "" {
-		if hasVendor {
-			baseURL = vendor.BaseURLFor(e.APIStyle)
-		}
-		if baseURL == "" {
-			baseURL = defaultBaseURLFor(e.APIStyle)
-		}
-	}
-
+	baseURL := resolveBaseURL(e, vendor, hasVendor)
 	apiVersion := e.APIVersion
 	if apiVersion == "" && hasVendor && vendor.APIVersion != "" {
 		apiVersion = vendor.APIVersion
@@ -171,23 +161,11 @@ func (e ProfileEntry) resolve(name string, credLookup func(string) string) (Prof
 	if e.APIStyle == StyleAnthropic && apiVersion == "" {
 		apiVersion = defaultAnthropicVersion
 	}
-
-	authStyle := e.AuthStyle
-	if authStyle == "" {
-		if hasVendor {
-			authStyle = vendor.AuthForStyle(e.APIStyle)
-		} else if e.APIStyle == StyleAnthropic {
-			authStyle = AuthXAPIKey
-		} else {
-			authStyle = AuthBearer
-		}
-	}
-
+	authStyle := resolveAuthStyle(e, vendor, hasVendor)
 	modelsPath := e.ModelsPath
 	if modelsPath == "" {
 		modelsPath = DefaultModelsPathFor(e.APIStyle)
 	}
-
 	displayName := e.DisplayName
 	if displayName == "" && hasVendor {
 		displayName = vendor.DisplayName
@@ -208,6 +186,31 @@ func (e ProfileEntry) resolve(name string, credLookup func(string) string) (Prof
 		KeepAlive:    e.KeepAlive,
 		ModelWindows: e.ModelWindows,
 	}, nil
+}
+
+func resolveBaseURL(e ProfileEntry, vendor Vendor, hasVendor bool) string {
+	if e.BaseURL != "" {
+		return e.BaseURL
+	}
+	if hasVendor {
+		if u := vendor.BaseURLFor(e.APIStyle); u != "" {
+			return u
+		}
+	}
+	return defaultBaseURLFor(e.APIStyle)
+}
+
+func resolveAuthStyle(e ProfileEntry, vendor Vendor, hasVendor bool) AuthStyle {
+	if e.AuthStyle != "" {
+		return e.AuthStyle
+	}
+	if hasVendor {
+		return vendor.AuthForStyle(e.APIStyle)
+	}
+	if e.APIStyle == StyleAnthropic {
+		return AuthXAPIKey
+	}
+	return AuthBearer
 }
 
 func defaultBaseURLFor(style APIStyle) string {

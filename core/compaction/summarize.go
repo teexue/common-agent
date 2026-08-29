@@ -83,77 +83,77 @@ func (c *SummarizingCompactor) Compact(ctx context.Context, messages []provider.
 	if !NeedsCompactionByTokensCount(c.currentUsage(messages), c.tokenLimit) && !NeedsCompaction(messages, 0) {
 		return nil, nil
 	}
+	systemMsgs, convMsgs := splitSystemConv(messages)
+	keepHead, keep := c.keepBounds(len(convMsgs))
+	head := convMsgs[:keepHead]
+	recent := ensureToolPairs(convMsgs[len(convMsgs)-keep:])
+	old, lastSummary, ok := c.messagesToSummarize(convMsgs, keepHead, keep)
+	if !ok {
+		if lastSummary != "" {
+			return c.buildResult(len(messages), systemMsgs, head, recent, lastSummary)
+		}
+		return nil, nil
+	}
+	summary, err := c.summarize(ctx, lastSummary, old)
+	if err != nil {
+		summary = fmt.Sprintf("[Context compacted: %d older messages removed; summarization unavailable]", len(old))
+	}
+	return c.buildResult(len(messages), systemMsgs, head, recent, summary)
+}
 
-	var systemMsgs, convMsgs []provider.Message
+func splitSystemConv(messages []provider.Message) (system, conv []provider.Message) {
 	for _, m := range messages {
 		if m.Role == provider.RoleSystem {
-			systemMsgs = append(systemMsgs, m)
+			system = append(system, m)
 		} else {
-			convMsgs = append(convMsgs, m)
+			conv = append(conv, m)
 		}
 	}
+	return system, conv
+}
 
-	keepHead := c.keepHead
+func (c *SummarizingCompactor) keepBounds(n int) (keepHead, keep int) {
+	keepHead = c.keepHead
 	if keepHead <= 0 {
 		keepHead = defaultKeepHead
 	}
-	if keepHead > len(convMsgs) {
-		keepHead = len(convMsgs)
+	if keepHead > n {
+		keepHead = n
 	}
-	keep := c.keepRecent
+	keep = c.keepRecent
 	if keep <= 0 {
 		keep = defaultKeepRecent
 	}
-	if keep > len(convMsgs)-keepHead {
-		keep = len(convMsgs) - keepHead
+	if keep > n-keepHead {
+		keep = n - keepHead
 	}
 	if keep < 0 {
 		keep = 0
 	}
+	return keepHead, keep
+}
 
-	head := convMsgs[:keepHead]
-	recent := ensureToolPairs(convMsgs[len(convMsgs)-keep:])
-
-	// Find an existing summary message to reuse.
+func (c *SummarizingCompactor) messagesToSummarize(conv []provider.Message, keepHead, keep int) (old []provider.Message, lastSummary string, ok bool) {
+	searchEnd := len(conv) - keep
 	summaryIdx := -1
-	lastSummary := ""
-	searchEnd := len(convMsgs) - keep
 	for i := keepHead; i < searchEnd; i++ {
-		m := convMsgs[i]
+		m := conv[i]
 		if m.Role == provider.RoleUser && strings.HasPrefix(m.Content, summaryMarker) {
 			summaryIdx = i
 			lastSummary = strings.TrimPrefix(m.Content, summaryMarker)
 			break
 		}
 	}
-
-	var old []provider.Message
 	if summaryIdx >= 0 {
-		// Incremental: only the messages after the existing summary and before
-		// the recent tail are new history.
 		from, to := summaryIdx+1, searchEnd
 		if from > to {
 			from = to
 		}
-		old = convMsgs[from:to]
-		if len(old) == 0 {
-			// Nothing new to summarize; reuse the existing summary verbatim.
-			return c.buildResult(len(messages), systemMsgs, head, recent, lastSummary)
-		}
-	} else {
-		old = convMsgs[keepHead:searchEnd]
-		if len(old) == 0 {
-			return nil, nil
-		}
+		old = conv[from:to]
+		return old, lastSummary, len(old) > 0
 	}
-
-	summary, err := c.summarize(ctx, lastSummary, old)
-	if err != nil {
-		// Fall back to a placeholder so compaction still happens even when
-		// the summarization call fails.
-		summary = fmt.Sprintf("[Context compacted: %d older messages removed; summarization unavailable]", len(old))
-	}
-	return c.buildResult(len(messages), systemMsgs, head, recent, summary)
+	old = conv[keepHead:searchEnd]
+	return old, "", len(old) > 0
 }
 
 // buildResult assembles the compacted message list: system prompt + stable
@@ -224,7 +224,9 @@ func renderMessage(m provider.Message) string {
 	case provider.RoleAssistant:
 		sb.WriteString("助手: ")
 	case provider.RoleTool:
-		sb.WriteString(fmt.Sprintf("工具 %s 返回: ", m.Name))
+		sb.WriteString("工具 ")
+		sb.WriteString(m.Name)
+		sb.WriteString(" 返回: ")
 	default:
 		sb.WriteString("系统: ")
 	}
@@ -233,7 +235,7 @@ func renderMessage(m provider.Message) string {
 	}
 	if len(m.ToolCalls) > 0 {
 		for _, tc := range m.ToolCalls {
-			sb.WriteString(fmt.Sprintf("\n  [调用工具 %s 参数 %s]", tc.Name, string(tc.Arguments)))
+			fmt.Fprintf(&sb, "\n  [调用工具 %s 参数 %s]", tc.Name, string(tc.Arguments))
 		}
 	}
 	return sb.String()

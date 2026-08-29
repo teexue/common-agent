@@ -23,7 +23,7 @@ func (CLIApprover) Approve(ctx context.Context, req loop.ApprovalRequest) bool {
 	ch := make(chan string, 1)
 	go func() {
 		var input string
-		fmt.Scanln(&input)
+		_, _ = fmt.Scanln(&input)
 		ch <- strings.TrimSpace(strings.ToLower(input))
 	}()
 

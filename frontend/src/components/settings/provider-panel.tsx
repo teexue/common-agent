@@ -1,87 +1,119 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { deleteProvider, fetchProviders } from "@/lib/api"
 import type { ProviderInfo } from "@/types/agent"
 import { EmptyState } from "@/components/shared/empty-state"
+import { FormError } from "./form-error"
 import { ProviderCard } from "./provider-card"
 import { ProviderForm } from "./provider-form"
+import { errMessage } from "./select-value"
 
-/** Provider list / create / edit panel for Settings. */
-export function ProviderPanel() {
-  const { t } = useTranslation()
-  const [providers, setProviders] = useState<ProviderInfo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const refresh = () => {
-    setLoading(true)
-    setError(null)
-    fetchProviders()
-      .then((list) => setProviders(list ?? []))
-      .catch((e: unknown) => {
-        setProviders([])
-        setError(e instanceof Error ? e.message : String(e))
-      })
-      .finally(() => setLoading(false))
-  }
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refresh()
-  }, [])
-
-  if (loading) return <EmptyState title={t("settings.loading")} />
-
+function ProviderItems({
+  providers,
+  editing,
+  onEdit,
+  onSaved,
+  onCancel,
+  onDelete,
+}: {
+  providers: ProviderInfo[]
+  editing: string | null
+  onEdit: (name: string) => void
+  onSaved: () => void
+  onCancel: () => void
+  onDelete: (name: string) => Promise<void>
+}) {
   return (
-    <div className="space-y-3">
-      {error && (
-        <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
-        </p>
-      )}
-      {providers.length === 0 && editing === null && (
-        <EmptyState title={t("settings.providersEmpty")} />
-      )}
+    <>
       {providers.map((p) =>
         editing === p.name ? (
           <ProviderForm
             key={p.name}
             provider={p}
-            onSaved={() => {
-              setEditing(null)
-              refresh()
-            }}
-            onCancel={() => setEditing(null)}
+            onSaved={onSaved}
+            onCancel={onCancel}
           />
         ) : (
           <ProviderCard
             key={p.name}
             provider={p}
-            onEdit={() => setEditing(p.name)}
-            onDelete={async () => {
-              await deleteProvider(p.name)
-              refresh()
-            }}
+            onEdit={() => onEdit(p.name)}
+            onDelete={() => void onDelete(p.name)}
           />
         )
       )}
-      {editing === "" && (
+    </>
+  )
+}
+
+function useProviderPanel() {
+  const [providers, setProviders] = useState<ProviderInfo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const load = useCallback(
+    () =>
+      fetchProviders()
+        .then((list) => setProviders(list ?? []))
+        .catch((e: unknown) => {
+          setProviders([])
+          setError(errMessage(e))
+        }),
+    []
+  )
+  const refresh = useCallback(() => {
+    setLoading(true)
+    setError(null)
+    void load().finally(() => setLoading(false))
+  }, [load])
+  useEffect(() => {
+    void load().finally(() => setLoading(false))
+  }, [load])
+  return { providers, loading, editing, setEditing, error, refresh }
+}
+
+/** Provider list / create / edit panel for Settings. */
+export function ProviderPanel() {
+  const { t } = useTranslation()
+  const p = useProviderPanel()
+  if (p.loading) return <EmptyState title={t("settings.loading")} />
+  return (
+    <div className="space-y-3">
+      <FormError error={p.error} />
+      {p.providers.length === 0 && p.editing === null && (
+        <EmptyState title={t("settings.providersEmpty")} />
+      )}
+      <ProviderItems
+        providers={p.providers}
+        editing={p.editing}
+        onEdit={p.setEditing}
+        onSaved={() => {
+          p.setEditing(null)
+          p.refresh()
+        }}
+        onCancel={() => p.setEditing(null)}
+        onDelete={async (name) => {
+          await deleteProvider(name)
+          p.refresh()
+        }}
+      />
+      {p.editing === "" && (
         <ProviderForm
           onSaved={() => {
-            setEditing(null)
-            refresh()
+            p.setEditing(null)
+            p.refresh()
           }}
-          onCancel={() => setEditing(null)}
+          onCancel={() => p.setEditing(null)}
         />
       )}
-      {editing === null && (
+      {p.editing === null && (
         <Button
           variant="outline"
           size="sm"
           className="w-full gap-1.5 text-xs"
-          onClick={() => setEditing("")}
+          onClick={() => p.setEditing("")}
         >
           <Plus className="h-3.5 w-3.5" /> {t("settings.addProvider")}
         </Button>

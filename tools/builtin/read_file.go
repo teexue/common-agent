@@ -19,6 +19,7 @@ type ReadFile struct {
 
 // Name returns the tool name.
 func (ReadFile) Name() string { return "read_file" }
+
 // Description returns a human-readable description.
 func (ReadFile) Description() string {
 	return "Read the contents of a file. Returns the file content as text. " +

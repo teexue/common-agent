@@ -1,6 +1,7 @@
 import type { VendorInfo } from "@/types/agent"
 
 export type StyleOption = "openai" | "anthropic" | "ollama"
+export type AuthStyle = "x-api-key" | "bearer" | ""
 
 export function defaultModelsPath(style: StyleOption): string {
   switch (style) {

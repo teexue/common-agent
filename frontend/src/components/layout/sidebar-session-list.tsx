@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { Clock, Play, Trash2 } from "lucide-react"
+import { Clock, Loader2, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -14,7 +14,6 @@ interface SessionListProps {
   activeSessionId?: string | null
   onResumeSession?: (id: string) => void
   onDeleteSession?: (id: string) => void
-  onReplaySession?: (id: string) => void
   agentLabels?: Record<string, string>
 }
 
@@ -51,14 +50,12 @@ function SessionListItem({
   active,
   onResume,
   onDelete,
-  onReplay,
   agentLabel,
 }: {
   sess: SessionMeta
   active: boolean
   onResume?: (id: string) => void
   onDelete?: (id: string) => void
-  onReplay?: (id: string) => void
   agentLabel?: string
 }) {
   const { t } = useTranslation()
@@ -80,19 +77,18 @@ function SessionListItem({
             {agentLabel || sess.agent} · {formatRelativeTime(sess.updated_at)}
           </span>
         </div>
+        {sess.running && (
+          <Tooltip>
+            <TooltipTrigger render={<span data-slot="running-indicator" />}>
+              <Loader2 className="h-3 w-3 shrink-0 animate-spin text-primary" />
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {t("layout.sessionRunning")}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </button>
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-        {onReplay && (
-          <SessionActionBtn
-            tooltip={t("layout.replaySession")}
-            onClick={(e) => {
-              e.stopPropagation()
-              onReplay(sess.id)
-            }}
-          >
-            <Play className="h-3 w-3 text-muted-foreground" />
-          </SessionActionBtn>
-        )}
         {onDelete && (
           <SessionActionBtn
             tooltip={t("layout.deleteSession")}
@@ -114,7 +110,6 @@ export function SessionList({
   activeSessionId,
   onResumeSession,
   onDeleteSession,
-  onReplaySession,
   agentLabels,
 }: SessionListProps) {
   const { t } = useTranslation()
@@ -133,7 +128,6 @@ export function SessionList({
             active={activeSessionId === sess.id}
             onResume={onResumeSession}
             onDelete={onDeleteSession}
-            onReplay={onReplaySession}
             agentLabel={agentLabels?.[sess.agent]}
           />
         ))}

@@ -7,6 +7,7 @@ import {
   HardDrive,
   Loader2,
   Users,
+  type LucideIcon,
 } from "lucide-react"
 import { fetchMetrics } from "@/lib/api"
 import type { MetricsData } from "@/types/agent"
@@ -27,7 +28,15 @@ function formatUptime(seconds: number): string {
   return `${h}h ${m}m`
 }
 
-function buildMetricCards(m: MetricsData, t: TFunction) {
+interface MetricCard {
+  icon: LucideIcon
+  label: string
+  value: string
+  color: string
+  bg: string
+}
+
+function buildMetricCards(m: MetricsData, t: TFunction): MetricCard[] {
   return [
     {
       icon: Activity,
@@ -67,6 +76,12 @@ function buildMetricCards(m: MetricsData, t: TFunction) {
   ]
 }
 
+function statusMark(status: string) {
+  if (status === "completed") return { cls: "text-success", mark: "✓" }
+  if (status === "failed") return { cls: "text-destructive", mark: "✗" }
+  return { cls: "", mark: "-" }
+}
+
 function AgentStats({
   agents,
 }: {
@@ -81,46 +96,75 @@ function AgentStats({
         {t("monitoring.agentStats")}
       </p>
       <div className="space-y-1.5">
-        {entries.map(([name, stats]) => (
-          <div
-            key={name}
-            className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2"
-          >
-            <span className="truncate text-xs font-medium text-foreground">
-              {name}
-            </span>
-            <div className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
-              <span>{t("monitoring.runs", { count: stats.runs })}</span>
-              <span>
-                {stats.avg_ms > 0
-                  ? `${(stats.avg_ms / 1000).toFixed(1)}s`
-                  : "-"}
+        {entries.map(([name, stats]) => {
+          const { cls, mark } = statusMark(stats.last_status)
+          return (
+            <div
+              key={name}
+              className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2"
+            >
+              <span className="truncate text-xs font-medium text-foreground">
+                {name}
               </span>
-              <span
-                className={
-                  stats.last_status === "completed"
-                    ? "text-success"
-                    : stats.last_status === "failed"
-                      ? "text-destructive"
-                      : ""
-                }
-              >
-                {stats.last_status === "completed"
-                  ? "✓"
-                  : stats.last_status === "failed"
-                    ? "✗"
+              <div className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
+                <span>{t("monitoring.runs", { count: stats.runs })}</span>
+                <span>
+                  {stats.avg_ms > 0
+                    ? `${(stats.avg_ms / 1000).toFixed(1)}s`
                     : "-"}
-              </span>
+                </span>
+                <span className={cls}>{mark}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
 }
 
-export function MetricsPanel() {
-  const { t } = useTranslation()
+function MetricCardGrid({ cards }: { cards: MetricCard[] }) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {cards.map((card) => (
+        <div
+          key={card.label}
+          className="flex items-center gap-2.5 rounded-xl border border-border bg-muted/50 p-2.5"
+        >
+          <div
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${card.bg}`}
+          >
+            <card.icon className={`h-3.5 w-3.5 ${card.color}`} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] text-muted-foreground">{card.label}</p>
+            <p className="font-mono text-xs font-medium text-foreground">
+              {card.value}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function applyMetrics(
+  mounted: boolean,
+  data: MetricsData | null,
+  message: string | null,
+  setMetrics: (data: MetricsData | null) => void,
+  setError: (message: string | null) => void
+) {
+  if (!mounted) return
+  if (data) {
+    setMetrics(data)
+    setError(null)
+    return
+  }
+  setError(message)
+}
+
+function useMetrics() {
   const [metrics, setMetrics] = useState<MetricsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -129,15 +173,10 @@ export function MetricsPanel() {
     let mounted = true
     const load = () => {
       fetchMetrics()
-        .then((data) => {
-          if (mounted) {
-            setMetrics(data)
-            setError(null)
-          }
-        })
-        .catch((err) => {
-          if (mounted) setError(err.message)
-        })
+        .then((data) => applyMetrics(mounted, data, null, setMetrics, setError))
+        .catch((err: Error) =>
+          applyMetrics(mounted, null, err.message, setMetrics, setError)
+        )
         .finally(() => {
           if (mounted) setLoading(false)
         })
@@ -150,6 +189,12 @@ export function MetricsPanel() {
     }
   }, [])
 
+  return { metrics, loading, error }
+}
+
+export function MetricsPanel() {
+  const { t } = useTranslation()
+  const { metrics, loading, error } = useMetrics()
   if (loading)
     return (
       <div className="flex items-center justify-center py-6">
@@ -163,31 +208,9 @@ export function MetricsPanel() {
       </div>
     )
   if (!metrics) return null
-
-  const cards = buildMetricCards(metrics, t)
-
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2">
-        {cards.map((card) => (
-          <div
-            key={card.label}
-            className="flex items-center gap-2.5 rounded-xl border border-border bg-muted/50 p-2.5"
-          >
-            <div
-              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${card.bg}`}
-            >
-              <card.icon className={`h-3.5 w-3.5 ${card.color}`} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] text-muted-foreground">{card.label}</p>
-              <p className="font-mono text-xs font-medium text-foreground">
-                {card.value}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
+      <MetricCardGrid cards={buildMetricCards(metrics, t)} />
       {metrics.agents && <AgentStats agents={metrics.agents} />}
     </div>
   )

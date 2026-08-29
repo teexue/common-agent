@@ -14,7 +14,6 @@ import (
 	"github.com/teexue/common-agent/core/compaction"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/hook"
-	"github.com/teexue/common-agent/core/knowledge"
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/telemetry"
@@ -30,76 +29,19 @@ type pendingResult struct {
 
 // Run executes the agent loop and streams events.
 func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
-	if cfg.Provider == nil {
-		return nil, fmt.Errorf("provider is required")
+	if err := validateRunConfig(cfg); err != nil {
+		return nil, err
 	}
-	if cfg.Registry == nil {
-		return nil, fmt.Errorf("registry is required")
+	cfg, err := prepareSession(cfg)
+	if err != nil {
+		return nil, err
 	}
-	if cfg.Agent == nil {
-		return nil, fmt.Errorf("agent is required")
-	}
-	if cfg.Session == nil {
-		return nil, fmt.Errorf("session is required")
-	}
-
-	// Only load from store if the caller hasn't already provided a loaded session.
-	if cfg.Store != nil && cfg.SessionID != "" && len(cfg.Session.GetMessages()) == 0 {
-		loaded, err := cfg.Store.Load(cfg.SessionID)
-		if err != nil {
-			return nil, fmt.Errorf("load session %s: %w", cfg.SessionID, err)
-		}
-		cfg.Session = loaded
-	}
-
-	if cfg.Prompt == "" && len(cfg.Session.GetMessages()) == 0 {
-		return nil, fmt.Errorf("prompt is required for a new session")
-	}
-
 	toolDefs, err := cfg.Registry.Definitions(cfg.Agent.Tools)
 	if err != nil {
 		return nil, err
 	}
-
-	msgs := cfg.Session.GetMessages()
-	if len(msgs) == 0 {
-		msgs = []provider.Message{
-			{Role: provider.RoleSystem, Content: cfg.Agent.SystemPrompt},
-		}
-		if cfg.Agent.ProjectContext != "" {
-			msgs = append(msgs, provider.Message{Role: provider.RoleSystem, Content: "# Project Context\n\n" + cfg.Agent.ProjectContext})
-		}
-		if cfg.Agent.SkillsContext != "" {
-			msgs = append(msgs, provider.Message{Role: provider.RoleSystem, Content: cfg.Agent.SkillsContext})
-		}
-		cfg.Session.SetMessages(msgs)
-	}
-	if cfg.Prompt != "" || len(cfg.Images) > 0 {
-		msg := provider.Message{
-			Role:    provider.RoleUser,
-			Content: cfg.Prompt,
-		}
-		if len(cfg.Images) > 0 {
-			msg.ContentParts = append([]provider.ContentPart{{Type: "text", Text: cfg.Prompt}}, cfg.Images...)
-		}
-		cfg.Session.AddMessages(msg)
-	}
-
-	if cfg.WorkDir != "" {
-		ctx = WithWorkDir(ctx, cfg.WorkDir)
-	}
-	// Attribute LLM requests to this run for request auditing.
-	ctx = provider.WithRunMeta(ctx, provider.RunMeta{
-		Agent:     cfg.Agent.Name,
-		SessionID: cfg.Session.ID,
-		Source:    cfg.Source,
-	})
-	if cfg.Agent.Knowledge != nil {
-		ctx = knowledge.WithScope(ctx, knowledge.Scope{
-			Bases: cfg.Agent.Knowledge.Bases,
-			TopK:  cfg.Agent.Knowledge.TopK,
-		})
-	}
+	seedMessages(cfg)
+	ctx = attachRunContext(ctx, cfg)
 
 	out := make(chan event.Event)
 	go func() {
@@ -147,23 +89,28 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 	for turn := 1; maxTurns <= 0 || turn <= maxTurns; turn++ {
 		select {
 		case <-ctx.Done():
-			emitCancelled(out, cfg.Session.ID, turn, lastTurn.input, lastTurn.output, lastTurn.cacheRead, lastTurn.cacheCreation, window)
+			emitCancelled(out, doneStats{
+				sessionID: cfg.Session.ID, turn: turn,
+				input: lastTurn.input, output: lastTurn.output,
+				cacheRead: lastTurn.cacheRead, cacheCreation: lastTurn.cacheCreation,
+				window: window, totalInput: totalInputTokens, totalOutput: totalOutputTokens,
+			})
 			cfg.Session.AddUsage(totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation, window)
 			persistSession(cfg)
 			return
 		default:
 		}
 
-		tc := TurnContext{Ctx: ctx, Config: cfg, ToolDefs: toolDefs, Out: out, Turn: turn, Log: log, Pol: pol, Hooks: hooks, Approver: approver, Tel: tel, ContextWindow: window}
+		tc := TurnContext{Ctx: ctx, Config: cfg, ToolDefs: toolDefs, Out: out, Turn: turn, Log: log, Pol: pol, Hooks: hooks, Approver: approver, Tel: tel, ContextWindow: window, totalInput: totalInputTokens, totalOutput: totalOutputTokens}
 		tokens, done := executeTurn(tc)
 		lastTurn = tokens
 		totalInputTokens += tokens.input
 		totalOutputTokens += tokens.output
 		totalCacheRead += tokens.cacheRead
 		totalCacheCreation += tokens.cacheCreation
-		// Persist after each completed turn so a page refresh mid-run can
-		// recover the conversation up to the last finished turn via
-		// GET /sessions/:id, while the in-progress turn is followed via replay.
+		// Persist after each completed turn so a page refresh mid-run
+		// recovers the conversation up to the last finished turn via
+		// GET /sessions/:id.
 		persistSession(cfg)
 		if done {
 			cfg.Session.AddUsage(totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation, window)
@@ -176,7 +123,7 @@ func runLoop(ctx context.Context, cfg Config, toolDefs []provider.ToolDefinition
 		tel.RecordRunDuration(ctx, time.Since(runStart), attribute.String("agent.name", cfg.Agent.Name))
 	}
 	forceEmit(out, event.Event{Type: event.TypeError, Code: "max_turns", Message: fmt.Sprintf("exceeded max turns %d", maxTurns)})
-	forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: maxTurns, InputTokens: lastTurn.input, OutputTokens: lastTurn.output, ContextWindow: window, SessionID: cfg.Session.ID, CacheReadInputTokens: lastTurn.cacheRead, CacheCreationInputTokens: lastTurn.cacheCreation})
+	forceEmit(out, event.Event{Type: event.TypeDone, Status: "failed", Turns: maxTurns, InputTokens: lastTurn.input, OutputTokens: lastTurn.output, ContextWindow: window, SessionID: cfg.Session.ID, CacheReadInputTokens: lastTurn.cacheRead, CacheCreationInputTokens: lastTurn.cacheCreation, TotalInputTokens: totalInputTokens, TotalOutputTokens: totalOutputTokens})
 	cfg.Session.AddUsage(totalInputTokens, totalOutputTokens, totalCacheRead, totalCacheCreation, window)
 	persistSession(cfg)
 }
@@ -200,6 +147,10 @@ type TurnContext struct {
 	Approver      Approver
 	Tel           *telemetry.Telemetry
 	ContextWindow int
+	// totalInput / totalOutput accumulate every completed turn's usage for
+	// the run so the final done event can carry run-level totals.
+	totalInput  int
+	totalOutput int
 }
 
 // executeTurn executes a single turn of the agent loop. Returns token deltas and
@@ -234,7 +185,12 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 		tc.Config.Session.SetLastUsage(tokens.input, tokens.output, reqMsgCount)
 	}
 	if cancelled {
-		emitCancelled(tc.Out, tc.Config.Session.ID, tc.Turn, tokens.input, tokens.output, tokens.cacheRead, tokens.cacheCreation, tc.ContextWindow)
+		emitCancelled(tc.Out, doneStats{
+			sessionID: tc.Config.Session.ID, turn: tc.Turn,
+			input: tokens.input, output: tokens.output,
+			cacheRead: tokens.cacheRead, cacheCreation: tokens.cacheCreation,
+			window: tc.ContextWindow, totalInput: tc.totalInput, totalOutput: tc.totalOutput,
+		})
 		return tokens, true
 	}
 
@@ -243,10 +199,10 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 			Role: provider.RoleAssistant, Content: text, ReasoningContent: reasoning,
 		})
 		endTurn(turnSpan, tc.Tel, turnCtx, tc.Turn)
-		forceEmit(tc.Out, event.Event{Type: event.TypeDone, Status: "completed", Turns: tc.Turn, InputTokens: tokens.input, OutputTokens: tokens.output, CacheReadInputTokens: tokens.cacheRead, CacheCreationInputTokens: tokens.cacheCreation, ContextWindow: tc.ContextWindow, SessionID: tc.Config.Session.ID})
+		forceEmit(tc.Out, event.Event{Type: event.TypeDone, Status: "completed", Turns: tc.Turn, InputTokens: tokens.input, OutputTokens: tokens.output, CacheReadInputTokens: tokens.cacheRead, CacheCreationInputTokens: tokens.cacheCreation, ContextWindow: tc.ContextWindow, SessionID: tc.Config.Session.ID, TotalInputTokens: tc.totalInput, TotalOutputTokens: tc.totalOutput})
 		// Compact even for plain text turns — otherwise pure chat sessions
 		// (no tool calls) never trigger context management.
-		compactIfNeeded(tc.Ctx, tc.Config, tc.Out, tc.Turn, tc.Log, tc.ContextWindow)
+		compactIfNeeded(tc.Ctx, tc.Config, tc.Out, compactHint{turn: tc.Turn, log: tc.Log, window: tc.ContextWindow})
 		return tokens, true
 	}
 
@@ -259,7 +215,7 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 	fireOnTurnEnd(tc.Hooks, turnCtx, tc.Turn, tc.Log)
 	endTurn(turnSpan, tc.Tel, turnCtx, tc.Turn)
 	recordToolResults(tc.Config, results, tc.ContextWindow)
-	compactIfNeeded(tc.Ctx, tc.Config, tc.Out, tc.Turn, tc.Log, tc.ContextWindow)
+	compactIfNeeded(tc.Ctx, tc.Config, tc.Out, compactHint{turn: tc.Turn, log: tc.Log, window: tc.ContextWindow})
 
 	return tokens, false
 }
@@ -433,7 +389,25 @@ func persistSession(cfg Config) {
 	}
 }
 
-func emitCancelled(out chan<- event.Event, sessionID string, turn, inputTokens, outputTokens, cacheRead, cacheCreation, contextWindow int) {
+type doneStats struct {
+	sessionID     string
+	turn          int
+	input         int
+	output        int
+	cacheRead     int
+	cacheCreation int
+	window        int
+	totalInput    int
+	totalOutput   int
+}
+
+func emitCancelled(out chan<- event.Event, s doneStats) {
 	forceEmit(out, event.Event{Type: event.TypeError, Code: "cancelled", Message: "context cancelled"})
-	forceEmit(out, event.Event{Type: event.TypeDone, Status: "cancelled", Turns: turn, InputTokens: inputTokens, OutputTokens: outputTokens, CacheReadInputTokens: cacheRead, CacheCreationInputTokens: cacheCreation, ContextWindow: contextWindow, SessionID: sessionID})
+	forceEmit(out, event.Event{
+		Type: event.TypeDone, Status: "cancelled", Turns: s.turn,
+		InputTokens: s.input, OutputTokens: s.output,
+		CacheReadInputTokens: s.cacheRead, CacheCreationInputTokens: s.cacheCreation,
+		ContextWindow: s.window, SessionID: s.sessionID,
+		TotalInputTokens: s.totalInput, TotalOutputTokens: s.totalOutput,
+	})
 }

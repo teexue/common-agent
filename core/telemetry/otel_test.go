@@ -39,9 +39,7 @@ func TestTelemetry_StartRun(t *testing.T) {
 	ctx, span := tel.StartRun(context.Background(), "demo", "gpt-4o")
 	defer span.End()
 
-	if span.SpanContext().SpanID().IsValid() {
-		// span was created
-	}
+	_ = span.SpanContext().SpanID().IsValid()
 	_ = ctx
 }
 

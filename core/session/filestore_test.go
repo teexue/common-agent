@@ -212,7 +212,7 @@ func TestFileStoreCorruptedFile(t *testing.T) {
 
 	// Write a corrupted JSON file.
 	corruptPath := filepath.Join(dir, "corrupt.json")
-	if err := os.WriteFile(corruptPath, []byte("{invalid json"), 0o644); err != nil {
+	if err := os.WriteFile(corruptPath, []byte("not valid json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
