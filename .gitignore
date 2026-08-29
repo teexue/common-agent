@@ -9,8 +9,11 @@ agent-server
 # local docs (not committed)
 /docs/
 
-# frontend build output for go:embed (make build)
-cmd/dist/
+# build output (SDK, frontend, etc.)
+dist/
+
+# go:embed needs a tracked file in cmd/dist so CI compiles without a frontend build.
+!cmd/dist/
+cmd/dist/*
 !cmd/dist/.gitkeep
 node_modules/
-dist/
