@@ -11,6 +11,8 @@ interface WorkspaceActionOpts {
   resolvedAgent: string
   agentInfo: AgentInfo | null
   workDir: string
+  runModel: { provider: string; model: string }
+  setRunModel: (v: { provider: string; model: string }) => void
   refreshSessions: () => void
   removeSession: (id: string) => void
   setAgent: (id: string) => void
@@ -23,19 +25,44 @@ interface WorkspaceActionOpts {
 export function useWorkspaceSend(
   opts: Pick<
     WorkspaceActionOpts,
-    "chat" | "agentInfo" | "resolvedAgent" | "workDir"
+    "chat" | "agentInfo" | "resolvedAgent" | "workDir" | "runModel"
   >
 ) {
   return useCallback(
     (text: string, images?: { dataUrl: string; name: string }[]) =>
-      opts.chat.sendMessage(
+      opts.chat.sendMessage({
         text,
-        opts.agentInfo?.id || opts.resolvedAgent || opts.agentInfo?.name || "",
-        opts.workDir || undefined,
-        images
-      ),
+        agent:
+          opts.agentInfo?.id ||
+          opts.resolvedAgent ||
+          opts.agentInfo?.name ||
+          "",
+        workDir: opts.workDir || undefined,
+        images,
+        model: opts.runModel.model || undefined,
+        provider: opts.runModel.provider || undefined,
+      }),
     [opts]
   )
+}
+
+function applyResumedSession(
+  opts: WorkspaceActionOpts,
+  id: string,
+  r: { agent: string; workdir: string | null; model: string; provider: string }
+) {
+  const ref =
+    opts.agents.find((a) => a.id === r.agent || a.name === r.agent)?.id ??
+    r.agent
+  opts.setAgent(ref)
+  opts.setSessionWorkDir(r.workdir)
+  opts.setRunModel({ provider: r.provider, model: r.model })
+  opts.setSelectedToolCallId(null)
+  const params = new URLSearchParams()
+  params.set("session", id)
+  opts.navigate(`/agents/${encodeURIComponent(ref)}?${params.toString()}`, {
+    replace: true,
+  })
 }
 
 export function useWorkspaceSessionActions(opts: WorkspaceActionOpts) {
@@ -43,6 +70,7 @@ export function useWorkspaceSessionActions(opts: WorkspaceActionOpts) {
     opts.chat.clear()
     opts.setSelectedToolCallId(null)
     opts.setSessionWorkDir(null)
+    opts.setRunModel({ provider: "", model: "" })
     opts.refreshSessions()
     const path = opts.resolvedAgent
       ? `/agents/${encodeURIComponent(opts.resolvedAgent)}`
@@ -52,18 +80,7 @@ export function useWorkspaceSessionActions(opts: WorkspaceActionOpts) {
   const handleResumeSession = useCallback(
     async (id: string) => {
       const r = await opts.chat.resumeSession(id)
-      if (!r) return
-      const ref =
-        opts.agents.find((a) => a.id === r.agent || a.name === r.agent)?.id ??
-        r.agent
-      opts.setAgent(ref)
-      opts.setSessionWorkDir(r.workdir)
-      opts.setSelectedToolCallId(null)
-      const params = new URLSearchParams()
-      params.set("session", id)
-      opts.navigate(`/agents/${encodeURIComponent(ref)}?${params.toString()}`, {
-        replace: true,
-      })
+      if (r) applyResumedSession(opts, id, r)
     },
     [opts]
   )
@@ -98,7 +115,7 @@ export function useWorkspaceSessionActions(opts: WorkspaceActionOpts) {
 export function useWorkspaceMiscActions(
   opts: Pick<
     WorkspaceActionOpts,
-    "chat" | "navigate" | "setAgent" | "setSelectedToolCallId"
+    "chat" | "navigate" | "setAgent" | "setSelectedToolCallId" | "setRunModel"
   >
 ) {
   const handleSelectToolCall = useCallback(
@@ -111,6 +128,7 @@ export function useWorkspaceMiscActions(
     (id: string) => {
       if (opts.chat.messages.length > 0) return
       opts.setAgent(id)
+      opts.setRunModel({ provider: "", model: "" })
       opts.setSelectedToolCallId(null)
       opts.navigate(`/agents/${encodeURIComponent(id)}`, { replace: true })
     },

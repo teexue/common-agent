@@ -14,15 +14,21 @@ function makeToolCall(event: AgentEvent, prefix: string): ToolCallEntry {
     toolCallId: event.tool_call_id,
     name: event.tool ?? (prefix === "sa" ? "sub-agent" : "unknown"),
     input: event.input ?? event.content ?? "",
-    status: prefix === "sa" ? "sub_agent_running" : "running",
+    status:
+      prefix === "sa" || event.tool === "delegate_task"
+        ? "sub_agent_running"
+        : "running",
     startTime: Date.now(),
+    sessionId: event.session_id,
   }
 }
 
 function isDeniedOutput(output: unknown): boolean {
-  if (!output || typeof output !== "object" || !("error" in output))
+  if (!output || typeof output !== "object" || Array.isArray(output))
     return false
-  const err = (output as Record<string, unknown>).error
+  const rec = output as Record<string, unknown>
+  if (rec.status === "user_rejected") return true
+  const err = rec.error
   return (
     err === "permission denied" ||
     err === "tool requires approval" ||
@@ -121,6 +127,7 @@ function handleSubAgentEnd(
     entryId,
     toolName: event.tool ?? "sub-agent",
     toolCallId: event.tool_call_id,
+    sessionId: event.session_id,
   })
   return false
 }

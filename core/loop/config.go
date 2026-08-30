@@ -77,6 +77,18 @@ type Config struct {
 	// When 0, agent.Compaction.ContextWindow is used if set; otherwise compaction
 	// is skipped unless a legacy max_messages trigger is configured.
 	ContextWindow int
+
+	// failStreak tracks consecutive identical tool failures within a run.
+	failStreak *toolFailStreak
+
+	// AgentsDir and NewProvider let tools spawn nested loop.Run calls
+	// (delegate_task). Optional; empty means sub-agent spawning is disabled.
+	AgentsDir   string
+	NewProvider func(a *agent.Agent) (provider.Provider, error)
+	// Depth is the current sub-agent nesting level (0 = main agent).
+	Depth int
+	// Subagent holds process-wide nested-run limits from global settings.
+	Subagent SubagentLimits
 }
 
 // GetWorkDir returns the working directory from context, or empty string.

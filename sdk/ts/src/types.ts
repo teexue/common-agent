@@ -108,6 +108,10 @@ export interface RunOptions {
   sessionId?: string
   /** Optional conversation history */
   messages?: Message[]
+  /** Override the agent's default model for this run */
+  model?: string
+  /** Provider name for model; resolved from enabled lists if omitted */
+  provider?: string
   /** AbortSignal for cancellation */
   signal?: AbortSignal
 }

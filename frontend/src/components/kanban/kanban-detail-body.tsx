@@ -1,12 +1,17 @@
 import { useTranslation } from "react-i18next"
-import { Badge } from "@/components/ui/badge"
+import { ConversationThread } from "@/components/conversation/conversation-thread"
 import { MarkdownRenderer } from "@/components/shared/markdown-renderer"
-import type { KanbanItem } from "@/types/agent"
+import type { ConversationEntry, KanbanItem } from "@/types/agent"
+import { cn } from "@/lib/utils"
 import { KanbanDetailMeta } from "./kanban-detail-meta"
 import { KanbanDetailReview } from "./kanban-detail-review"
+import { KANBAN_LANE_TICK, kanbanStatusKey } from "./kanban-lane"
+import { KanbanEyebrow, KanbanSheet } from "./kanban-sheet"
 
 export function KanbanDetailBody({
   item,
+  messages,
+  isStreaming,
   error,
   feedback,
   setFeedback,
@@ -14,6 +19,8 @@ export function KanbanDetailBody({
   runAction,
 }: {
   item: KanbanItem
+  messages: ConversationEntry[]
+  isStreaming: boolean
   error: string | null
   feedback: string
   setFeedback: (v: string) => void
@@ -22,17 +29,24 @@ export function KanbanDetailBody({
 }) {
   const { t } = useTranslation()
   return (
-    <div className="space-y-3 text-xs">
+    <KanbanSheet>
       {error && (
-        <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <p className="mb-5 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {error}
         </p>
       )}
-      <StatusBadges item={item} />
-      <PromptBlock label={t("kanban.fieldPrompt")} text={item.prompt} />
-      {item.result && <ResultBlock content={item.result} />}
+      <Masthead item={item} />
+      <h2 className="mt-4 font-heading text-[1.65rem] leading-snug tracking-tight text-foreground">
+        {item.title}
+      </h2>
+      <TaskRun item={item} messages={messages} isStreaming={isStreaming} />
       {item.feedback && (
-        <PromptBlock label={t("kanban.feedbackLabel")} text={item.feedback} />
+        <section className="mt-8 border-t border-border/50 pt-6">
+          <KanbanEyebrow>{t("kanban.feedbackLabel")}</KanbanEyebrow>
+          <p className="mt-2 text-sm leading-7 whitespace-pre-wrap text-foreground">
+            {item.feedback}
+          </p>
+        </section>
       )}
       <KanbanDetailMeta item={item} />
       <KanbanDetailReview
@@ -42,55 +56,83 @@ export function KanbanDetailBody({
         busy={busy}
         runAction={runAction}
       />
-    </div>
+    </KanbanSheet>
   )
 }
 
-function StatusBadges({ item }: { item: KanbanItem }) {
+function TaskRun({
+  item,
+  messages,
+  isStreaming,
+}: {
+  item: KanbanItem
+  messages: ConversationEntry[]
+  isStreaming: boolean
+}) {
   const { t } = useTranslation()
-  const statusLabel = t(
-    `kanban.col${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`
-  )
+  if (messages.length > 0) {
+    return (
+      <section className="mt-8 border-t border-border/50 pt-6">
+        <ConversationThread messages={messages} isStreaming={isStreaming} />
+      </section>
+    )
+  }
   return (
-    <div className="flex items-center gap-2">
-      <Badge
-        variant="secondary"
-        className="rounded-md px-1.5 py-0.5 text-[10px]"
-      >
-        {statusLabel}
-      </Badge>
-      {(item.tags ?? []).map((tag) => (
-        <Badge
-          key={tag}
-          variant="secondary"
-          className="rounded-md px-1.5 py-0.5 text-[10px]"
-        >
-          {tag}
-        </Badge>
+    <>
+      <section className="mt-8">
+        <KanbanEyebrow>{t("kanban.fieldPrompt")}</KanbanEyebrow>
+        <p className="mt-2 text-sm leading-7 whitespace-pre-wrap text-foreground">
+          {item.prompt}
+        </p>
+      </section>
+      {isStreaming && (
+        <p className="mt-4 text-[11px] text-muted-foreground">
+          {t("kanban.waitingStart")}
+        </p>
+      )}
+      {item.result && <ResultFallback content={item.result} />}
+    </>
+  )
+}
+
+function Masthead({ item }: { item: KanbanItem }) {
+  const { t } = useTranslation()
+  const tags = item.tags ?? []
+  const priorityLabel =
+    item.priority === 3
+      ? t("kanban.priorityHigh")
+      : item.priority === 2
+        ? t("kanban.priorityMedium")
+        : t("kanban.priorityLow")
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+      <span
+        className={cn(
+          "h-3.5 w-0.5 rounded-full",
+          KANBAN_LANE_TICK[item.status],
+          item.status === "running" && "animate-pulse"
+        )}
+      />
+      <span className="text-foreground">{t(kanbanStatusKey(item.status))}</span>
+      <span aria-hidden="true">·</span>
+      <span className="font-mono">{item.agent}</span>
+      <span aria-hidden="true">·</span>
+      <span>{priorityLabel}</span>
+      {tags.map((tag) => (
+        <span key={tag}>· {tag}</span>
       ))}
     </div>
   )
 }
 
-function ResultBlock({ content }: { content: string }) {
+function ResultFallback({ content }: { content: string }) {
   const { t } = useTranslation()
   return (
-    <div className="space-y-1">
-      <p className="text-muted-foreground">{t("kanban.resultLabel")}</p>
-      <div className="max-h-96 overflow-y-auto rounded-lg bg-muted/40 px-3 py-2 leading-relaxed text-foreground">
+    <section className="mt-8 border-t border-border/50 pt-6">
+      <KanbanEyebrow>{t("kanban.resultLabel")}</KanbanEyebrow>
+      <div className="mt-3 text-sm leading-7">
         <MarkdownRenderer content={content} isStreaming={false} />
       </div>
-    </div>
-  )
-}
-
-function PromptBlock({ label, text }: { label: string; text: string }) {
-  return (
-    <div className="space-y-1">
-      <p className="text-muted-foreground">{label}</p>
-      <p className="rounded-lg bg-muted/40 px-3 py-2 leading-relaxed whitespace-pre-wrap text-foreground">
-        {text}
-      </p>
-    </div>
+    </section>
   )
 }

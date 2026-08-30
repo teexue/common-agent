@@ -1,9 +1,51 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { fetchProviderModels, upsertProvider } from "@/lib/api"
 import type { ModelInfo } from "@/types/agent"
 import { errMessage } from "./select-value"
 import type { ProviderFields, ProviderVendors } from "./use-provider-fields"
 import type { StyleOption } from "./provider-form-utils"
+
+function useDebounced(value: string, ms: number): string {
+  const [v, setV] = useState("")
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms)
+    return () => clearTimeout(t)
+  }, [value, ms])
+  return v
+}
+
+function listFetchArgs(
+  opts: {
+    name: string
+    apiStyle: StyleOption
+    baseURL: string
+    modelsPath: string
+    authStyle: string
+  },
+  apiKey: string
+) {
+  return {
+    name: opts.name.trim(),
+    api_style: opts.apiStyle,
+    base_url: opts.baseURL.trim() || undefined,
+    models_path: opts.modelsPath.trim() || undefined,
+    auth_style: opts.authStyle || undefined,
+    api_key: apiKey.trim() || undefined,
+  }
+}
+
+function modelsFetchKey(
+  opts: {
+    name: string
+    apiStyle: StyleOption
+    baseURL: string
+    modelsPath: string
+    authStyle: string
+  },
+  apiKey: string
+): string {
+  return JSON.stringify(listFetchArgs(opts, apiKey))
+}
 
 export function useProviderModels(opts: {
   canFetch: boolean
@@ -14,32 +56,42 @@ export function useProviderModels(opts: {
   authStyle: string
   apiKey: string
 }) {
+  const { canFetch, name, apiStyle, baseURL, modelsPath, authStyle, apiKey } =
+    opts
+  const fp = modelsFetchKey(
+    { name, apiStyle, baseURL, modelsPath, authStyle },
+    apiKey
+  )
+  const debounced = useDebounced(fp, 400)
   const [models, setModels] = useState<ModelInfo[] | null>(null)
-  const [fetching, setFetching] = useState(false)
   const [fetchErr, setFetchErr] = useState<string | null>(null)
-  const handleFetchModels = async () => {
-    if (!opts.canFetch) return
-    setFetching(true)
-    setFetchErr(null)
-    try {
-      const list = await fetchProviderModels({
-        name: opts.name.trim(),
-        api_style: opts.apiStyle,
-        base_url: opts.baseURL.trim() || undefined,
-        models_path: opts.modelsPath.trim() || undefined,
-        api_version: undefined,
-        auth_style: opts.authStyle || undefined,
-        api_key: opts.apiKey.trim() || undefined,
+  const [loadedFp, setLoadedFp] = useState<string | null>(null)
+  useEffect(() => {
+    if (!canFetch || !debounced) return
+    let cancelled = false
+    fetchProviderModels(
+      JSON.parse(debounced) as ReturnType<typeof listFetchArgs>
+    )
+      .then((list) => {
+        if (cancelled) return
+        setModels(list ?? [])
+        setFetchErr(null)
+        setLoadedFp(debounced)
       })
-      setModels(list ?? [])
-    } catch (e: unknown) {
-      setFetchErr(errMessage(e))
-      setModels(null)
-    } finally {
-      setFetching(false)
+      .catch((e: unknown) => {
+        if (cancelled) return
+        setFetchErr(errMessage(e))
+        setLoadedFp(debounced)
+      })
+    return () => {
+      cancelled = true
     }
+  }, [canFetch, debounced])
+  return {
+    models,
+    fetching: canFetch && (debounced === "" || loadedFp !== debounced),
+    fetchErr,
   }
-  return { models, fetching, fetchErr, handleFetchModels }
 }
 
 export function useProviderSave(opts: {
@@ -66,6 +118,7 @@ export function useProviderSave(opts: {
           undefined,
         default_model: f.defaultModel.trim() || undefined,
         display_name: f.displayName.trim() || undefined,
+        models: f.enabledModels,
         models_path: f.modelsPath.trim() || undefined,
         auth_style: f.authStyle || undefined,
         vision: f.vision,

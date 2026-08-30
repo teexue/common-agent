@@ -85,6 +85,7 @@ system_prompt: |
 tools:
   - read_file
   - get_time
+  - delegate_task
 max_turns: 10
 max_tokens: 4096
 tool_execution:

@@ -191,6 +191,7 @@ export interface ToolCallEntry {
     | "sub_agent_running"
   startTime?: number
   endTime?: number
+  sessionId?: string
 }
 
 export type StreamStatus = "idle" | "streaming" | "error" | "done"
@@ -213,6 +214,7 @@ export interface ProviderInfo {
   display_name: string
   base_url: string
   default_model: string
+  models?: string[]
   models_path: string
   vision: boolean
   api_key_env?: string

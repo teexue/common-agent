@@ -50,4 +50,6 @@ func RegisterAll(r *registry.Registry, workDir string) {
 
 	// Network
 	r.MustRegister(WebFetch{})
+
+	r.MustRegister(DelegateTask{})
 }

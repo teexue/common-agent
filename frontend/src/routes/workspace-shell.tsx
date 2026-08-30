@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { WorkspacePanel } from "@/components/conversation/workspace-panel"
 import { ConversationActions } from "@/components/conversation/conversation-actions"
 import { SessionWorkdir } from "@/components/conversation/session-workdir"
+import { ModelPicker } from "@/components/conversation/model-picker"
 import { AppDialogs } from "./app-dialogs"
 import { setWorkspaceChrome, clearWorkspaceChrome } from "./workspace-chrome"
 import type { useWorkspacePage } from "./use-workspace-page"
@@ -47,12 +48,21 @@ function WorkspaceChat({ page }: { page: WorkspacePage }) {
       visionEnabled={derived.visionEnabled}
       search={search}
       inputAccessory={
-        <SessionWorkdir
-          workDir={ui.workDir}
-          sessionScoped={ui.sessionWorkDir !== null}
-          onPick={(dir) => void actions.handleWorkdirChange(dir)}
-          onClear={() => void actions.handleWorkdirChange("")}
-        />
+        <>
+          <ModelPicker
+            providers={ui.providers}
+            provider={ui.runModel.provider || agent.agentInfo?.provider || ""}
+            model={ui.runModel.model || agent.agentInfo?.model || ""}
+            locked={derived.agentLocked}
+            onChange={actions.setRunModel}
+          />
+          <SessionWorkdir
+            workDir={ui.workDir}
+            sessionScoped={ui.sessionWorkDir !== null}
+            onPick={(dir) => void actions.handleWorkdirChange(dir)}
+            onClear={() => void actions.handleWorkdirChange("")}
+          />
+        </>
       }
       tokenUsage={derived.tokenUsage}
       sessionId={chat.sessionId}

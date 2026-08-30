@@ -1,13 +1,12 @@
 import { useTranslation } from "react-i18next"
 import { Textarea } from "@/components/ui/textarea"
 import { useInputBar } from "@/hooks/use-input-bar"
-import {
-  AttachImageButton,
-  HintText,
-  InputBarFooterRight,
-} from "./input-bar-actions"
+import { AttachImageButton, InputBarFooterRight } from "./input-bar-actions"
 import { InputBarImages } from "./input-bar-images"
-import type { SessionTokenUsage } from "./token-usage-indicator"
+import {
+  TokenUsageIndicator,
+  type SessionTokenUsage,
+} from "./token-usage-indicator"
 
 export interface ImageAttachment {
   dataUrl: string
@@ -50,11 +49,11 @@ export function InputBar(props: InputBarProps) {
         />
         <InputBarToolbar
           accessory={props.accessory}
+          tokenUsage={props.tokenUsage}
           isStreaming={!!props.isStreaming}
           visionEnabled={props.visionEnabled}
           fileInputRef={fileInputRef}
           onFileSelect={handleFileSelect}
-          tokenUsage={props.tokenUsage}
           showOptimize={!!props.onOptimize}
           optimizing={props.optimizing}
           optimizeDisabled={
@@ -93,7 +92,7 @@ function PromptField({
           : t("conversation.placeholderIdle")
       }
       disabled={false}
-      className="min-h-[2.75rem] resize-none border-0 bg-transparent px-4 py-3 text-sm shadow-none focus-visible:ring-0"
+      className="max-h-[calc(6lh+1rem)] min-h-[calc(1lh+1rem)] resize-none overflow-y-auto overscroll-contain border-0 bg-transparent px-3.5 pt-3 pb-1 text-sm shadow-none focus-visible:ring-0"
       rows={1}
     />
   )
@@ -101,11 +100,11 @@ function PromptField({
 
 function InputBarToolbar({
   accessory,
+  tokenUsage,
   isStreaming,
   visionEnabled,
   fileInputRef,
   onFileSelect,
-  tokenUsage,
   showOptimize,
   optimizing,
   optimizeDisabled,
@@ -115,11 +114,11 @@ function InputBarToolbar({
   onStop,
 }: {
   accessory?: React.ReactNode
+  tokenUsage?: SessionTokenUsage
   isStreaming: boolean
   visionEnabled?: boolean
   fileInputRef: React.RefObject<HTMLInputElement | null>
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
-  tokenUsage?: SessionTokenUsage
   showOptimize: boolean
   optimizing?: boolean
   optimizeDisabled: boolean
@@ -129,24 +128,19 @@ function InputBarToolbar({
   onStop?: () => void
 }) {
   return (
-    <div className="flex items-center justify-between border-t border-border/50 px-3 py-2">
-      <div className="flex items-center gap-1">
-        {accessory}
-        <HintText isStreaming={isStreaming} />
-        {visionEnabled && (
-          <AttachImageButton onClick={() => fileInputRef.current?.click()} />
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={onFileSelect}
-        />
-      </div>
+    <div className="flex flex-nowrap items-center gap-2 px-2 pb-2">
+      <ToolbarStart
+        accessory={accessory}
+        visionEnabled={visionEnabled}
+        fileInputRef={fileInputRef}
+        onFileSelect={onFileSelect}
+      />
+      {tokenUsage ? (
+        <div className="shrink-0">
+          <TokenUsageIndicator usage={tokenUsage} />
+        </div>
+      ) : null}
       <InputBarFooterRight
-        tokenUsage={tokenUsage}
         isStreaming={isStreaming}
         showOptimize={showOptimize}
         optimizing={optimizing}
@@ -155,6 +149,35 @@ function InputBarToolbar({
         onOptimizeClick={onOptimizeClick}
         onSend={onSend}
         onStop={onStop}
+      />
+    </div>
+  )
+}
+
+function ToolbarStart({
+  accessory,
+  visionEnabled,
+  fileInputRef,
+  onFileSelect,
+}: {
+  accessory?: React.ReactNode
+  visionEnabled?: boolean
+  fileInputRef: React.RefObject<HTMLInputElement | null>
+  onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
+}) {
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
+      {accessory}
+      {visionEnabled && (
+        <AttachImageButton onClick={() => fileInputRef.current?.click()} />
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={onFileSelect}
       />
     </div>
   )

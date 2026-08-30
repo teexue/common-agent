@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react"
+import { Link } from "react-router"
 import { useTranslation } from "react-i18next"
 import {
   AlertTriangle,
@@ -113,6 +114,11 @@ export function ToolOperationCard({
       <CollapsibleContent>
         <div className="ml-5 border-l-2 border-primary/15 py-1.5 pl-3">
           <InlineToolDetail toolCall={toolCall} />
+          <SubAgentDetailLink
+            sessionId={
+              toolCall.sessionId || sessionIdFromOutput(toolCall.output)
+            }
+          />
           {toolCall.status === "denied" && (
             <p className="mt-1.5 text-xs text-warning">
               {t("conversation.toolDenied")}
@@ -179,5 +185,24 @@ function ToolCardTrigger({
         <span className={cn("text-[10px]", config.color)}>{config.label}</span>
       </span>
     </CollapsibleTrigger>
+  )
+}
+
+function sessionIdFromOutput(output: unknown): string | undefined {
+  if (!output || typeof output !== "object" || Array.isArray(output)) return
+  const sid = (output as Record<string, unknown>).session_id
+  return typeof sid === "string" && sid ? sid : undefined
+}
+
+function SubAgentDetailLink({ sessionId }: { sessionId?: string }) {
+  const { t } = useTranslation()
+  if (!sessionId) return null
+  return (
+    <Link
+      to={`/sessions/${encodeURIComponent(sessionId)}`}
+      className="mt-1.5 inline-block text-[11px] text-primary hover:underline"
+    >
+      {t("conversation.viewSubAgentDetail")}
+    </Link>
   )
 }

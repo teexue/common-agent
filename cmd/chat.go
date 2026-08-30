@@ -34,6 +34,7 @@ type chatState struct {
 	sess     *session.Session
 	reg      *registry.Registry
 	store    session.Store
+	subagent loop.SubagentLimits
 }
 
 func runChat(args []string, logger *slog.Logger) {
@@ -75,6 +76,7 @@ func runChat(args []string, logger *slog.Logger) {
 	if !*mock {
 		registerRuntimeTools(state.reg, paths, settings, creds, logger)
 	}
+	state.subagent = wireSubagent(state.agent, settings, state.reg)
 
 	tui.PrintWelcome(state.agent.Name, state.agent.Provider, state.agent.Model)
 
@@ -160,14 +162,17 @@ func runChatLoop(rl *readline.Instance, state *chatState) {
 		runCtx, runCancel := context.WithCancel(sigCtx)
 		line = service.OptimizeUserPrompt(runCtx, state.agent, state.provider, line, nil)
 		events, err := loop.Run(runCtx, loop.Config{
-			Provider: state.provider,
-			Registry: state.reg,
-			Agent:    state.agent,
-			Session:  state.sess,
-			Prompt:   line,
-			Store:    state.store,
-			Policy:   pol,
-			Approver: CLIApprover{},
+			Provider:    state.provider,
+			Registry:    state.reg,
+			Agent:       state.agent,
+			Session:     state.sess,
+			Prompt:      line,
+			Store:       state.store,
+			Policy:      pol,
+			Approver:    CLIApprover{},
+			AgentsDir:   state.paths.agentsDir,
+			NewProvider: resolveProvider(state.catalog, state.mock),
+			Subagent:    state.subagent,
 		})
 		runCancel()
 		if err != nil {

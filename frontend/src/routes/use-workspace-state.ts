@@ -23,7 +23,8 @@ export function useWorkspaceAgent(agents: AgentInfo[], pathname: string) {
 export function useWorkspaceDerived(
   chat: ReturnType<typeof useChat>,
   agentInfo: AgentInfo | null,
-  providers: ProviderInfo[]
+  providers: ProviderInfo[],
+  runModel: { provider: string; model: string }
 ) {
   const hasAgents = agentInfo !== null
   const agentLocked = chat.messages.length > 0
@@ -32,8 +33,9 @@ export function useWorkspaceDerived(
     : chat.error
       ? "error"
       : "idle"
-  const visionEnabled = agentInfo
-    ? (providers.find((p) => p.name === agentInfo.provider)?.vision ?? false)
+  const providerName = runModel.provider || agentInfo?.provider || ""
+  const visionEnabled = providerName
+    ? (providers.find((p) => p.name === providerName)?.vision ?? false)
     : false
   const listWindow = agentInfo?.context_window ?? agentInfo?.contextWindow ?? 0
   const tokenUsage = {

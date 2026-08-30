@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,6 +30,8 @@ type RunRequest struct {
 	Messages  []provider.Message `json:"messages,omitempty"`
 	WorkDir   string             `json:"workdir,omitempty"`
 	Images    []ImageAttachment  `json:"images,omitempty"`
+	Model     string             `json:"model,omitempty"`
+	Provider  string             `json:"provider,omitempty"`
 }
 
 func (s *Server) handleRun(c *gin.Context) {
@@ -54,6 +57,8 @@ func (s *Server) handleRun(c *gin.Context) {
 		Messages:  req.Messages,
 		WorkDir:   req.WorkDir,
 		Images:    images,
+		Model:     req.Model,
+		Provider:  req.Provider,
 		Source:    "http",
 	}, s.approver)
 	if err != nil {
@@ -136,12 +141,20 @@ func encodeRunSSE(ev event.Event) string {
 // mergeContext returns a context that is cancelled when either a or b is done.
 func mergeContext(a, b context.Context) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
+	stop := make(chan struct{})
+	var once sync.Once
+	stopCancel := func() {
+		once.Do(func() { close(stop) })
+		cancel()
+	}
 	go func() {
 		select {
 		case <-a.Done():
 		case <-b.Done():
+		case <-stop:
+			return
 		}
 		cancel()
 	}()
-	return ctx, cancel
+	return ctx, stopCancel
 }

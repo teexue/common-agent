@@ -1,7 +1,7 @@
 import i18n from "@/i18n"
 import type { MetricsData, HealthStatus } from "@/types/agent"
 
-import { langHeaders } from "./client"
+import { ensureOK, langHeaders } from "./client"
 
 /** Fetches the list of registered tools with their schemas. */
 export async function fetchTools(): Promise<
@@ -78,5 +78,19 @@ export async function fetchDirList(path?: string): Promise<DirListResponse> {
       err?.message ?? i18n.t("api.fetchDirListFailed", { status: res.status })
     )
   }
+  return res.json()
+}
+
+/** Creates a subdirectory under parent. */
+export async function createDir(
+  parent: string,
+  name: string
+): Promise<{ path: string }> {
+  const res = await fetch("/v1/fs/mkdir", {
+    method: "POST",
+    headers: langHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ path: parent, name }),
+  })
+  await ensureOK(res, "api.createDirFailed")
   return res.json()
 }

@@ -16,10 +16,20 @@ const listeners = new Set<Listener>()
 let pollTimer: number | null = null
 let fastTimer: number | null = null
 
+/** Overlays live run flags. Stale `running: true` must be cleared when a run ends. */
+export function applyRunningFlags(
+  sessions: SessionMeta[],
+  runningIds: ReadonlySet<string>
+): SessionMeta[] {
+  return sessions.map((s) => {
+    const running = runningIds.has(s.id)
+    if (!!s.running === running) return s
+    return { ...s, running }
+  })
+}
+
 function emit() {
-  globalSessions = globalSessions.map((s) =>
-    runningSessions.has(s.id) ? { ...s, running: true } : s
-  )
+  globalSessions = applyRunningFlags(globalSessions, runningSessions)
   const snapshot = globalSessions
   for (const listener of listeners) listener(snapshot)
 }
@@ -112,4 +122,5 @@ export function setSessionRunning(sessionId: string | null, running: boolean) {
     stopFastPolling()
     if (listeners.size > 0) ensurePolling(10_000)
   }
+  if (!running) void fetchAndUpdate()
 }

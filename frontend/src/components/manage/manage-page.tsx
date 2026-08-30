@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PageHeader } from "@/components/shared/page-header"
 import { PageMain, PageShell } from "@/components/shared/page-shell"
-import { fetchAgents, fetchSkills, fetchTools } from "@/lib/api"
+import { fetchSkills, fetchTools } from "@/lib/api"
 import type { AgentInfo, SkillInfo, ToolInfo } from "@/types/agent"
 import {
   ManageAgentsPane,
@@ -26,6 +26,7 @@ import {
 } from "./manage-panes"
 
 interface ManagePageProps {
+  agents: AgentInfo[]
   onViewAgent?: (name: string) => void
   onEditAgent?: (name: string) => void
   onDeleteAgent?: (name: string) => void
@@ -34,12 +35,11 @@ interface ManagePageProps {
   onSelectTool?: (tool: ToolInfo) => void
   onEditSkill?: (skill: SkillInfo) => void
   onCreateSkill?: () => void
-  agentsRefreshKey?: number
 }
 
 export function ManagePage(props: ManagePageProps) {
   const { t } = useTranslation()
-  const data = useManageData(props.agentsRefreshKey ?? 0)
+  const data = useManageData()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get("tab") || "agents"
   const [kbId, setKbId] = useState<string | null>(null)
@@ -61,12 +61,12 @@ export function ManagePage(props: ManagePageProps) {
           className="h-full min-h-0 w-full gap-0"
         >
           <ManageTabNav
-            agents={data.agents.length}
+            agents={props.agents.length}
             tools={data.tools.length}
             skills={data.skills.length}
           />
           <div className="min-h-0 min-w-0 flex-1 overflow-auto px-6 py-6">
-            <ManageAgentsPane {...props} {...data} />
+            <ManageAgentsPane {...props} {...data} agents={props.agents} />
             <ManageToolsPane {...props} {...data} />
             <ManageSkillsPane
               {...props}
@@ -133,8 +133,7 @@ function ManageTabNav({
   )
 }
 
-function useManageData(agentsRefreshKey: number) {
-  const [agents, setAgents] = useState<AgentInfo[]>([])
+function useManageData() {
   const [tools, setTools] = useState<ToolInfo[]>([])
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -147,9 +146,6 @@ function useManageData(agentsRefreshKey: number) {
 
   useEffect(() => {
     Promise.all([
-      fetchAgents()
-        .then((d) => setAgents(d ?? []))
-        .catch(() => setAgents([])),
       fetchTools()
         .then((d) => setTools(d ?? []))
         .catch(() => setTools([])),
@@ -157,7 +153,7 @@ function useManageData(agentsRefreshKey: number) {
         .then((d) => setSkills(d ?? []))
         .catch(() => setSkills([])),
     ]).finally(() => setLoading(false))
-  }, [agentsRefreshKey])
+  }, [])
 
-  return { agents, tools, skills, loading, reloadSkills }
+  return { tools, skills, loading, reloadSkills }
 }

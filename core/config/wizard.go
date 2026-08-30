@@ -22,6 +22,7 @@ type ProviderSpec struct {
 	AuthStyle    provider.AuthStyle
 	DefaultModel string
 	DisplayName  string
+	Models       []string
 	ModelsPath   string
 	Vision       bool
 	ThinkingType string
@@ -315,6 +316,9 @@ func (spec *ProviderSpec) applyDefaults(existing provider.ProfileEntry) {
 	if spec.DefaultModel == "" {
 		spec.DefaultModel = existing.DefaultModel
 	}
+	if spec.Models == nil {
+		spec.Models = existing.Models
+	}
 	if spec.BaseURL == "" {
 		spec.BaseURL = existing.BaseURL
 	}
@@ -335,6 +339,7 @@ func (spec ProviderSpec) toEntry(existing provider.ProfileEntry) provider.Profil
 		AuthStyle:    spec.AuthStyle,
 		DefaultModel: spec.DefaultModel,
 		DisplayName:  spec.DisplayName,
+		Models:       spec.modelsOrDefault(),
 		ModelsPath:   spec.ModelsPath,
 		Vision:       spec.Vision,
 		KeepAlive:    existing.KeepAlive,
@@ -459,5 +464,27 @@ func (s ProviderSpec) validate() error {
 	if s.DefaultModel == "" {
 		return fmt.Errorf("%s", i18n.T("wizard.error.model_required"))
 	}
+	return s.validateModels()
+}
+
+func (s ProviderSpec) modelsOrDefault() []string {
+	if len(s.Models) > 0 {
+		return s.Models
+	}
+	if s.DefaultModel != "" {
+		return []string{s.DefaultModel}
+	}
 	return nil
+}
+
+func (s ProviderSpec) validateModels() error {
+	if len(s.Models) == 0 {
+		return nil
+	}
+	for _, m := range s.Models {
+		if m == s.DefaultModel {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s", i18n.T("wizard.error.default_model_not_enabled"))
 }

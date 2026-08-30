@@ -12,6 +12,7 @@ export function ManageRoute() {
   return (
     <>
       <ManagePage
+        agents={shell.agentMgr.agents}
         onViewAgent={(id) =>
           navigate(`/manage/agents/${encodeURIComponent(id)}`)
         }

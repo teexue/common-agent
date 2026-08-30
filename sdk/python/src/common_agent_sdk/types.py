@@ -58,6 +58,8 @@ class RunOptions(BaseModel):
     prompt: str
     session_id: Optional[str] = None
     messages: Optional[list[Message]] = None
+    model: Optional[str] = None
+    provider: Optional[str] = None
 
 
 class ToolInfo(BaseModel):

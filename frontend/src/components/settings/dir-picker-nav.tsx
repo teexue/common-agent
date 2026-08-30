@@ -1,23 +1,43 @@
 import { useTranslation } from "react-i18next"
-import { ChevronRight, Home } from "lucide-react"
+import { ArrowUp, FolderPlus, Home } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { isComposingEvent } from "@/lib/keys"
 
-export function DirPathInput({
+const iconBtn =
+  "h-7 w-7 shrink-0 rounded-md text-muted-foreground hover:text-foreground"
+
+export function DirToolbar({
   pathInput,
   loading,
+  canUp,
+  canCreate,
   onPathInputChange,
   onGo,
+  onUp,
+  onHome,
+  onNewFolder,
 }: {
   pathInput: string
   loading: boolean
+  canUp: boolean
+  canCreate: boolean
   onPathInputChange: (v: string) => void
   onGo: (path: string) => void
+  onUp: () => void
+  onHome: () => void
+  onNewFolder: () => void
 }) {
-  const { t } = useTranslation()
   return (
-    <div className="flex gap-2">
+    <div className="flex items-center gap-1">
+      <DirNavButtons
+        loading={loading}
+        canUp={canUp}
+        canCreate={canCreate}
+        onUp={onUp}
+        onHome={onHome}
+        onNewFolder={onNewFolder}
+      />
       <Input
         value={pathInput}
         onChange={(e) => onPathInputChange(e.target.value)}
@@ -25,55 +45,65 @@ export function DirPathInput({
           if (isComposingEvent(e)) return
           if (e.key === "Enter") onGo(pathInput.trim())
         }}
-        className="h-9 flex-1 rounded-lg font-mono text-xs"
+        className="h-7 flex-1 rounded-md px-2 font-mono text-[11px]"
         placeholder="/"
-      />
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-9 shrink-0 text-xs"
-        onClick={() => onGo(pathInput.trim())}
         disabled={loading}
-      >
-        {t("settings.go")}
-      </Button>
+      />
     </div>
   )
 }
 
-export function DirBreadcrumbs({
-  crumbs,
+function DirNavButtons({
   loading,
-  onGo,
+  canUp,
+  canCreate,
+  onUp,
+  onHome,
+  onNewFolder,
 }: {
-  crumbs: { label: string; path: string }[]
   loading: boolean
-  onGo: (path: string) => void
+  canUp: boolean
+  canCreate: boolean
+  onUp: () => void
+  onHome: () => void
+  onNewFolder: () => void
 }) {
+  const { t } = useTranslation()
   return (
-    <div className="flex flex-wrap items-center gap-0.5 text-[11px]">
-      <button
+    <>
+      <Button
         type="button"
-        className="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-        disabled={loading}
-        onClick={() => onGo("")}
+        variant="ghost"
+        size="icon-xs"
+        className={iconBtn}
+        disabled={loading || !canUp}
+        onClick={onUp}
+        title={t("settings.parentDir")}
       >
-        <Home className="h-3 w-3" />
-      </button>
-      {crumbs.map((c) => (
-        <span key={c.path} className="flex items-center">
-          <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
-          <button
-            type="button"
-            className="max-w-[10rem] truncate rounded px-1.5 py-0.5 font-mono text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-            disabled={loading}
-            onClick={() => onGo(c.path)}
-            title={c.path}
-          >
-            {c.label}
-          </button>
-        </span>
-      ))}
-    </div>
+        <ArrowUp className="h-3.5 w-3.5" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className={iconBtn}
+        disabled={loading}
+        onClick={onHome}
+        title={t("settings.homeDir")}
+      >
+        <Home className="h-3.5 w-3.5" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className={iconBtn}
+        disabled={loading || !canCreate}
+        onClick={onNewFolder}
+        title={t("settings.newDir")}
+      >
+        <FolderPlus className="h-3.5 w-3.5" />
+      </Button>
+    </>
   )
 }

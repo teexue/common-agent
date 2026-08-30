@@ -27,6 +27,9 @@ type Service struct {
 	Store       session.Store
 	StateDB     *store.DB
 	Creds       *config.CredentialStore
+	// Catalog, when set, validates run-time model selection against each
+	// provider's enabled model list.
+	Catalog *provider.Catalog
 	// RequestLogger, when set, audits every LLM request/response. Optional.
 	RequestLogger *audit.RequestLogger
 

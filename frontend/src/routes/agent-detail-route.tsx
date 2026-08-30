@@ -1,9 +1,11 @@
 import { useNavigate, useParams, useSearchParams } from "react-router"
 import { AgentDetailPage } from "@/components/agents/agent-detail-page"
 import { AgentDeleteConfirm } from "@/components/agents/agent-delete-confirm"
+import { useShell } from "./shell-context"
 
 export function AgentDetailRoute() {
   const navigate = useNavigate()
+  const shell = useShell()
   const { agentId } = useParams<{ agentId: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
   const id = decodeURIComponent(agentId || "")
@@ -26,7 +28,10 @@ export function AgentDetailRoute() {
         onOpenChange={(open) => {
           if (!open) setSearchParams({})
         }}
-        onDeleted={() => navigate("/manage")}
+        onDeleted={() => {
+          shell.agentMgr.handleAgentDeleted()
+          navigate("/manage")
+        }}
       />
     </>
   )

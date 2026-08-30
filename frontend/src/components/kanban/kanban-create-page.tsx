@@ -26,22 +26,20 @@ export function KanbanCreatePage({
       <PageHeader
         icon={KanbanSquare}
         title={t("kanban.createTitle")}
+        description={t("kanban.createSubtitle")}
         actions={<CreateActions form={form} onBack={onBack} />}
       />
-      <PageMain contentClassName="max-w-2xl">
+      <PageMain contentClassName="mx-auto max-w-2xl">
         <form
           onSubmit={(e) => void form.handleSubmit(e)}
           onKeyDown={(e) => {
             if (isComposingEvent(e)) e.preventDefault()
           }}
-          className="space-y-4"
         >
           <KanbanCreateFields form={form} />
           <KanbanCreateMore form={form} />
           {form.error && (
-            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {form.error}
-            </p>
+            <p className="mt-4 text-xs text-destructive">{form.error}</p>
           )}
         </form>
         <DirPickerDialog

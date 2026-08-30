@@ -17,6 +17,7 @@ import { KanbanDetailRoute } from "./routes/kanban-detail-route"
 import { AdminRoute } from "./routes/admin-route"
 import { SettingsRoute } from "./routes/settings-route"
 import { ApiDocsRoute } from "./routes/api-docs-route"
+import { SessionDetailRoute } from "./routes/session-detail-route"
 
 /** `key` remounts LoginPage when hasUsers resolves so mode is correct without a reset effect. */
 function LoginGate() {
@@ -62,6 +63,10 @@ export function App() {
                 element={<SkillFormRoute mode="edit" />}
               />
               <Route path="/agents/:agentName" element={<WorkspaceRoute />} />
+              <Route
+                path="/sessions/:sessionId"
+                element={<SessionDetailRoute />}
+              />
               <Route path="/" element={<WorkspaceRoute />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

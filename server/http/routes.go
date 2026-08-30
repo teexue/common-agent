@@ -19,6 +19,7 @@ func (s *Server) mountAPIRoutes(r *gin.Engine) {
 	s.mountProviderRoutes(v1)
 	s.mountSkillRoutes(v1)
 	v1.GET("/fs/list", requireScope(auth.ScopeFS), s.handleFSList)
+	v1.POST("/fs/mkdir", requireScope(auth.ScopeFS), s.handleFSMkdir)
 	s.mountSessionRoutes(v1)
 	s.mountKanbanRoutes(v1)
 }
@@ -44,6 +45,7 @@ func (s *Server) mountAdminRoutes(v1 *gin.RouterGroup) {
 	admin.POST("/providers/models", s.handleProviderModelsTest)
 	admin.POST("/providers/models/detail", s.handleProviderModelDetailTest)
 	admin.PUT("/embedding", s.handleEmbeddingPut)
+	admin.PUT("/subagent", s.handleSubagentPut)
 	if s.requestLogger != nil {
 		admin.GET("/audit/requests", s.handleAuditRequests)
 		admin.GET("/audit/requests/detail", s.handleAuditRequestDetail)
@@ -99,6 +101,7 @@ func (s *Server) mountProviderRoutes(v1 *gin.RouterGroup) {
 	providers.GET("/providers/:name/models/:model/detail", s.handleProviderModelDetail)
 	providers.GET("/embedding", s.handleEmbeddingGet)
 	providers.GET("/embedding/vendors", s.handleEmbeddingVendors)
+	providers.GET("/subagent", s.handleSubagentGet)
 }
 
 func (s *Server) mountSkillRoutes(v1 *gin.RouterGroup) {

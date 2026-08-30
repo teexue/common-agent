@@ -45,6 +45,8 @@ export class AgentClient {
     }
     if (options.sessionId) body.session_id = options.sessionId
     if (options.messages?.length) body.messages = options.messages
+    if (options.model) body.model = options.model
+    if (options.provider) body.provider = options.provider
 
     const res = await this.fetchFn(`${this.baseUrl}/v1/agents/run`, {
       method: "POST",

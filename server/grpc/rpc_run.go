@@ -3,15 +3,15 @@ package grpcapi
 import (
 	"context"
 	"errors"
+	"os"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/loop"
-	"github.com/teexue/common-agent/core/permission"
+	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
 	commonagentv1 "github.com/teexue/common-agent/proto"
 )
@@ -28,59 +28,28 @@ func (s *GRPCServer) Run(req *commonagentv1.RunRequest, stream grpc.ServerStream
 		return status.Error(codes.InvalidArgument, i18n.TCtx(ctx, "api.grpc.error.agent_prompt_required"))
 	}
 
-	a, err := agent.LoadByName(s.agentsDir, req.Agent)
+	result, err := s.svc.PrepareRun(ctx, service.RunRequest{
+		Agent:     req.Agent,
+		Prompt:    req.Prompt,
+		SessionID: req.SessionId,
+		Messages:  ProtoMessagesToProvider(req.Messages),
+		Source:    "grpc",
+	}, s.approver)
 	if err != nil {
-		return status.Error(codes.InvalidArgument, i18n.TCtx(ctx, "api.grpc.error.load_agent", "error", err.Error()))
+		return mapGRPCRunError(ctx, err)
 	}
+	defer result.Cleanup(s.registry)
 
-	p, err := s.newProvider(a)
-	if err != nil {
-		return status.Error(codes.Internal, i18n.TCtx(ctx, "api.grpc.error.create_provider", "error", err.Error()))
-	}
-
-	sess := session.New(a.ID)
-	if msgs := ProtoMessagesToProvider(req.Messages); len(msgs) > 0 {
-		sess.SetMessages(msgs)
-	}
-
-	var pol permission.Policy
-	if a.Permissions != nil {
-		pol = permission.NewAgentPolicy(*a.Permissions)
-	} else {
-		pol = permission.AllowAllPolicy{}
-	}
-
-	loopCfg := loop.Config{
-		Provider: p,
-		Registry: s.registry,
-		Agent:    a,
-		Session:  sess,
-		Prompt:   req.Prompt,
-		Logger:   s.logger,
-		Store:    s.store,
-		Policy:   pol,
-		Approver: s.approver,
-	}
-
-	if req.SessionId != "" {
-		if s.store == nil {
-			return status.Error(codes.FailedPrecondition, i18n.TCtx(ctx, "api.grpc.error.session_not_configured"))
-		}
-		if _, err := s.store.Load(req.SessionId); err != nil {
-			if errors.Is(err, session.ErrNotFound) {
-				return status.Error(codes.NotFound, i18n.TCtx(ctx, "api.grpc.error.session_not_found", "id", req.SessionId))
-			}
-			return status.Error(codes.Internal, i18n.TCtx(ctx, "api.grpc.error.load_session", "error", err.Error()))
-		}
-		loopCfg.SessionID = req.SessionId
-	}
-
-	events, err := loop.Run(ctx, loopCfg)
+	events, err := loop.Run(ctx, result.Config)
 	if err != nil {
 		return status.Error(codes.Internal, i18n.TCtx(ctx, "api.grpc.error.run", "error", err.Error()))
 	}
 
-	s.logger.Info("log.grpc.agent_run_started", "session_id", sess.ID, "agent", a.Name, "provider", a.Provider, "model", a.Model)
+	s.logger.Info("log.grpc.agent_run_started",
+		"session_id", result.Session.ID,
+		"agent", result.Config.Agent.Name,
+		"provider", result.Config.Agent.Provider,
+		"model", result.Config.Agent.Model)
 
 	for ev := range events {
 		if err := stream.Send(EventToProto(ev)); err != nil {
@@ -89,6 +58,27 @@ func (s *GRPCServer) Run(req *commonagentv1.RunRequest, stream grpc.ServerStream
 	}
 
 	return nil
+}
+
+func mapGRPCRunError(ctx context.Context, err error) error {
+	var arg *service.ArgError
+	if errors.As(err, &arg) {
+		if arg.Field == "session_id" {
+			return status.Error(codes.FailedPrecondition, i18n.TCtx(ctx, "api.grpc.error.session_not_configured"))
+		}
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	if errors.Is(err, session.ErrNotFound) {
+		return status.Error(codes.NotFound, err.Error())
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return status.Error(codes.InvalidArgument, i18n.TCtx(ctx, "api.grpc.error.load_agent", "error", err.Error()))
+	}
+	var sev *service.ServerError
+	if errors.As(err, &sev) {
+		return status.Error(codes.Internal, i18n.TCtx(ctx, "api.grpc.error.create_provider", "error", sev.Message))
+	}
+	return status.Error(codes.Internal, i18n.TCtx(ctx, "api.grpc.error.run", "error", err.Error()))
 }
 
 // Approve resolves a pending tool approval.

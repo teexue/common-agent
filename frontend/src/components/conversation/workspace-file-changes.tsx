@@ -67,8 +67,10 @@ function computeFileChanges(messages: ConversationEntry[]): FileChange[] {
 
 export function FileChangeSummary({
   messages,
+  className,
 }: {
   messages: ConversationEntry[]
+  className?: string
 }) {
   const { t } = useTranslation()
   const changes = useMemo(() => computeFileChanges(messages), [messages])
@@ -77,7 +79,12 @@ export function FileChangeSummary({
   const add = changes.reduce((s, c) => s + c.add, 0)
   const del = changes.reduce((s, c) => s + c.del, 0)
   return (
-    <div className="mx-5 mb-1.5 rounded-xl border border-border bg-card/80 shadow-sm backdrop-blur-sm">
+    <div
+      className={cn(
+        "mx-5 mb-1.5 rounded-xl border border-border bg-card/80 shadow-sm backdrop-blur-sm",
+        className
+      )}
+    >
       <Collapsible open={open} onOpenChange={setOpen}>
         <FileChangeHeader
           open={open}

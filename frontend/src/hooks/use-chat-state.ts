@@ -6,7 +6,8 @@ import {
 } from "./chat-state-helpers"
 import { reduceContentUpdate } from "./chat-reduce-content"
 import { reduceSessionAction } from "./chat-reduce-session"
-import { reduceSubAgentAction, reduceToolAction } from "./chat-reduce-tool"
+import { reduceSubAgentAction } from "./chat-reduce-subagent"
+import { reduceToolAction } from "./chat-reduce-tool"
 import { usageFromMetadata } from "./chat-usage"
 
 export type { ChatAction, ChatState } from "./chat-state-types"

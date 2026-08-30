@@ -43,6 +43,7 @@ function useWorkspaceUi() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sessionWorkDir, setSessionWorkDir] = useState<string | null>(null)
   const [providers, setProviders] = useState<ProviderInfo[]>([])
+  const [runModel, setRunModel] = useState({ provider: "", model: "" })
   const workDir = (sessionWorkDir ?? localStorage.getItem("workDir")) || ""
   return {
     selectedToolCallId,
@@ -53,6 +54,8 @@ function useWorkspaceUi() {
     setSessionWorkDir,
     providers,
     setProviders,
+    runModel,
+    setRunModel,
     workDir,
   }
 }
@@ -67,7 +70,12 @@ export function useWorkspacePage() {
   const agentMgr = useAgentManager()
   const ui = useWorkspaceUi()
   const agent = useWorkspaceAgent(agentMgr.agents, location.pathname)
-  const derived = useWorkspaceDerived(chat, agent.agentInfo, ui.providers)
+  const derived = useWorkspaceDerived(
+    chat,
+    agent.agentInfo,
+    ui.providers,
+    ui.runModel
+  )
   useWorkspaceSideEffects({ chat, location, navigate, sessMgr, ui, agent })
   const actions = useWorkspaceBoundActions({
     chat,
@@ -130,13 +138,20 @@ function useResumeSync(
 ) {
   const setSessionWorkDir = ui.setSessionWorkDir
   const setSelectedToolCallId = ui.setSelectedToolCallId
+  const setRunModel = ui.setRunModel
   const onResumed = useCallback(
-    (r: { agent: string; workdir: string | null }) => {
+    (r: {
+      agent: string
+      workdir: string | null
+      model: string
+      provider: string
+    }) => {
       setAgent(r.agent)
       setSessionWorkDir(r.workdir)
       setSelectedToolCallId(null)
+      setRunModel({ provider: r.provider, model: r.model })
     },
-    [setAgent, setSessionWorkDir, setSelectedToolCallId]
+    [setAgent, setSessionWorkDir, setSelectedToolCallId, setRunModel]
   )
   useWorkspaceSessionSync({
     sessionId: chat.sessionId,
@@ -164,6 +179,11 @@ function useWorkspaceBoundActions(ctx: {
     resolvedAgent: agent.resolvedAgent,
     agentInfo: agent.agentInfo,
     workDir: ui.workDir,
+    runModel: {
+      provider: ui.runModel.provider || agent.agentInfo?.provider || "",
+      model: ui.runModel.model || agent.agentInfo?.model || "",
+    },
+    setRunModel: ui.setRunModel,
     refreshSessions: sessMgr.refresh,
     removeSession: sessMgr.remove,
     setAgent: agent.setAgent,
@@ -173,5 +193,10 @@ function useWorkspaceBoundActions(ctx: {
   const session = useWorkspaceSessionActions(opts)
   const misc = useWorkspaceMiscActions(opts)
   const handleSendMessage = useWorkspaceSend(opts)
-  return { ...session, ...misc, handleSendMessage }
+  return {
+    ...session,
+    ...misc,
+    handleSendMessage,
+    setRunModel: ui.setRunModel,
+  }
 }

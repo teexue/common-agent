@@ -5,7 +5,7 @@ import {
   AuthStyleField,
   BaseURLField,
 } from "./provider-connection-fields"
-import { ModelFields } from "./provider-model-fields"
+import { ModelFields, ModelsPathField } from "./provider-model-fields"
 import { FormActions, VisionToggle } from "./provider-form-actions"
 import { VendorSelect } from "./provider-vendor-select"
 import { ModelDetailCard } from "./model-detail-card"
@@ -66,18 +66,21 @@ function ProviderModelSection({ form }: { form: ProviderFormModel }) {
   const m = form.models
   return (
     <>
+      <ModelsPathField
+        modelsPath={f.modelsPath}
+        onModelsPathChange={(v) => {
+          f.setModelsPath(v)
+          f.setModelsPathTouched(true)
+        }}
+      />
       <ModelFields
         defaultModel={f.defaultModel}
         onDefaultModelChange={(value) => {
           if (!value.trim()) d.clearDetail()
           f.setDefaultModel(value)
         }}
-        modelsPath={f.modelsPath}
-        onModelsPathChange={(path) => {
-          f.setModelsPath(path)
-          f.setModelsPathTouched(true)
-        }}
-        apiStyle={f.apiStyle}
+        enabledModels={f.enabledModels}
+        onEnabledModelsChange={f.setEnabledModels}
         models={m.models}
         fetching={m.fetching}
         canFetch={form.canFetch}
@@ -87,8 +90,6 @@ function ProviderModelSection({ form }: { form: ProviderFormModel }) {
           !!form.vendors.selectedVendor?.supported_styles?.includes("openai") &&
           !m.fetchErr
         }
-        apiKeyOptional={!form.requiresKey}
-        onFetchModels={m.handleFetchModels}
       />
       {d.detailSupported && (
         <ModelDetailCard

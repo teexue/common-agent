@@ -28,6 +28,13 @@ type RunRequest struct {
 	Messages  []provider.Message     `json:"messages,omitempty"`
 	WorkDir   string                 `json:"workdir,omitempty"`
 	Images    []provider.ContentPart `json:"images,omitempty"`
+	// Model overrides the agent's default model for this run. Ignored when
+	// the session already locked a model on a previous run.
+	Model string `json:"model,omitempty"`
+	// Provider names the catalog profile for Model. Empty means the agent's
+	// default provider if it enables Model, else the lexicographically first
+	// catalog provider that does.
+	Provider string `json:"provider,omitempty"`
 	// Source attributes the run for request auditing (e.g. "http", "kanban").
 	Source string `json:"-"`
 }
@@ -73,17 +80,21 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 	if err != nil {
 		return nil, err
 	}
-	p, prompt, err := s.prepareRunProvider(ctx, a, req.Prompt)
+	sess, workDir, err := s.prepareRunSession(ctx, req, a)
 	if err != nil {
 		return nil, err
 	}
-	sess, workDir, err := s.prepareRunSession(ctx, req, a)
+	if err := s.applyRunModel(req, sess, a); err != nil {
+		return nil, err
+	}
+	p, prompt, err := s.prepareRunProvider(ctx, a, req.Prompt)
 	if err != nil {
 		return nil, err
 	}
 
 	a.ProjectContext = loadContextFile(workDir)
 	mcpMgr, mcpToolNames := injectMCP(ctx, a, s.AgentsDir, s.Registry, s.Logger)
+	limits := s.applySubagent(a)
 
 	var pol permission.Policy
 	if a.Permissions != nil {
@@ -106,7 +117,10 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		WorkDir:       workDir,
 		Images:        req.Images,
 		Source:        req.Source,
+		AgentsDir:     s.AgentsDir,
+		NewProvider:   s.NewProvider,
 		ContextWindow: s.savedContextWindow(a),
+		Subagent:      limits,
 	}
 
 	return &RunResult{

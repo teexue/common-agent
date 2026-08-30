@@ -14,6 +14,7 @@ type Settings struct {
 	DefaultAgent string            `yaml:"default_agent"`
 	Locale       string            `yaml:"locale,omitempty"`
 	Embedding    *embedding.Config `yaml:"embedding,omitempty"`
+	Subagent     *SubagentSettings `yaml:"subagent,omitempty"`
 }
 
 // LoadSettings reads settings from SQLite when bound, else config.yaml.
@@ -23,7 +24,10 @@ func LoadSettings(home string) (Settings, error) {
 		if err != nil {
 			return Settings{}, err
 		}
-		return Settings{DefaultAgent: s.DefaultAgent, Locale: s.Locale, Embedding: s.Embedding}, nil
+		return Settings{
+			DefaultAgent: s.DefaultAgent, Locale: s.Locale,
+			Embedding: s.Embedding, Subagent: fromStoreSubagent(s.Subagent),
+		}, nil
 	}
 	return loadSettingsFile(home)
 }
@@ -35,6 +39,7 @@ func SaveSettings(home string, s Settings) error {
 			DefaultAgent: s.DefaultAgent,
 			Locale:       s.Locale,
 			Embedding:    s.Embedding,
+			Subagent:     toStoreSubagent(s.Subagent),
 		})
 	}
 	return saveSettingsFile(home, s)

@@ -9,6 +9,13 @@ import {
 } from "@/components/ui/select"
 import type { AgentFormData } from "@/lib/agent-yaml"
 import type { ProviderInfo } from "@/types/agent"
+import {
+  chatModelOptions,
+  modelChoiceKey,
+  parseModelChoice,
+  withCurrentChatOption,
+  type ChatModelOption,
+} from "@/lib/provider-models"
 import { Field, SectionCard } from "./shared"
 
 export function BasicIdentityFields({
@@ -23,7 +30,6 @@ export function BasicIdentityFields({
   isCreate: boolean
 }) {
   const { t } = useTranslation()
-  const current = providers.find((p) => p.name === form.provider)
   return (
     <SectionCard
       title={t("agent.sectionIdentity")}
@@ -47,107 +53,106 @@ export function BasicIdentityFields({
             />
           </Field>
         )}
-        <ProviderSelect
-          form={form}
-          setForm={setForm}
-          providers={providers}
-          current={current}
-        />
       </div>
-      <ModelField form={form} setForm={setForm} current={current} />
+      <ModelField form={form} setForm={setForm} providers={providers} />
     </SectionCard>
-  )
-}
-
-function ProviderSelect({
-  form,
-  setForm,
-  providers,
-  current,
-}: {
-  form: AgentFormData
-  setForm: React.Dispatch<React.SetStateAction<AgentFormData>>
-  providers: ProviderInfo[]
-  current: ProviderInfo | undefined
-}) {
-  const { t } = useTranslation()
-  return (
-    <Field label={t("agent.provider")}>
-      <Select
-        value={
-          form.provider
-            ? {
-                value: form.provider,
-                label: current
-                  ? `${current.display_name || current.name} (${current.api_style})`
-                  : form.provider,
-              }
-            : null
-        }
-        onValueChange={(v) => applyProvider(v, providers, setForm)}
-      >
-        <SelectTrigger className="h-9 w-full rounded-xl">
-          <SelectValue placeholder={t("agent.selectProvider")} />
-        </SelectTrigger>
-        <SelectContent className="rounded-xl">
-          {providers.map((p) => (
-            <SelectItem
-              key={p.name}
-              value={{
-                value: p.name,
-                label: `${p.display_name || p.name} (${p.api_style})`,
-              }}
-            >
-              {p.display_name || p.name}{" "}
-              <span className="text-muted-foreground">({p.api_style})</span>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </Field>
   )
 }
 
 function ModelField({
   form,
   setForm,
-  current,
+  providers,
 }: {
   form: AgentFormData
   setForm: React.Dispatch<React.SetStateAction<AgentFormData>>
-  current: ProviderInfo | undefined
+  providers: ProviderInfo[]
 }) {
   const { t } = useTranslation()
+  const enabled = chatModelOptions(providers)
+  const options = withCurrentChatOption(
+    enabled,
+    { provider: form.provider, model: form.model },
+    providers
+  )
+  const listed = enabled.some(
+    (o) => o.provider === form.provider && o.model === form.model
+  )
   return (
     <Field
-      label={t("agent.model")}
+      label={t("agent.defaultModel")}
       hint={
-        current
-          ? t("agent.recommended", { model: current.default_model })
-          : undefined
+        form.model && !listed
+          ? t("agent.modelNotEnabledHint")
+          : t("agent.defaultModelHint")
       }
     >
-      <Input
-        value={form.model}
-        onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
-        placeholder={current?.default_model || t("agent.modelName")}
-        className="h-9 rounded-xl font-mono text-sm"
-      />
+      {options.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {t("conversation.noEnabledModels")}
+        </p>
+      ) : (
+        <ModelSelect
+          options={options}
+          selected={form.model ? modelChoiceKey(form.provider, form.model) : ""}
+          onChange={(v) => applyModelChoice(v, setForm)}
+        />
+      )}
     </Field>
   )
 }
 
-function applyProvider(
+function ModelSelect({
+  options,
+  selected,
+  onChange,
+}: {
+  options: ChatModelOption[]
+  selected: string
+  onChange: (v: unknown) => void
+}) {
+  const { t } = useTranslation()
+  const current = options.find(
+    (o) => modelChoiceKey(o.provider, o.model) === selected
+  )
+  return (
+    <Select
+      value={
+        current
+          ? {
+              value: selected,
+              label: `${current.model} · ${current.providerLabel}`,
+            }
+          : null
+      }
+      onValueChange={onChange}
+    >
+      <SelectTrigger className="h-9 w-full rounded-xl">
+        <SelectValue placeholder={t("agent.selectDefaultModel")} />
+      </SelectTrigger>
+      <SelectContent className="rounded-xl">
+        {options.map((o) => {
+          const key = modelChoiceKey(o.provider, o.model)
+          return (
+            <SelectItem
+              key={key}
+              value={{ value: key, label: `${o.model} · ${o.providerLabel}` }}
+            >
+              <span className="font-mono">{o.model}</span>{" "}
+              <span className="text-muted-foreground">{o.providerLabel}</span>
+            </SelectItem>
+          )
+        })}
+      </SelectContent>
+    </Select>
+  )
+}
+
+function applyModelChoice(
   v: unknown,
-  providers: ProviderInfo[],
   setForm: React.Dispatch<React.SetStateAction<AgentFormData>>
 ) {
   if (!v || typeof v !== "object" || !("value" in v)) return
-  const name = (v as { value: string }).value
-  const def = providers.find((p) => p.name === name)
-  setForm((p) => ({
-    ...p,
-    provider: name,
-    model: def?.default_model || p.model,
-  }))
+  const { provider, model } = parseModelChoice((v as { value: string }).value)
+  setForm((f) => ({ ...f, provider, model }))
 }

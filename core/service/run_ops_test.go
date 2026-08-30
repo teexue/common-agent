@@ -152,3 +152,57 @@ func TestPrepareRun_ExplicitWorkdirOverridesStored(t *testing.T) {
 	assert.Equal(t, "/tmp/new", result.Config.WorkDir)
 	assert.Equal(t, "/tmp/new", result.Session.GetMetadata()[session.MetadataKeyWorkdir])
 }
+
+func TestPrepareRun_LocksModelOnFirstRun(t *testing.T) {
+	agentsDir := t.TempDir()
+	writePlainAgent(t, agentsDir)
+	svc := newWorkdirService(t, agentsDir, newMemStore())
+
+	result, err := svc.PrepareRun(context.Background(), service.RunRequest{
+		Agent:    "agt_wd",
+		Prompt:   "hi",
+		Model:    "picked",
+		Provider: "mock",
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "picked", result.Config.Agent.Model)
+	assert.Equal(t, "mock", result.Config.Agent.Provider)
+	assert.Equal(t, "picked", result.Session.GetMetadata()[session.MetadataKeyModel])
+}
+
+func TestPrepareRun_SessionModelLockRejectsOverride(t *testing.T) {
+	agentsDir := t.TempDir()
+	writePlainAgent(t, agentsDir)
+	store := newMemStore()
+	svc := newWorkdirService(t, agentsDir, store)
+
+	sess := session.NewForUser("agt_wd", "usr_local")
+	sess.SetMetadata(session.MetadataKeyModel, "locked")
+	sess.SetMetadata(session.MetadataKeyProvider, "mock")
+	require.NoError(t, store.Save(sess))
+
+	_, err := svc.PrepareRun(context.Background(), service.RunRequest{
+		Agent:     "agt_wd",
+		Prompt:    "hi",
+		SessionID: sess.ID,
+		Model:     "other",
+	}, nil)
+	require.Error(t, err)
+	var arg *service.ArgError
+	require.ErrorAs(t, err, &arg)
+	assert.Equal(t, "model", arg.Field)
+}
+
+func TestPrepareRun_UsesAgentDefaultWhenModelOmitted(t *testing.T) {
+	agentsDir := t.TempDir()
+	writePlainAgent(t, agentsDir)
+	svc := newWorkdirService(t, agentsDir, newMemStore())
+
+	result, err := svc.PrepareRun(context.Background(), service.RunRequest{
+		Agent:  "agt_wd",
+		Prompt: "hi",
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "mock-1", result.Config.Agent.Model)
+	assert.Equal(t, "mock", result.Config.Agent.Provider)
+}

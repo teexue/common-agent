@@ -34,13 +34,15 @@ export function fromBackendMessages(msgs: BackendMsg[]): ConversationEntry[] {
     if (msg.role === "assistant") {
       const toolCalls = (msg.tool_calls ?? []).map((tc) => {
         const output = toolOutputs.get(tc.id)
+        const parsed = output ? tryParseJSON(output) : undefined
         return {
           id: tc.id,
           toolCallId: tc.id,
           name: tc.name,
           input: tc.arguments,
-          output: output ? tryParseJSON(output) : undefined,
+          output: parsed,
           status: "completed" as const,
+          sessionId: sessionIdFromOutput(parsed),
         }
       })
       entries.push({
@@ -62,6 +64,12 @@ function tryParseJSON(s: string): unknown {
   } catch {
     return s
   }
+}
+
+function sessionIdFromOutput(output: unknown): string | undefined {
+  if (!output || typeof output !== "object" || Array.isArray(output)) return
+  const sid = (output as Record<string, unknown>).session_id
+  return typeof sid === "string" && sid ? sid : undefined
 }
 
 export function parseSSELine(line: string): AgentEvent | null {

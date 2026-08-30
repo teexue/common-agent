@@ -90,10 +90,7 @@ export function BackgroundPanel() {
     }
   }
   return (
-    <div className="space-y-3">
-      <p className="text-[11px] leading-relaxed text-muted-foreground">
-        {t("settings.backgroundHint")}
-      </p>
+    <div className="space-y-4">
       <input
         ref={fileRef}
         type="file"

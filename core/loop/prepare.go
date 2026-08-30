@@ -25,8 +25,10 @@ func validateRunConfig(cfg Config) error {
 }
 
 func prepareSession(cfg Config) (Config, error) {
-	// Only load from store if the caller hasn't already provided a loaded session.
-	if cfg.Store != nil && cfg.SessionID != "" && len(cfg.Session.GetMessages()) == 0 {
+	// Reload from store only when the in-memory session is a placeholder
+	// (different ID). PrepareRun already loads the real session and may have
+	// written model-lock metadata that must not be wiped by a second Load.
+	if cfg.Store != nil && cfg.SessionID != "" && cfg.Session.ID != cfg.SessionID {
 		loaded, err := cfg.Store.Load(cfg.SessionID)
 		if err != nil {
 			return cfg, fmt.Errorf("load session %s: %w", cfg.SessionID, err)
@@ -78,6 +80,7 @@ func attachRunContext(ctx context.Context, cfg Config) context.Context {
 		SessionID: cfg.Session.ID,
 		Source:    cfg.Source,
 	})
+	ctx = WithSpawn(ctx, spawnFromConfig(cfg))
 	if cfg.Agent.Knowledge != nil {
 		ctx = knowledge.WithScope(ctx, knowledge.Scope{
 			Bases: cfg.Agent.Knowledge.Bases,

@@ -5,12 +5,15 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/embedding"
 	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/knowledge"
+	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/store"
+	"github.com/teexue/common-agent/core/subagent"
 	"github.com/teexue/common-agent/tools/builtin"
 	"github.com/teexue/common-agent/tools/registry"
 )
@@ -121,4 +124,17 @@ func runtimeEmbedder(settings config.Settings, creds *config.CredentialStore, lo
 		return nil
 	}
 	return emb
+}
+
+func wireSubagent(a *agent.Agent, settings config.Settings, reg *registry.Registry) loop.SubagentLimits {
+	view := settings.SubagentView()
+	if reg != nil {
+		if _, ok := reg.Get(subagent.ToolName); ok {
+			subagent.ApplyToAgent(a, view.Enabled)
+		}
+	}
+	return loop.SubagentLimits{
+		Enabled: view.Enabled, MaxTurns: view.MaxTurns,
+		MaxDepth: config.DefaultSubagentMaxDepth, Timeout: view.Timeout,
+	}
 }

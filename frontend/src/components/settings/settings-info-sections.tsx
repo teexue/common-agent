@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ImageIcon, Keyboard } from "lucide-react"
+import { ExternalLink, ImageIcon, Keyboard } from "lucide-react"
 import { fetchVersion } from "@/lib/api"
 import { BackgroundPanel } from "./background-panel"
 import { SettingsSection } from "./settings-section"
@@ -10,6 +10,7 @@ export function BackgroundSection() {
   return (
     <SettingsSection
       title={t("settings.background")}
+      description={t("settings.backgroundHint")}
       icon={<ImageIcon className="h-3.5 w-3.5" />}
     >
       <BackgroundPanel />
@@ -17,7 +18,21 @@ export function BackgroundSection() {
   )
 }
 
-export function ShortcutsSection() {
+export function AppSection() {
+  const { t } = useTranslation()
+  return (
+    <SettingsSection
+      title={t("settings.app")}
+      icon={<Keyboard className="h-3.5 w-3.5" />}
+      padded={false}
+    >
+      <ShortcutsList />
+      <AboutRow />
+    </SettingsSection>
+  )
+}
+
+function ShortcutsList() {
   const { t } = useTranslation()
   const shortcuts = [
     [t("settings.shortcutSidebar"), "⌘ Shift S"],
@@ -26,28 +41,23 @@ export function ShortcutsSection() {
     [t("settings.shortcutNewline"), "Shift Enter"],
   ] as const
   return (
-    <SettingsSection
-      title={t("settings.shortcuts")}
-      icon={<Keyboard className="h-3.5 w-3.5" />}
-    >
-      <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
-        {shortcuts.map(([label, key]) => (
-          <div
-            key={label}
-            className="flex items-center justify-between px-3 py-2 text-xs"
-          >
-            <span className="text-foreground">{label}</span>
-            <kbd className="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-              {key}
-            </kbd>
-          </div>
-        ))}
-      </div>
-    </SettingsSection>
+    <div className="divide-y divide-border">
+      {shortcuts.map(([label, key]) => (
+        <div
+          key={label}
+          className="flex items-center justify-between gap-4 px-5 py-3 transition-colors hover:bg-muted/30"
+        >
+          <span className="text-sm text-foreground">{label}</span>
+          <kbd className="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+            {key}
+          </kbd>
+        </div>
+      ))}
+    </div>
   )
 }
 
-export function AboutSection() {
+function AboutRow() {
   const { t } = useTranslation()
   const [appVersion, setAppVersion] = useState("")
   useEffect(() => {
@@ -60,20 +70,21 @@ export function AboutSection() {
     }
   }, [])
   return (
-    <SettingsSection title={t("settings.about")}>
-      <a
-        href="https://github.com/teexue/common-agent"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block rounded-xl border border-border bg-muted/30 px-3.5 py-3 transition-colors hover:border-primary/30 hover:bg-muted/50"
-      >
-        <p className="font-mono text-xs font-medium text-foreground">
+    <a
+      href="https://github.com/teexue/common-agent"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center justify-between gap-3 border-t border-border px-5 py-3.5 transition-colors hover:bg-muted/40"
+    >
+      <span className="min-w-0">
+        <span className="block font-mono text-xs font-medium text-foreground">
           common-agent {appVersion || "dev"}
-        </p>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">
+        </span>
+        <span className="mt-0.5 block text-[11px] text-muted-foreground">
           {t("settings.aboutDesc")}
-        </p>
-      </a>
-    </SettingsSection>
+        </span>
+      </span>
+      <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+    </a>
   )
 }

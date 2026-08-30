@@ -1,42 +1,5 @@
 import { useTranslation } from "react-i18next"
-
-function Toggle({
-  checked,
-  onChange,
-  label,
-  hint,
-}: {
-  checked: boolean
-  onChange: (v: boolean) => void
-  label: string
-  hint?: string
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-start gap-3 rounded-xl border border-border bg-card px-3.5 py-3 text-left transition-colors hover:border-primary/20 hover:bg-muted/30"
-    >
-      <span
-        className={`mt-0.5 flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors ${checked ? "bg-primary" : "bg-muted-foreground/30"}`}
-      >
-        <span
-          className={`h-3 w-3 rounded-full bg-background transition-transform ${checked ? "translate-x-3" : ""}`}
-        />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-xs font-medium text-foreground">
-          {label}
-        </span>
-        {hint && (
-          <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
-            {hint}
-          </span>
-        )}
-      </span>
-    </button>
-  )
-}
+import { SettingsToggle } from "./settings-toggle"
 
 function Slider({
   label,
@@ -88,7 +51,7 @@ export function BackgroundEnableToggle({
 }) {
   const { t } = useTranslation()
   return (
-    <Toggle
+    <SettingsToggle
       checked={enabled}
       onChange={(v) => onUpdate({ enabled: v })}
       label={t("settings.backgroundEnable")}
@@ -105,7 +68,7 @@ export function BackgroundAdaptToggle({
 }) {
   const { t } = useTranslation()
   return (
-    <Toggle
+    <SettingsToggle
       checked={autoAdapt}
       onChange={(v) => onUpdate({ autoAdapt: v })}
       label={t("settings.backgroundAdapt")}
@@ -125,7 +88,7 @@ export function BackgroundSliders({
 }) {
   const { t } = useTranslation()
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card px-3.5 py-3">
+    <div className="space-y-3 rounded-xl bg-muted/50 px-3.5 py-3">
       <Slider
         label={t("settings.backgroundOpacity")}
         value={opacity}

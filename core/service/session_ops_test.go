@@ -21,6 +21,10 @@ func TestListSessionsExcludesKanbanSessions(t *testing.T) {
 	fromBoard.SetMetadata(session.MetadataKeySource, session.SourceKanban)
 	require.NoError(t, store.Save(fromBoard))
 
+	fromSub := session.NewForUser("agent", "usr_local")
+	fromSub.SetMetadata(session.MetadataKeySource, session.SourceSubagent)
+	require.NoError(t, store.Save(fromSub))
+
 	metas, err := svc.ListSessions("usr_local")
 	require.NoError(t, err)
 	require.Len(t, metas, 1)

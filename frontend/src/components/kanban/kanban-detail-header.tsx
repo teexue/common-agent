@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/shared/page-header"
 import { deleteKanbanItem } from "@/lib/api"
 import type { KanbanItem } from "@/types/agent"
+import { kanbanStatusKey } from "./kanban-lane"
 
 export function KanbanDetailHeader({
   item,
@@ -20,14 +21,15 @@ export function KanbanDetailHeader({
   return (
     <PageHeader
       icon={KanbanSquare}
-      title={item.title}
+      title={t("kanban.title")}
+      description={`${t(kanbanStatusKey(item.status))} · ${item.agent}`}
       actions={
         <>
           {item.session_id && (
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="h-8 gap-1.5 text-xs"
+              className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
               onClick={() => onViewLogs(item.session_id!)}
             >
               <ScrollText className="h-3.5 w-3.5" /> {t("audit.title")}
@@ -36,7 +38,7 @@ export function KanbanDetailHeader({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 text-xs text-destructive hover:text-destructive"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-destructive"
             disabled={busy}
             onClick={() => void handleDelete(item, onDeleted, t)}
           >

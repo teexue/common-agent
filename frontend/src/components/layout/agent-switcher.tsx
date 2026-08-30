@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -21,14 +20,6 @@ function AgentIdentity({ agent }: { agent: AgentInfo }) {
       <span className="text-sm font-medium tracking-tight text-foreground">
         {agent.name}
       </span>
-      {agent.model && (
-        <Badge
-          variant="secondary"
-          className="rounded-md px-1.5 py-0 font-mono text-[10px]"
-        >
-          {agent.model}
-        </Badge>
-      )}
     </>
   )
 }

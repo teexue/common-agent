@@ -1,6 +1,9 @@
+import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Folder, Loader2 } from "lucide-react"
+import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { isComposingEvent } from "@/lib/keys"
 import type { DirListResponse } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
@@ -16,22 +19,22 @@ function DirListStatus({
   const { t } = useTranslation()
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      <div className="flex h-52 items-center justify-center">
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
       </div>
     )
   }
   if (error) {
     return (
-      <div className="flex h-64 items-center justify-center px-4">
-        <p className="text-center text-xs text-destructive">{error}</p>
+      <div className="flex h-52 items-center justify-center px-3">
+        <p className="text-center text-[11px] text-destructive">{error}</p>
       </div>
     )
   }
   if (empty) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <p className="text-xs text-muted-foreground">
+      <div className="flex h-52 items-center justify-center">
+        <p className="text-[11px] text-muted-foreground">
           {t("settings.emptyDir")}
         </p>
       </div>
@@ -42,39 +45,46 @@ function DirListStatus({
 
 function DirEntries({
   entries,
-  current,
-  onGo,
-  onChoose,
+  highlighted,
+  creating,
+  onHighlight,
+  onOpen,
+  onSubmitCreate,
+  onCancelCreate,
 }: {
   entries: { name: string; path: string }[]
-  current: string
-  onGo: (path: string) => void
-  onChoose: (path: string) => void
+  highlighted: string
+  creating: boolean
+  onHighlight: (path: string) => void
+  onOpen: (path: string) => void
+  onSubmitCreate: (name: string) => void
+  onCancelCreate: () => void
 }) {
   return (
-    <div className="divide-y divide-border">
+    <div className="p-0.5">
+      {creating && (
+        <DirNewFolderRow onSubmit={onSubmitCreate} onCancel={onCancelCreate} />
+      )}
       {entries.map((entry) => {
-        const active = entry.path === current
+        const active = entry.path === highlighted
         return (
           <button
             key={entry.path}
             type="button"
             className={cn(
-              "flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/60",
-              active && "bg-primary/10"
+              "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[11px] transition-colors hover:bg-muted/70",
+              active && "bg-muted text-foreground"
             )}
-            onClick={() => onGo(entry.path)}
-            onDoubleClick={() => onChoose(entry.path)}
+            onClick={() => onHighlight(entry.path)}
+            onDoubleClick={() => onOpen(entry.path)}
           >
             <Folder
               className={cn(
                 "h-3.5 w-3.5 shrink-0",
-                active ? "text-primary" : "text-primary/70"
+                active ? "text-primary" : "text-muted-foreground"
               )}
             />
-            <span className="truncate font-mono text-foreground">
-              {entry.name}
-            </span>
+            <span className="truncate font-mono">{entry.name}</span>
           </button>
         )
       })}
@@ -82,37 +92,91 @@ function DirEntries({
   )
 }
 
+function DirNewFolderRow({
+  onSubmit,
+  onCancel,
+}: {
+  onSubmit: (name: string) => void
+  onCancel: () => void
+}) {
+  const { t } = useTranslation()
+  const [name, setName] = useState(t("settings.newDirDefault"))
+  const done = useRef(false)
+  const commit = () => {
+    if (done.current) return
+    done.current = true
+    const next = name.trim()
+    if (next) onSubmit(next)
+    else onCancel()
+  }
+  return (
+    <div className="flex items-center gap-2 rounded-md bg-muted/70 px-2 py-1">
+      <Folder className="h-3.5 w-3.5 shrink-0 text-primary" />
+      <Input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onFocus={(e) => e.currentTarget.select()}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (isComposingEvent(e)) return
+          if (e.key === "Enter") {
+            e.preventDefault()
+            commit()
+          }
+          if (e.key === "Escape") {
+            e.preventDefault()
+            done.current = true
+            onCancel()
+          }
+        }}
+        className="h-6 rounded-md px-1.5 font-mono text-[11px]"
+      />
+    </div>
+  )
+}
+
 export function DirEntryList({
   data,
-  current,
+  highlighted,
   loading,
   error,
-  onGo,
-  onChoose,
+  creating,
+  onHighlight,
+  onOpen,
+  onSubmitCreate,
+  onCancelCreate,
 }: {
   data: DirListResponse | null
-  current: string
+  highlighted: string
   loading: boolean
   error: string | null
-  onGo: (path: string) => void
-  onChoose: (path: string) => void
+  creating: boolean
+  onHighlight: (path: string) => void
+  onOpen: (path: string) => void
+  onSubmitCreate: (name: string) => void
+  onCancelCreate: () => void
 }) {
   const empty = !data || data.entries.length === 0
-  const showEntries = !loading && !error && !empty && data
+  const showEntries = !loading && !!data && (!empty || creating)
   return (
-    <div className="overflow-hidden rounded-xl border border-border">
-      <ScrollArea className="h-64">
-        {showEntries ? (
-          <DirEntries
-            entries={data.entries}
-            current={current}
-            onGo={onGo}
-            onChoose={onChoose}
-          />
-        ) : (
-          <DirListStatus loading={loading} error={error} empty={empty} />
-        )}
-      </ScrollArea>
-    </div>
+    <ScrollArea className="h-52">
+      {error && data ? (
+        <p className="px-2 py-1 text-[11px] text-destructive">{error}</p>
+      ) : null}
+      {showEntries ? (
+        <DirEntries
+          entries={data?.entries ?? []}
+          highlighted={highlighted}
+          creating={creating}
+          onHighlight={onHighlight}
+          onOpen={onOpen}
+          onSubmitCreate={onSubmitCreate}
+          onCancelCreate={onCancelCreate}
+        />
+      ) : (
+        <DirListStatus loading={loading} error={error} empty={empty} />
+      )}
+    </ScrollArea>
   )
 }

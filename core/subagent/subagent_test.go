@@ -7,8 +7,10 @@ import (
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/event"
+	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/permission"
 	"github.com/teexue/common-agent/core/provider"
+	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/tool"
 	"github.com/teexue/common-agent/tools/registry"
 )
@@ -78,12 +80,14 @@ func TestRun_EmitsSubAgentEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Drain the channel and check for sub-agent events.
 	close(out)
 	var hasStart, hasEnd bool
 	for ev := range out {
 		if ev.Type == event.TypeSubAgentStart {
 			hasStart = true
+			if ev.SessionID == "" {
+				t.Error("expected session_id on TypeSubAgentStart")
+			}
 		}
 		if ev.Type == event.TypeSubAgentEnd {
 			hasEnd = true
@@ -98,15 +102,24 @@ func TestRun_EmitsSubAgentEvents(t *testing.T) {
 	}
 }
 
+func TestRun_FirstChildAllowedAtMaxDepth(t *testing.T) {
+	deps := setupDeps()
+	_, err := Run(context.Background(), Config{
+		Task:   "do something",
+		Depth:  1,
+		Limits: loop.SubagentLimits{Enabled: true, MaxTurns: 5, MaxDepth: 1},
+	}, deps, make(chan event.Event, 100))
+	if err != nil {
+		t.Fatalf("first child at max depth 1 should run: %v", err)
+	}
+}
+
 func TestRun_DepthLimitExceeded(t *testing.T) {
 	deps := setupDeps()
-	ctx := context.Background()
-	out := make(chan event.Event, 100)
-
-	_, err := Run(ctx, Config{
+	_, err := Run(context.Background(), Config{
 		Task:  "do something",
-		Depth: DefaultMaxDepth, // at the limit
-	}, deps, out)
+		Depth: DefaultMaxDepth + 1,
+	}, deps, make(chan event.Event, 100))
 	if err == nil {
 		t.Fatal("expected depth limit error")
 	}
@@ -137,9 +150,9 @@ func TestRun_WithMaxTurns(t *testing.T) {
 	out := make(chan event.Event, 100)
 
 	result, err := Run(ctx, Config{
-		Task:     "do something",
-		MaxTurns: 3,
-		Depth:    0,
+		Task:   "do something",
+		Depth:  0,
+		Limits: loop.SubagentLimits{Enabled: true, MaxTurns: 3, MaxDepth: 1},
 	}, deps, out)
 	if err != nil {
 		t.Fatal(err)
@@ -178,4 +191,100 @@ func TestRun_CancelledContext(t *testing.T) {
 	}, deps, out)
 	// May or may not error depending on timing, but should not panic.
 	_ = err
+}
+
+type memStore struct {
+	sessions map[string]*session.Session
+}
+
+func (m *memStore) Save(sess *session.Session) error {
+	if m.sessions == nil {
+		m.sessions = map[string]*session.Session{}
+	}
+	m.sessions[sess.ID] = sess
+	return nil
+}
+
+func (m *memStore) Load(id string) (*session.Session, error) {
+	sess, ok := m.sessions[id]
+	if !ok {
+		return nil, session.ErrNotFound
+	}
+	return sess, nil
+}
+
+func (m *memStore) List() ([]session.SessionMeta, error) { return nil, nil }
+func (m *memStore) Delete(id string) error               { return nil }
+
+func TestRun_PersistsChildSession(t *testing.T) {
+	store := &memStore{}
+	deps := setupDeps()
+	deps.Store = store
+	deps.ParentSessionID = "parent-1"
+	deps.UserID = "usr"
+	out := make(chan event.Event, 100)
+
+	result, err := Run(context.Background(), Config{Task: "nested work", Depth: 0}, deps, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SessionID == "" {
+		t.Fatal("expected child session id")
+	}
+	saved, err := store.Load(result.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.GetMetadata()[session.MetadataKeySource] != session.SourceSubagent {
+		t.Errorf("source = %q", saved.GetMetadata()[session.MetadataKeySource])
+	}
+	if saved.GetMetadata()[session.MetadataKeyParentSession] != "parent-1" {
+		t.Errorf("parent = %q", saved.GetMetadata()[session.MetadataKeyParentSession])
+	}
+}
+
+func TestLoadSubAgent_StripsDelegateAtMaxDepth(t *testing.T) {
+	deps := setupDeps()
+	reg, ok := deps.Registry.(*registry.Registry)
+	if !ok {
+		t.Fatal("expected *registry.Registry")
+	}
+	reg.MustRegister(&testTool{name: ToolName})
+	deps.ParentAgent = &agent.Agent{Name: "p", Tools: []string{"echo"}}
+	a, err := loadSubAgent(deps, Config{Depth: 1}, loop.SubagentLimits{
+		Enabled: true, MaxTurns: 5, MaxDepth: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range a.Tools {
+		if n == ToolName {
+			t.Fatal("child at max depth must not receive delegate_task")
+		}
+	}
+}
+
+func TestLoadSubAgent_KeepsDelegateBelowMaxDepth(t *testing.T) {
+	deps := setupDeps()
+	reg, ok := deps.Registry.(*registry.Registry)
+	if !ok {
+		t.Fatal("expected *registry.Registry")
+	}
+	reg.MustRegister(&testTool{name: ToolName})
+	deps.ParentAgent = &agent.Agent{Name: "p", Tools: []string{"echo"}}
+	a, err := loadSubAgent(deps, Config{Depth: 1}, loop.SubagentLimits{
+		Enabled: true, MaxTurns: 5, MaxDepth: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, n := range a.Tools {
+		if n == ToolName {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected delegate_task when another nesting level remains")
+	}
 }

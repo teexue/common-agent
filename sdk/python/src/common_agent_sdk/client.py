@@ -71,6 +71,8 @@ class AgentClient:
         *,
         session_id: Optional[str] = None,
         messages: Optional[list[Message]] = None,
+        model: Optional[str] = None,
+        provider: Optional[str] = None,
     ) -> AsyncIterator[AgentEvent]:
         """Run an agent and stream events via SSE.
 
@@ -83,6 +85,10 @@ class AgentClient:
             body["session_id"] = session_id
         if messages:
             body["messages"] = [m.model_dump() for m in messages]
+        if model:
+            body["model"] = model
+        if provider:
+            body["provider"] = provider
 
         async with client.stream(
             "POST",

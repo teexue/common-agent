@@ -28,8 +28,8 @@ func (s *Server) handleVendors(c *gin.Context) {
 	c.JSON(http.StatusOK, provider.VendorInfos())
 }
 
-// handleProviderModels fetches the model list for a configured provider.
-// Requires a valid API key to be stored for the provider.
+// handleProviderModels returns the enabled model subset for a saved provider.
+// It does not call the vendor listing API; unselected models stay hidden.
 func (s *Server) handleProviderModels(c *gin.Context) {
 	if s.catalog == nil {
 		respondError(c, http.StatusServiceUnavailable, "no_catalog", "api.error.no_catalog")
@@ -40,9 +40,9 @@ func (s *Server) handleProviderModels(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "invalid_request", "api.error.invalid_request")
 		return
 	}
-	models, err := s.catalog.ListModels(c.Request.Context(), name)
+	models, err := s.catalog.EnabledModelInfos(name)
 	if err != nil {
-		respondErrorDetails(c, errorDetails{Status: http.StatusBadGateway, Code: "provider_error", MsgKey: "api.error.provider_error", Details: err.Error()})
+		respondErrorDetails(c, errorDetails{Status: http.StatusNotFound, Code: "not_found", MsgKey: "api.error.invalid_request", Details: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, models)
@@ -219,18 +219,19 @@ func (s *Server) handleProviderModelDetailTest(c *gin.Context) {
 
 // ProviderUpsertRequest is the DTO for POST/PUT /v1/providers.
 type ProviderUpsertRequest struct {
-	Name          string `json:"name"`
-	APIStyle      string `json:"api_style"`
-	BaseURL       string `json:"base_url,omitempty"`
-	APIKey        string `json:"api_key,omitempty"`
-	APIKeyEnv     string `json:"api_key_env,omitempty"`
-	APIVersion    string `json:"api_version,omitempty"`
-	AuthStyle     string `json:"auth_style,omitempty"`
-	DefaultModel  string `json:"default_model,omitempty"`
-	DisplayName   string `json:"display_name,omitempty"`
-	ModelsPath    string `json:"models_path,omitempty"`
-	Vision        bool   `json:"vision,omitempty"`
-	ContextWindow int    `json:"context_window,omitempty"`
+	Name          string   `json:"name"`
+	APIStyle      string   `json:"api_style"`
+	BaseURL       string   `json:"base_url,omitempty"`
+	APIKey        string   `json:"api_key,omitempty"`
+	APIKeyEnv     string   `json:"api_key_env,omitempty"`
+	APIVersion    string   `json:"api_version,omitempty"`
+	AuthStyle     string   `json:"auth_style,omitempty"`
+	DefaultModel  string   `json:"default_model,omitempty"`
+	DisplayName   string   `json:"display_name,omitempty"`
+	Models        []string `json:"models,omitempty"`
+	ModelsPath    string   `json:"models_path,omitempty"`
+	Vision        bool     `json:"vision,omitempty"`
+	ContextWindow int      `json:"context_window,omitempty"`
 }
 
 func (s *Server) handleProviderUpsert(c *gin.Context) {
@@ -263,6 +264,7 @@ func (s *Server) handleProviderUpsert(c *gin.Context) {
 		AuthStyle:    provider.AuthStyle(req.AuthStyle),
 		DefaultModel: req.DefaultModel,
 		DisplayName:  req.DisplayName,
+		Models:       req.Models,
 		ModelsPath:   req.ModelsPath,
 		Vision:       req.Vision,
 		ModelWindows: s.modelWindowsForUpsert(c.Request.Context(), req),

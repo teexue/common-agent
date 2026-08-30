@@ -11,13 +11,23 @@ const (
 	settingDefaultAgent = "default_agent"
 	settingLocale       = "locale"
 	settingEmbedding    = "embedding"
+	settingSubagent     = "subagent"
 )
+
+// SubagentSettings is the persisted global sub-agent section.
+type SubagentSettings struct {
+	Enabled  *bool `json:"enabled,omitempty"`
+	MaxTurns int   `json:"max_turns,omitempty"`
+	MaxDepth int   `json:"max_depth,omitempty"`
+	Timeout  int   `json:"timeout,omitempty"`
+}
 
 // Settings mirrors config.Settings for persistence.
 type Settings struct {
 	DefaultAgent string
 	Locale       string
 	Embedding    *embedding.Config
+	Subagent     *SubagentSettings
 }
 
 // LoadSettings reads settings from the DB with defaults.
@@ -43,6 +53,9 @@ func (db *DB) LoadSettings() (Settings, error) {
 		n := emb.Normalize()
 		s.Embedding = &n
 	}
+	if err := db.loadSubagent(&s); err != nil {
+		return Settings{}, err
+	}
 	return s, nil
 }
 
@@ -60,15 +73,42 @@ func (db *DB) SaveSettings(s Settings) error {
 	if err := db.setSetting(settingLocale, s.Locale); err != nil {
 		return err
 	}
-	if s.Embedding == nil {
-		return db.Where("key = ?", settingEmbedding).Delete(&Setting{}).Error
+	var emb any
+	if s.Embedding != nil {
+		n := s.Embedding.Normalize()
+		emb = n
 	}
-	n := s.Embedding.Normalize()
-	b, err := json.Marshal(n)
+	if err := db.saveJSONSetting(settingEmbedding, emb); err != nil {
+		return err
+	}
+	return db.saveJSONSetting(settingSubagent, s.Subagent)
+}
+
+func (db *DB) loadSubagent(s *Settings) error {
+	v, err := db.getSetting(settingSubagent)
 	if err != nil {
-		return fmt.Errorf("marshal embedding: %w", err)
+		return err
 	}
-	return db.setSetting(settingEmbedding, string(b))
+	if v == "" {
+		return nil
+	}
+	var sub SubagentSettings
+	if err := json.Unmarshal([]byte(v), &sub); err != nil {
+		return fmt.Errorf("parse subagent settings: %w", err)
+	}
+	s.Subagent = &sub
+	return nil
+}
+
+func (db *DB) saveJSONSetting(key string, val any) error {
+	if val == nil {
+		return db.Where("key = ?", key).Delete(&Setting{}).Error
+	}
+	b, err := json.Marshal(val)
+	if err != nil {
+		return fmt.Errorf("marshal %s settings: %w", key, err)
+	}
+	return db.setSetting(key, string(b))
 }
 
 func (db *DB) getSetting(key string) (string, error) {

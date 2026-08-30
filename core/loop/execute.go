@@ -97,13 +97,22 @@ func checkPermission(ctx context.Context, pol permission.Policy, approver Approv
 			Tool: call.Name, Arguments: call.Arguments, ApprovalID: call.ID,
 		})
 		if !approved {
-			errJSON, _ := json.Marshal(map[string]string{"error": "tool approval denied", "tool": call.Name})
-			emit(ctx, out, event.Event{Type: event.TypeToolResult, Tool: call.Name, Output: json.RawMessage(errJSON), ToolCallID: call.ID})
-			return json.RawMessage(errJSON), true
+			outJSON := userRejectedOutput(call.Name)
+			emit(ctx, out, event.Event{Type: event.TypeToolResult, Tool: call.Name, Output: outJSON, ToolCallID: call.ID})
+			return outJSON, true
 		}
 	}
 
 	return nil, false
+}
+
+func userRejectedOutput(tool string) json.RawMessage {
+	body, _ := json.Marshal(map[string]string{
+		"status":  "user_rejected",
+		"tool":    tool,
+		"message": "The user declined to execute this tool. This is not a tool execution failure. Do not retry the same call; ask the user or choose a different approach.",
+	})
+	return body
 }
 
 func fireOnToolStartHook(hooks *hook.Chain, call provider.ToolCall, log *slog.Logger) {

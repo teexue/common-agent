@@ -3,13 +3,21 @@ import type { NavigateFunction } from "react-router"
 
 interface SessionSyncOpts {
   sessionId: string | null
-  resumeSession: (
-    id: string
-  ) => Promise<{ agent: string; workdir: string | null } | null>
+  resumeSession: (id: string) => Promise<{
+    agent: string
+    workdir: string | null
+    model: string
+    provider: string
+  } | null>
   locationSearch: string
   locationPathname: string
   navigate: NavigateFunction
-  onResumed: (r: { agent: string; workdir: string | null }) => void
+  onResumed: (r: {
+    agent: string
+    workdir: string | null
+    model: string
+    provider: string
+  }) => void
 }
 
 /** Writes session id into the URL. Must not subscribe to location.search

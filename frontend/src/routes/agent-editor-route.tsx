@@ -1,8 +1,10 @@
 import { useNavigate, useParams, useSearchParams } from "react-router"
 import { AgentEditorPage } from "@/components/agents/agent-editor"
+import { useShell } from "./shell-context"
 
 export function AgentEditorRoute({ mode }: { mode: "create" | "edit" }) {
   const navigate = useNavigate()
+  const shell = useShell()
   const { agentId } = useParams<{ agentId: string }>()
   const [searchParams] = useSearchParams()
   const id = mode === "edit" ? decodeURIComponent(agentId || "") : null
@@ -13,7 +15,10 @@ export function AgentEditorRoute({ mode }: { mode: "create" | "edit" }) {
       agentId={id}
       copyFrom={copyFrom}
       onBack={() => navigate("/manage")}
-      onSaved={() => navigate("/manage")}
+      onSaved={() => {
+        shell.agentMgr.handleAgentSaved()
+        navigate("/manage")
+      }}
     />
   )
 }

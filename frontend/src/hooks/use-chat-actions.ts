@@ -8,6 +8,15 @@ import { sendRunRequest } from "./chat-run"
 type AbortRef = MutableRefObject<AbortController | null>
 type SessionRef = MutableRefObject<string | null>
 
+export interface SendMessageOpts {
+  text: string
+  agent: string
+  workDir?: string
+  images?: { dataUrl: string; name: string }[]
+  model?: string
+  provider?: string
+}
+
 function cancelStream(
   dispatch: Dispatch<ChatAction>,
   abortRef: AbortRef
@@ -28,28 +37,25 @@ export function useChatSend(
   sessionIdRef: SessionRef
 ) {
   return useCallback(
-    async (
-      text: string,
-      agent: string,
-      workDir?: string,
-      images?: { dataUrl: string; name: string }[]
-    ) => {
+    async (opts: SendMessageOpts) => {
       cancelStream(dispatch, abortRef)
       const controller = new AbortController()
       abortRef.current = controller
-      dispatch({ type: "ADD_USER_MESSAGE", text })
+      dispatch({ type: "ADD_USER_MESSAGE", text: opts.text })
       const entryId = `assistant-${Date.now()}`
       dispatch({ type: "START_ASSISTANT", entryId })
       try {
         await sendRunRequest({
-          agent,
-          prompt: text,
+          agent: opts.agent,
+          prompt: opts.text,
           sessionId: sessionIdRef.current,
-          workDir,
+          workDir: opts.workDir,
           signal: controller.signal,
           entryId,
           dispatch,
-          images,
+          images: opts.images,
+          model: opts.model,
+          provider: opts.provider,
         })
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === "AbortError") return
@@ -112,7 +118,12 @@ function useResumeSession(
   return useCallback(
     async (
       sessionId: string
-    ): Promise<{ agent: string; workdir: string | null } | null> => {
+    ): Promise<{
+      agent: string
+      workdir: string | null
+      model: string
+      provider: string
+    } | null> => {
       abort()
       try {
         const sess = await fetchSession(sessionId)
@@ -121,7 +132,12 @@ function useResumeSession(
           sess.messages as BackendMsg[],
           sess.metadata
         )
-        return { agent: sess.agent, workdir: sess.metadata?.workdir || null }
+        return {
+          agent: sess.agent,
+          workdir: sess.metadata?.workdir || null,
+          model: sess.metadata?.model || "",
+          provider: sess.metadata?.provider || "",
+        }
       } catch (err) {
         console.error("Failed to resume session:", err)
         return null

@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { Check, RotateCcw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
   approveKanbanItem,
@@ -9,6 +8,7 @@ import {
   requeueKanbanItem,
 } from "@/lib/api"
 import type { KanbanItem } from "@/types/agent"
+import { KanbanEyebrow } from "./kanban-sheet"
 
 export function KanbanDetailReview({
   item,
@@ -25,7 +25,7 @@ export function KanbanDetailReview({
 }) {
   if (item.status === "review") {
     return (
-      <ReviewActions
+      <ReviewBand
         item={item}
         feedback={feedback}
         setFeedback={setFeedback}
@@ -35,30 +35,38 @@ export function KanbanDetailReview({
     )
   }
   if (item.status === "failed") {
-    return (
-      <div className="border-t border-border/60 pt-3">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 w-full gap-1.5 text-xs"
-          disabled={busy}
-          onClick={() => void runAction(() => requeueKanbanItem(item.id))}
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-          <RequeueLabel />
-        </Button>
-      </div>
-    )
+    return <FailedBand item={item} busy={busy} runAction={runAction} />
   }
   return null
 }
 
-function RequeueLabel() {
+function FailedBand({
+  item,
+  busy,
+  runAction,
+}: {
+  item: KanbanItem
+  busy: boolean
+  runAction: (fn: () => Promise<unknown>) => Promise<void>
+}) {
   const { t } = useTranslation()
-  return <>{t("kanban.requeue")}</>
+  return (
+    <div className="mt-8 flex items-center justify-between gap-3 border-t border-border/50 pt-5">
+      <p className="text-xs text-muted-foreground">{t("kanban.failedHint")}</p>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 gap-1.5 text-xs"
+        disabled={busy}
+        onClick={() => void runAction(() => requeueKanbanItem(item.id))}
+      >
+        <RotateCcw className="h-3.5 w-3.5" /> {t("kanban.requeue")}
+      </Button>
+    </div>
+  )
 }
 
-function ReviewActions({
+function ReviewBand({
   item,
   feedback,
   setFeedback,
@@ -73,23 +81,19 @@ function ReviewActions({
 }) {
   const { t } = useTranslation()
   return (
-    <div className="space-y-2 border-t border-border/60 pt-3">
-      <div className="space-y-1.5">
-        <Label className="text-xs text-muted-foreground">
-          {t("kanban.feedbackLabel")}
-        </Label>
-        <Textarea
-          value={feedback}
-          onChange={(e) => setFeedback(e.target.value)}
-          rows={2}
-          className="rounded-lg text-sm"
-          placeholder={t("kanban.feedbackPlaceholder")}
-        />
-      </div>
+    <div className="mt-8 space-y-3 border-t border-border/50 pt-5">
+      <KanbanEyebrow>{t("kanban.feedbackLabel")}</KanbanEyebrow>
+      <Textarea
+        value={feedback}
+        onChange={(e) => setFeedback(e.target.value)}
+        rows={3}
+        className="rounded-xl bg-muted/40 text-sm"
+        placeholder={t("kanban.feedbackPlaceholder")}
+      />
       <div className="flex gap-2">
         <Button
           size="sm"
-          className="h-8 flex-1 gap-1.5 text-xs"
+          className="h-8 gap-1.5 text-xs"
           disabled={busy}
           onClick={() => void runAction(() => approveKanbanItem(item.id))}
         >
@@ -98,7 +102,7 @@ function ReviewActions({
         <Button
           variant="outline"
           size="sm"
-          className="h-8 flex-1 gap-1.5 text-xs"
+          className="h-8 gap-1.5 text-xs"
           disabled={!feedback.trim() || busy}
           onClick={() => {
             if (!feedback.trim()) return

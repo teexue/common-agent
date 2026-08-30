@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
 import { ToolOperationCard } from "./tool-operation-card"
+import { SubAgentCard } from "./sub-agent-card"
+import { isSubAgentCall } from "@/lib/sub-agent"
 import { businessFailed, formatToolGroupSummary } from "./tool-summary"
 import type { ToolCallEntry } from "@/types/agent"
 import type { TFunction } from "i18next"
@@ -96,6 +98,7 @@ export function ToolCallGroup(props: ToolCallGroupProps) {
   const [expanded, setExpanded] = useState(false)
   if (props.toolCalls.length === 1) {
     const tc = props.toolCalls[0]
+    if (isSubAgentCall(tc)) return <SubAgentCard toolCall={tc} />
     return (
       <ToolOperationCard
         toolCall={tc}
@@ -138,16 +141,20 @@ function MultiToolGroup({
       />
       <CollapsibleContent>
         <div className="ml-5 flex flex-col gap-0.5 border-l-2 border-primary/15 pl-3">
-          {props.toolCalls.map((tc) => (
-            <ToolOperationCard
-              key={tc.id}
-              toolCall={tc}
-              isSelected={props.selectedToolCallId === tc.id}
-              onSelect={() => props.onSelectToolCall(tc.id)}
-              onApprove={props.onApproveTool}
-              onDeny={props.onDenyTool}
-            />
-          ))}
+          {props.toolCalls.map((tc) =>
+            isSubAgentCall(tc) ? (
+              <SubAgentCard key={tc.id} toolCall={tc} />
+            ) : (
+              <ToolOperationCard
+                key={tc.id}
+                toolCall={tc}
+                isSelected={props.selectedToolCallId === tc.id}
+                onSelect={() => props.onSelectToolCall(tc.id)}
+                onApprove={props.onApproveTool}
+                onDeny={props.onDenyTool}
+              />
+            )
+          )}
         </div>
       </CollapsibleContent>
     </Collapsible>

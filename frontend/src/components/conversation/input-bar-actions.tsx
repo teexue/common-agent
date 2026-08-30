@@ -12,37 +12,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import {
-  TokenUsageIndicator,
-  type SessionTokenUsage,
-} from "./token-usage-indicator"
-
-export function HintText({ isStreaming }: { isStreaming: boolean }) {
-  const { t } = useTranslation()
-  return (
-    <span className="text-[11px] text-muted-foreground/70">
-      {isStreaming ? (
-        <>
-          <kbd className="rounded border border-border bg-muted px-1 py-px font-mono text-[10px]">
-            Enter
-          </kbd>{" "}
-          {t("conversation.hintStop")}
-        </>
-      ) : (
-        <>
-          <kbd className="rounded border border-border bg-muted px-1 py-px font-mono text-[10px]">
-            Enter
-          </kbd>{" "}
-          {t("conversation.hintSend")}{" "}
-          <kbd className="rounded border border-border bg-muted px-1 py-px font-mono text-[10px]">
-            Shift+Enter
-          </kbd>{" "}
-          {t("conversation.hintNewline")}
-        </>
-      )}
-    </span>
-  )
-}
 
 export function AttachImageButton({ onClick }: { onClick: () => void }) {
   const { t } = useTranslation()
@@ -118,45 +87,60 @@ export function SendStopButton({
   const { t } = useTranslation()
   if (isStreaming) {
     return (
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              size="sm"
-              variant="destructive"
-              className="h-7 gap-1.5 rounded-lg px-3 text-xs"
-              onClick={onStop}
-            >
-              <Square className="h-3 w-3" /> {t("conversation.stop")}
-            </Button>
-          }
-        />
-        <TooltipContent>{t("conversation.stopGenerating")}</TooltipContent>
-      </Tooltip>
+      <SendStopTrigger
+        variant="destructive"
+        tooltip={t("conversation.composerStopHint")}
+        onClick={onStop}
+      >
+        <Square className="h-3 w-3" /> {t("conversation.stop")}
+      </SendStopTrigger>
     )
   }
+  return (
+    <SendStopTrigger
+      tooltip={t("conversation.composerSendHint")}
+      disabled={disabled}
+      onClick={onSend}
+    >
+      {t("conversation.send")} <CornerDownLeft className="h-3 w-3 opacity-60" />
+    </SendStopTrigger>
+  )
+}
+
+function SendStopTrigger({
+  variant,
+  tooltip,
+  disabled,
+  onClick,
+  children,
+}: {
+  variant?: "destructive"
+  tooltip: string
+  disabled?: boolean
+  onClick?: () => void
+  children: React.ReactNode
+}) {
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <Button
             size="sm"
+            variant={variant}
             className="h-7 gap-1.5 rounded-lg px-3 text-xs disabled:opacity-30"
-            onClick={onSend}
+            onClick={onClick}
             disabled={disabled}
           >
-            {t("conversation.send")}{" "}
-            <CornerDownLeft className="h-3 w-3 opacity-60" />
+            {children}
           </Button>
         }
       />
-      <TooltipContent>{t("conversation.sendMessage")}</TooltipContent>
+      <TooltipContent>{tooltip}</TooltipContent>
     </Tooltip>
   )
 }
 
 export function InputBarFooterRight({
-  tokenUsage,
   isStreaming,
   showOptimize,
   optimizing,
@@ -166,7 +150,6 @@ export function InputBarFooterRight({
   onSend,
   onStop,
 }: {
-  tokenUsage?: SessionTokenUsage
   isStreaming?: boolean
   showOptimize: boolean
   optimizing?: boolean
@@ -177,8 +160,7 @@ export function InputBarFooterRight({
   onStop?: () => void
 }) {
   return (
-    <div className="flex items-center gap-1">
-      {tokenUsage && <TokenUsageIndicator usage={tokenUsage} />}
+    <div className="flex shrink-0 items-center gap-1">
       {!isStreaming && showOptimize && (
         <OptimizeButton
           onClick={onOptimizeClick}

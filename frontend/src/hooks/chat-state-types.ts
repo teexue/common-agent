@@ -46,12 +46,18 @@ export type ChatAction =
       approvalId?: string
     }
   | { type: "COMPACTION"; summary: string }
-  | { type: "SUB_AGENT_START"; entryId: string; toolCall: ToolCallEntry }
+  | {
+      type: "SUB_AGENT_START"
+      entryId: string
+      toolCall: ToolCallEntry
+      sessionId?: string
+    }
   | {
       type: "SUB_AGENT_END"
       entryId: string
       toolName: string
       toolCallId?: string
+      sessionId?: string
     }
   | {
       type: "STREAM_DONE"

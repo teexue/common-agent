@@ -31,6 +31,7 @@ function applyVendorPreset(
   f.setModelsPathTouched(false)
   f.setVision(v.vision)
   f.setDisplayName(v.display_name)
+  f.setEnabledModels([])
 }
 
 function applyStyleChange(
@@ -66,7 +67,8 @@ export function useProviderForm(
   const canFetch = fields.isEdit || !requiresKey || !!fields.apiKey.trim()
   const canSave =
     !!fields.name.trim() &&
-    !!fields.defaultModel.trim() &&
+    fields.enabledModels.length > 0 &&
+    fields.enabledModels.includes(fields.defaultModel.trim()) &&
     (fields.isEdit || !requiresKey || !!fields.apiKey.trim())
   const models = useProviderModels({
     canFetch,

@@ -89,15 +89,15 @@ func TestNames(t *testing.T) {
 	builtin.RegisterAll(reg, t.TempDir())
 
 	names := reg.Names()
-	if len(names) != 9 {
-		t.Fatalf("got %d names, want 9", len(names))
+	if len(names) != 10 {
+		t.Fatalf("got %d names, want 10", len(names))
 	}
 	// Names should be sorted.
 	if names[0] != "create_directory" {
 		t.Fatalf("names[0] = %q, want create_directory", names[0])
 	}
-	if names[1] != "edit_file" {
-		t.Fatalf("names[1] = %q, want edit_file", names[1])
+	if names[1] != "delegate_task" {
+		t.Fatalf("names[1] = %q, want delegate_task", names[1])
 	}
 }
 
@@ -114,15 +114,15 @@ func TestList(t *testing.T) {
 	builtin.RegisterAll(reg, t.TempDir())
 
 	tools := reg.List()
-	if len(tools) != 9 {
-		t.Fatalf("got %d tools, want 9", len(tools))
+	if len(tools) != 10 {
+		t.Fatalf("got %d tools, want 10", len(tools))
 	}
 	// List should be sorted by name.
 	if tools[0].Name() != "create_directory" {
 		t.Fatalf("tools[0].Name() = %q, want create_directory", tools[0].Name())
 	}
-	if tools[1].Name() != "edit_file" {
-		t.Fatalf("tools[1].Name() = %q, want edit_file", tools[1].Name())
+	if tools[1].Name() != "delegate_task" {
+		t.Fatalf("tools[1].Name() = %q, want delegate_task", tools[1].Name())
 	}
 }
 

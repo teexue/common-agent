@@ -297,8 +297,10 @@ func (s *Server) SetCatalog(c *provider.Catalog) {
 				return c.ResolveForAgent(a.Provider)
 			}
 			s.svc.ModelWindow = c.ModelContextWindow
+			s.svc.Catalog = c
 		} else {
 			s.svc.ModelWindow = nil
+			s.svc.Catalog = nil
 		}
 	}
 }

@@ -20,9 +20,11 @@ type Profile struct {
 	AuthStyle    AuthStyle
 	DisplayName  string
 	DefaultModel string
-	ModelsPath   string
-	Vision       bool
-	Thinking     *ThinkingConfig
+	// Models is the user-selected subset available for conversation.
+	Models     []string
+	ModelsPath string
+	Vision     bool
+	Thinking   *ThinkingConfig
 	// KeepAlive is the Ollama model keep-alive duration (e.g. "5m", "0").
 	// Only meaningful for StyleOllama; ignored by other styles.
 	KeepAlive string
@@ -33,17 +35,20 @@ type Profile struct {
 
 // ProfileEntry is a provider definition in providers.yaml.
 type ProfileEntry struct {
-	APIStyle     APIStyle        `yaml:"api_style"`
-	BaseURL      string          `yaml:"base_url"`
-	APIKeyEnv    string          `yaml:"api_key_env"`
-	APIVersion   string          `yaml:"api_version"`
-	AuthStyle    AuthStyle       `yaml:"auth_style,omitempty"`
-	DefaultModel string          `yaml:"default_model"`
-	DisplayName  string          `yaml:"display_name,omitempty"`
-	ModelsPath   string          `yaml:"models_path,omitempty"`
-	Vision       bool            `yaml:"vision,omitempty"`
-	Thinking     *ThinkingConfig `yaml:"thinking"`
-	KeepAlive    string          `yaml:"keep_alive,omitempty" json:"keep_alive,omitempty"`
+	APIStyle     APIStyle  `yaml:"api_style"`
+	BaseURL      string    `yaml:"base_url"`
+	APIKeyEnv    string    `yaml:"api_key_env"`
+	APIVersion   string    `yaml:"api_version"`
+	AuthStyle    AuthStyle `yaml:"auth_style,omitempty"`
+	DefaultModel string    `yaml:"default_model"`
+	DisplayName  string    `yaml:"display_name,omitempty"`
+	// Models is the subset of vendor models enabled for conversation.
+	// Empty means only DefaultModel is available (legacy providers).
+	Models     []string        `yaml:"models,omitempty" json:"models,omitempty"`
+	ModelsPath string          `yaml:"models_path,omitempty"`
+	Vision     bool            `yaml:"vision,omitempty"`
+	Thinking   *ThinkingConfig `yaml:"thinking"`
+	KeepAlive  string          `yaml:"keep_alive,omitempty" json:"keep_alive,omitempty"`
 	// ModelWindows maps model id → context window in tokens, captured when
 	// the provider is saved so agents can use the real window instead of 128K.
 	ModelWindows map[string]int `yaml:"model_windows,omitempty" json:"model_windows,omitempty"`
@@ -180,6 +185,7 @@ func (e ProfileEntry) resolve(name string, credLookup func(string) string) (Prof
 		AuthStyle:    authStyle,
 		DisplayName:  displayName,
 		DefaultModel: e.DefaultModel,
+		Models:       EnabledModels(e),
 		ModelsPath:   modelsPath,
 		Vision:       e.Vision,
 		Thinking:     e.Thinking,
@@ -291,6 +297,7 @@ type ProviderInfo struct {
 	DisplayName   string         `json:"display_name"`
 	BaseURL       string         `json:"base_url"`
 	DefaultModel  string         `json:"default_model"`
+	Models        []string       `json:"models,omitempty"`
 	ModelsPath    string         `json:"models_path"`
 	Vision        bool           `json:"vision"`
 	APIKeyEnv     string         `json:"api_key_env,omitempty"`
@@ -337,6 +344,7 @@ func (c *Catalog) Entries() []ProviderInfo {
 			DisplayName:   displayName,
 			BaseURL:       baseURL,
 			DefaultModel:  entry.DefaultModel,
+			Models:        EnabledModels(entry),
 			ModelsPath:    modelsPath,
 			Vision:        entry.Vision,
 			APIKeyEnv:     entry.APIKeyEnv,

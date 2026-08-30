@@ -29,6 +29,7 @@ function defaultsFrom(p: ProviderInfo | undefined) {
       modelsPath: "",
       vision: false,
       displayName: "",
+      enabledModels: [] as string[],
     }
   }
   return {
@@ -40,6 +41,12 @@ function defaultsFrom(p: ProviderInfo | undefined) {
     modelsPath: p.models_path || "",
     vision: !!p.vision,
     displayName: p.display_name || "",
+    enabledModels:
+      p.models && p.models.length > 0
+        ? p.models
+        : p.default_model
+          ? [p.default_model]
+          : [],
   }
 }
 
@@ -57,6 +64,7 @@ export function useProviderFieldState(provider?: ProviderInfo) {
   const [modelsPathTouched, setModelsPathTouched] = useState(false)
   const [vision, setVision] = useState(d.vision)
   const [displayName, setDisplayName] = useState(d.displayName)
+  const [enabledModels, setEnabledModels] = useState<string[]>(d.enabledModels)
   return {
     isEdit,
     name,
@@ -81,6 +89,8 @@ export function useProviderFieldState(provider?: ProviderInfo) {
     setVision,
     displayName,
     setDisplayName,
+    enabledModels,
+    setEnabledModels,
     provider,
   }
 }

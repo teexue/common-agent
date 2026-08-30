@@ -8,7 +8,7 @@ import (
 )
 
 // ListSessions returns metadata for sessions owned by userID. Sessions
-// created by kanban task runs are excluded — they belong to the board.
+// created by kanban or sub-agent runs are excluded from the conversation list.
 func (s *Service) ListSessions(userID string) ([]session.SessionMeta, error) {
 	if s.Store == nil {
 		return nil, fmt.Errorf("session persistence not configured")
@@ -29,8 +29,8 @@ func (s *Service) ListSessions(userID string) ([]session.SessionMeta, error) {
 	}
 	out := make([]session.SessionMeta, 0, len(metas))
 	for _, m := range metas {
-		if m.Metadata[session.MetadataKeySource] == session.SourceKanban {
-			continue // kanban task sessions live on the board, not in the conversation list
+		if hiddenSessionSource(m.Metadata[session.MetadataKeySource]) {
+			continue
 		}
 		uid := m.UserID
 		if uid == "" {
@@ -83,4 +83,8 @@ func (s *Service) DeleteSession(id, userID string) error {
 		return err
 	}
 	return s.Store.Delete(id)
+}
+
+func hiddenSessionSource(src string) bool {
+	return src == session.SourceKanban || src == session.SourceSubagent
 }

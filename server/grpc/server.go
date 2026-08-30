@@ -89,6 +89,13 @@ func NewGRPCServer(
 	}
 }
 
+// SetCatalog attaches the provider catalog so PrepareRun enforces enabled models.
+func (s *GRPCServer) SetCatalog(c *provider.Catalog) {
+	if s.svc != nil {
+		s.svc.Catalog = c
+	}
+}
+
 // SetHealth sets the health server for component-level readiness checks.
 // When set, Check() reports SERVING only when all registered components are healthy.
 func (s *GRPCServer) SetHealth(h *telemetry.HealthServer) {

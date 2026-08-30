@@ -15,13 +15,16 @@ type ToolInfo struct {
 
 func (s *Server) handleTools(c *gin.Context) {
 	tools := s.registry.List()
-	result := make([]ToolInfo, len(tools))
-	for i, t := range tools {
-		result[i] = ToolInfo{
+	result := make([]ToolInfo, 0, len(tools))
+	for _, t := range tools {
+		if t.Name() == "delegate_task" {
+			continue
+		}
+		result = append(result, ToolInfo{
 			Name:        t.Name(),
 			Description: t.Description(),
 			Parameters:  t.InputSchema(),
-		}
+		})
 	}
 	c.JSON(http.StatusOK, result)
 }

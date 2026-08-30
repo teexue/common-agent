@@ -36,6 +36,8 @@ export interface SendRunOpts {
   entryId: string
   dispatch: (action: ChatAction) => void
   images?: { dataUrl: string; name: string }[]
+  model?: string
+  provider?: string
 }
 
 function buildRunBody(opts: SendRunOpts): Record<string, unknown> {
@@ -45,6 +47,8 @@ function buildRunBody(opts: SendRunOpts): Record<string, unknown> {
   }
   if (opts.sessionId) body.session_id = opts.sessionId
   if (opts.workDir) body.workdir = opts.workDir
+  if (opts.model) body.model = opts.model
+  if (opts.provider) body.provider = opts.provider
   if (opts.images && opts.images.length > 0) {
     body.images = opts.images.map((img) => ({
       data_url: img.dataUrl,

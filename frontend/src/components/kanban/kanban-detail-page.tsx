@@ -7,6 +7,7 @@ import { fetchKanbanItem } from "@/lib/api"
 import type { KanbanItem } from "@/types/agent"
 import { KanbanDetailBody } from "./kanban-detail-body"
 import { KanbanDetailHeader } from "./kanban-detail-header"
+import { useKanbanSession } from "./use-kanban-session"
 
 interface KanbanDetailPageProps {
   taskId: string
@@ -26,7 +27,7 @@ export function KanbanDetailPage({
     return (
       <PageShell>
         <PageHeader icon={KanbanSquare} title={t("kanban.title")} />
-        <PageMain contentClassName="max-w-3xl">
+        <PageMain contentClassName="mx-auto max-w-2xl">
           <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {detail.error}
           </p>
@@ -54,9 +55,11 @@ export function KanbanDetailPage({
         onViewLogs={onViewLogs}
         onDeleted={onBack}
       />
-      <PageMain contentClassName="max-w-3xl">
+      <PageMain contentClassName="mx-auto max-w-3xl">
         <KanbanDetailBody
           item={detail.item}
+          messages={detail.messages}
+          isStreaming={detail.item.status === "running"}
           error={detail.error}
           feedback={detail.feedback}
           setFeedback={detail.setFeedback}
@@ -106,5 +109,18 @@ function useKanbanDetail(taskId: string) {
     [refresh]
   )
 
-  return { item, error, feedback, setFeedback, busy, runAction }
+  const messages = useKanbanSession(
+    item?.session_id,
+    item?.status === "running"
+  )
+
+  return {
+    item,
+    messages,
+    error,
+    feedback,
+    setFeedback,
+    busy,
+    runAction,
+  }
 }

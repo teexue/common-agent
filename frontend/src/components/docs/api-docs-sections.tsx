@@ -133,6 +133,8 @@ function runFieldRows(t: TFunction): FieldRow[] {
     { name: "workdir", type: "string", desc: t("apiDocs.fieldWorkdir") },
     { name: "images", type: "array", desc: t("apiDocs.fieldImages") },
     { name: "messages", type: "array", desc: t("apiDocs.fieldMessages") },
+    { name: "model", type: "string", desc: t("apiDocs.fieldModel") },
+    { name: "provider", type: "string", desc: t("apiDocs.fieldRunProvider") },
   ]
 }
 

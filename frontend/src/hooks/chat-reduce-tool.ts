@@ -79,29 +79,3 @@ export function reduceToolAction(
       return state
   }
 }
-
-/** Handles SUB_AGENT_START and SUB_AGENT_END. */
-export function reduceSubAgentAction(
-  state: ChatState,
-  action: ChatAction & { type: `SUB_AGENT_${string}` }
-): ChatState {
-  if (action.type === "SUB_AGENT_START") {
-    return {
-      ...state,
-      messages: updateMessage(state.messages, action.entryId, (m) => ({
-        ...m,
-        toolCalls: [...(m.toolCalls ?? []), action.toolCall],
-      })),
-    }
-  }
-  return {
-    ...state,
-    messages: updateToolCall(
-      state.messages,
-      action.entryId,
-      action.toolName,
-      action.toolCallId,
-      (tc) => ({ ...tc, status: "completed" as const, endTime: Date.now() })
-    ),
-  }
-}

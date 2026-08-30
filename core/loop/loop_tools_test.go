@@ -133,8 +133,14 @@ func TestRunApproval_Denied(t *testing.T) {
 		case event.TypeToolResult:
 			out := make(map[string]string)
 			_ = json.Unmarshal(ev.Output, &out)
-			if out["error"] != "tool approval denied" {
-				t.Fatalf("expected denial error, got %s", ev.Output)
+			if out["status"] != "user_rejected" {
+				t.Fatalf("expected user_rejected status, got %s", ev.Output)
+			}
+			if !strings.Contains(out["message"], "user declined") {
+				t.Fatalf("expected user-declined message, got %s", ev.Output)
+			}
+			if _, hasErr := out["error"]; hasErr {
+				t.Fatalf("denial must not use error (looks like a tool failure): %s", ev.Output)
 			}
 			sawDeniedResult = true
 		}

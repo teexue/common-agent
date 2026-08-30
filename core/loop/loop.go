@@ -25,6 +25,7 @@ type pendingResult struct {
 	callID   string
 	toolName string
 	output   json.RawMessage
+	args     json.RawMessage
 }
 
 // Run executes the agent loop and streams events.
@@ -41,6 +42,8 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 		return nil, err
 	}
 	seedMessages(cfg)
+	cfg.failStreak = &toolFailStreak{}
+	cfg.failStreak.seed(cfg.Session.GetMessages())
 	ctx = attachRunContext(ctx, cfg)
 
 	out := make(chan event.Event)
@@ -295,7 +298,7 @@ func collectParallelResults(tc ToolCollectContext) []pendingResult {
 			defer func() { <-sem }()
 			res := executeOneTool(ToolExecContext{Ctx: tc.Ctx, Reg: tc.Config.Registry, Call: call, Out: tc.Out, Log: tc.Log, Pol: tc.Pol, Hooks: tc.Hooks, Approver: tc.Approver})
 			select {
-			case resultCh <- indexedResult{i, pendingResult{idx: i, callID: call.ID, toolName: call.Name, output: res}}:
+			case resultCh <- indexedResult{i, pendingResult{idx: i, callID: call.ID, toolName: call.Name, args: call.Arguments, output: res}}:
 			case <-tc.Ctx.Done():
 			}
 		}(call, i)
@@ -320,7 +323,7 @@ func collectSerialResults(tc ToolCollectContext) []pendingResult {
 	results := make([]pendingResult, 0, len(tc.ToolCalls))
 	for i, call := range tc.ToolCalls {
 		res := executeOneTool(ToolExecContext{Ctx: tc.Ctx, Reg: tc.Config.Registry, Call: call, Out: tc.Out, Log: tc.Log, Pol: tc.Pol, Hooks: tc.Hooks, Approver: tc.Approver})
-		results = append(results, pendingResult{idx: i, callID: call.ID, toolName: call.Name, output: res})
+		results = append(results, pendingResult{idx: i, callID: call.ID, toolName: call.Name, args: call.Arguments, output: res})
 	}
 	return results
 }
@@ -331,8 +334,12 @@ func recordToolResults(cfg Config, results []pendingResult, window int) {
 		budget = toolResultBudget(currentPressure(cfg, window))
 	}
 	for _, tr := range results {
+		content := truncateToolOutputBudget(string(tr.output), budget)
+		if cfg.failStreak != nil {
+			content = cfg.failStreak.annotate(tr.toolName, tr.args, tr.output, content)
+		}
 		cfg.Session.AddMessages(provider.Message{
-			Role: provider.RoleTool, ToolCallID: tr.callID, Name: tr.toolName, Content: truncateToolOutputBudget(string(tr.output), budget),
+			Role: provider.RoleTool, ToolCallID: tr.callID, Name: tr.toolName, Content: content,
 		})
 	}
 }

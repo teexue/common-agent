@@ -19,7 +19,7 @@ const (
 	ScopeProviders = "providers"
 	// ScopeAudit authorizes request-log and usage audit endpoints when granted on an API key.
 	ScopeAudit = "audit"
-	// ScopeFS authorizes directory listing under the configured workspace via /v1/fs/list.
+	// ScopeFS authorizes directory listing and creation via /v1/fs/list and /v1/fs/mkdir.
 	ScopeFS = "fs"
 )
 

@@ -71,7 +71,7 @@ function AgentSelect({
             onChange((v as { value: string }).value)
         }}
       >
-        <SelectTrigger className="h-8 rounded-xl text-sm">
+        <SelectTrigger className="h-8 w-full rounded-lg border-0 bg-muted/50 text-sm shadow-none">
           <SelectValue />
         </SelectTrigger>
         <SelectContent className="rounded-xl">
@@ -101,16 +101,16 @@ function PriorityToggle({
       <Label className="text-xs text-muted-foreground">
         {t("kanban.fieldPriority")}
       </Label>
-      <div className="flex h-8 items-center rounded-xl border border-border p-0.5">
+      <div className="flex h-8 items-center gap-0.5 rounded-lg bg-muted/50 p-0.5">
         {PRIORITIES.map((p) => (
           <button
             key={p}
             type="button"
             onClick={() => onChange(p)}
             className={cn(
-              "h-full rounded-lg px-3 text-xs transition-colors",
+              "h-full rounded-md px-3 text-xs transition-colors",
               priority === p
-                ? "bg-primary text-primary-foreground"
+                ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >

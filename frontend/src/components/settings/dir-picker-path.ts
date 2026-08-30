@@ -1,11 +1,28 @@
-export function breadcrumbs(path: string): { label: string; path: string }[] {
-  if (!path) return []
-  const parts = path.split("/").filter(Boolean)
-  const crumbs: { label: string; path: string }[] = []
-  let acc = ""
-  for (const p of parts) {
-    acc += "/" + p
-    crumbs.push({ label: p, path: acc })
+const HISTORY_KEY = "workdir-history"
+const HISTORY_MAX = 8
+
+export function basename(path: string): string {
+  const parts = path.replace(/[\\/]+$/, "").split(/[\\/]/)
+  return parts[parts.length - 1] || path
+}
+
+export function loadWorkdirHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY)
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed)
+      ? parsed.filter((x): x is string => typeof x === "string")
+      : []
+  } catch {
+    return []
   }
-  return crumbs
+}
+
+export function pushWorkdirHistory(dir: string): string[] {
+  const next = [dir, ...loadWorkdirHistory().filter((d) => d !== dir)].slice(
+    0,
+    HISTORY_MAX
+  )
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
+  return next
 }

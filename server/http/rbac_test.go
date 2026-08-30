@@ -135,6 +135,7 @@ func TestRBAC_MemberForbiddenAdminRoutes(t *testing.T) {
 		{"POST", "/v1/providers"},
 		{"DELETE", "/v1/providers/openai"},
 		{"PUT", "/v1/embedding"},
+		{"PUT", "/v1/subagent"},
 		{"GET", "/v1/auth/keys"},
 	} {
 		w := doJSON(t, router, tc.method, tc.path, memberToken, map[string]any{})
@@ -177,6 +178,11 @@ func TestRBAC_ScopedAPIKey(t *testing.T) {
 		router.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusForbidden, w.Code, "GET %s", path)
 	}
+	req, _ = http.NewRequest("POST", "/v1/fs/mkdir", nil)
+	req.Header.Set("X-API-Key", key.Key)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code, "POST /v1/fs/mkdir")
 
 	// Key-exchanged JWT keeps the same scope restriction.
 	w = doJSON(t, router, "POST", "/v1/auth/token", "", map[string]string{"api_key": key.Key})

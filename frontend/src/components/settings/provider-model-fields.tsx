@@ -1,124 +1,156 @@
 import { useTranslation } from "react-i18next"
-import { RefreshCw } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Check } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import type { ModelInfo } from "@/types/agent"
 import { SettingsField } from "./settings-field"
 import { SettingsSelect } from "./settings-select"
-import { defaultModelsPath, type StyleOption } from "./provider-form-utils"
 
-function fetchTitle(
-  t: (key: string) => string,
-  canFetch: boolean,
-  apiKeyOptional?: boolean
-): string {
-  if (!canFetch) return t("settings.fetchModelsNoKey")
-  if (apiKeyOptional) return t("settings.fetchModelsLocalHint")
-  return t("settings.fetchModelsHint")
+function mergeModelIds(fetched: ModelInfo[], enabled: string[]): ModelInfo[] {
+  const seen = new Set<string>()
+  const out: ModelInfo[] = []
+  for (const m of fetched) {
+    if (seen.has(m.id)) continue
+    seen.add(m.id)
+    out.push(m)
+  }
+  for (const id of enabled) {
+    if (seen.has(id)) continue
+    seen.add(id)
+    out.push({ id })
+  }
+  return out
 }
 
-function FetchedModelSelect({
-  defaultModel,
-  models,
-  onChange,
-}: {
-  defaultModel: string
-  models: ModelInfo[]
-  onChange: (v: string) => void
-}) {
-  const { t } = useTranslation()
-  return (
-    <SettingsSelect
-      value={defaultModel}
-      options={models.map((m) => ({ value: m.id, label: m.id }))}
-      placeholder={t("settings.fetchModelsPick")}
-      onChange={onChange}
-    />
-  )
+function toggleModel(id: string, selected: string[]): string[] {
+  return selected.includes(id)
+    ? selected.filter((m) => m !== id)
+    : [...selected, id]
 }
 
-function FetchModelsButton({
-  fetching,
-  canFetch,
-  apiKeyOptional,
-  onFetchModels,
+function ModelCheckRow({
+  id,
+  checked,
+  onToggle,
 }: {
-  fetching: boolean
-  canFetch: boolean
-  apiKeyOptional?: boolean
-  onFetchModels: () => void
+  id: string
+  checked: boolean
+  onToggle: () => void
 }) {
-  const { t } = useTranslation()
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      className="h-9 shrink-0 gap-1.5 px-3 text-xs"
-      onClick={onFetchModels}
-      disabled={fetching || !canFetch}
-      title={fetchTitle(t, canFetch, apiKeyOptional)}
+    <button
+      type="button"
+      onClick={onToggle}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm",
+        checked ? "bg-primary/10 text-foreground" : "hover:bg-muted/60"
+      )}
     >
-      <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
-      {t("settings.fetchModels")}
-    </Button>
+      <span
+        className={cn(
+          "flex h-4 w-4 items-center justify-center rounded border",
+          checked
+            ? "border-primary bg-primary text-primary-foreground"
+            : "border-border"
+        )}
+      >
+        {checked && <Check className="h-3 w-3" />}
+      </span>
+      <span className="font-mono text-xs">{id}</span>
+    </button>
   )
 }
 
-function DefaultModelField({
-  defaultModel,
-  onDefaultModelChange,
+function AvailableModelsList({
   models,
+  enabled,
   fetching,
+  onToggle,
+}: {
+  models: ModelInfo[]
+  enabled: string[]
+  fetching: boolean
+  onToggle: (id: string) => void
+}) {
+  const { t } = useTranslation()
+  if (fetching) {
+    return (
+      <p className="text-[11px] text-muted-foreground">
+        {t("settings.fetchModelsLoading")}
+      </p>
+    )
+  }
+  if (models.length === 0) {
+    return (
+      <p className="text-[11px] text-muted-foreground">
+        {t("settings.fetchModelsEmpty")}
+      </p>
+    )
+  }
+  return (
+    <div className="max-h-48 overflow-y-auto rounded-xl border border-border/60 p-1">
+      {models.map((m) => (
+        <ModelCheckRow
+          key={m.id}
+          id={m.id}
+          checked={enabled.includes(m.id)}
+          onToggle={() => onToggle(m.id)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function FetchStatus({
   canFetch,
   fetchErr,
   showOpenAIHint,
-  apiKeyOptional,
-  onFetchModels,
 }: {
-  defaultModel: string
-  onDefaultModelChange: (v: string) => void
-  models: ModelInfo[] | null
-  fetching: boolean
   canFetch: boolean
   fetchErr: string | null
   showOpenAIHint: boolean
-  apiKeyOptional?: boolean
-  onFetchModels: () => void
 }) {
   const { t } = useTranslation()
   return (
-    <SettingsField label={t("settings.providerDefaultModel")}>
-      <div className="flex gap-2">
-        <Input
-          value={defaultModel}
-          onChange={(e) => onDefaultModelChange(e.target.value)}
-          className="h-9 rounded-lg font-mono text-sm"
-          placeholder={t("settings.defaultModelPlaceholder")}
-        />
-        <FetchModelsButton
-          fetching={fetching}
-          canFetch={canFetch}
-          apiKeyOptional={apiKeyOptional}
-          onFetchModels={onFetchModels}
-        />
-      </div>
+    <>
+      {!canFetch && (
+        <p className="text-[11px] text-muted-foreground">
+          {t("settings.fetchModelsNoKey")}
+        </p>
+      )}
       {fetchErr && (
         <p className="text-[11px] text-destructive">
           {t("settings.fetchModelsFailed")}: {fetchErr}
         </p>
       )}
-      {showOpenAIHint && (
+      {showOpenAIHint && !fetchErr && (
         <p className="text-[11px] text-muted-foreground">
           {t("settings.fetchModelsViaOpenAI")}
         </p>
       )}
-      {models && models.length > 0 && (
-        <FetchedModelSelect
-          defaultModel={defaultModel}
-          models={models}
-          onChange={onDefaultModelChange}
-        />
-      )}
+    </>
+  )
+}
+
+export function ModelsPathField({
+  modelsPath,
+  onModelsPathChange,
+}: {
+  modelsPath: string
+  onModelsPathChange: (v: string) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <SettingsField
+      label={t("settings.providerModelsPath")}
+      hint={t("settings.providerModelsPathHint")}
+    >
+      <Input
+        value={modelsPath}
+        onChange={(e) => onModelsPathChange(e.target.value)}
+        className="h-9 rounded-lg font-mono text-sm"
+        placeholder="/v1/models"
+      />
     </SettingsField>
   )
 }
@@ -126,50 +158,56 @@ function DefaultModelField({
 export function ModelFields({
   defaultModel,
   onDefaultModelChange,
-  modelsPath,
-  onModelsPathChange,
-  apiStyle,
+  enabledModels,
+  onEnabledModelsChange,
   models,
   fetching,
-  canFetch,
   fetchErr,
   showOpenAIHint,
-  apiKeyOptional,
-  onFetchModels,
+  canFetch,
 }: {
   defaultModel: string
   onDefaultModelChange: (v: string) => void
-  modelsPath: string
-  onModelsPathChange: (v: string) => void
-  apiStyle: StyleOption
+  enabledModels: string[]
+  onEnabledModelsChange: (v: string[]) => void
   models: ModelInfo[] | null
   fetching: boolean
-  canFetch: boolean
   fetchErr: string | null
   showOpenAIHint: boolean
-  apiKeyOptional?: boolean
-  onFetchModels: () => void
+  canFetch: boolean
 }) {
   const { t } = useTranslation()
+  const onToggle = (id: string) => {
+    const next = toggleModel(id, enabledModels)
+    onEnabledModelsChange(next)
+    if (!next.includes(defaultModel)) onDefaultModelChange(next[0] ?? "")
+  }
   return (
-    <div className="grid grid-cols-2 gap-4">
-      <DefaultModelField
-        defaultModel={defaultModel}
-        onDefaultModelChange={onDefaultModelChange}
-        models={models}
-        fetching={fetching}
-        canFetch={canFetch}
-        fetchErr={fetchErr}
-        showOpenAIHint={showOpenAIHint}
-        apiKeyOptional={apiKeyOptional}
-        onFetchModels={onFetchModels}
-      />
-      <SettingsField label={t("settings.providerModelsPath")}>
-        <Input
-          value={modelsPath}
-          onChange={(e) => onModelsPathChange(e.target.value)}
-          className="h-9 rounded-lg font-mono text-sm"
-          placeholder={defaultModelsPath(apiStyle)}
+    <div className="grid gap-4">
+      <SettingsField
+        label={t("settings.providerEnabledModels")}
+        hint={t("settings.providerEnabledModelsHint")}
+      >
+        <FetchStatus
+          canFetch={canFetch}
+          fetchErr={fetchErr}
+          showOpenAIHint={showOpenAIHint}
+        />
+        {canFetch && (
+          <AvailableModelsList
+            models={mergeModelIds(models ?? [], enabledModels)}
+            enabled={enabledModels}
+            fetching={fetching}
+            onToggle={onToggle}
+          />
+        )}
+      </SettingsField>
+      <SettingsField label={t("settings.providerDefaultModel")}>
+        <SettingsSelect
+          value={defaultModel}
+          options={enabledModels.map((id) => ({ value: id, label: id }))}
+          placeholder={t("settings.fetchModelsPick")}
+          onChange={onDefaultModelChange}
         />
       </SettingsField>
     </div>

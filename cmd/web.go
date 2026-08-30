@@ -249,6 +249,7 @@ type GRPCConfig struct {
 // startGRPCServer creates, registers, and starts a gRPC server in a goroutine.
 func startGRPCServer(cfg GRPCConfig) *grpc.Server {
 	grpcSrv := grpcapi.NewGRPCServer(cfg.Paths.agentsDir, cfg.Reg, resolveProvider(cfg.Catalog, cfg.Mock), cfg.Logger, cfg.SessStore)
+	grpcSrv.SetCatalog(cfg.Catalog)
 	if cfg.Health != nil {
 		grpcSrv.SetHealth(cfg.Health)
 	}

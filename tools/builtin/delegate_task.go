@@ -11,28 +11,24 @@ import (
 )
 
 // DelegateTask is a built-in tool that delegates a task to a sub-agent.
-type DelegateTask struct {
-	Deps subagent.Deps
-	// Depth is the current nesting depth.
-	Depth int
-}
+type DelegateTask struct{}
 
 // Name returns the tool name.
-func (d *DelegateTask) Name() string { return "delegate_task" }
+func (DelegateTask) Name() string { return "delegate_task" }
 
 // Description returns a human-readable description.
-func (d *DelegateTask) Description() string {
-	return "Delegate a task to a sub-agent. The sub-agent will execute the task independently and return the result."
+func (DelegateTask) Description() string {
+	return "Delegate a self-contained task to a sub-agent. Call this yourself when work is parallelizable, isolated, or would clutter the main thread; do not wait for the user to request a sub-agent. Pass a complete task — the child does not share this conversation."
 }
 
 // InputSchema returns the JSON Schema for the tool's input.
-func (d *DelegateTask) InputSchema() map[string]any {
+func (DelegateTask) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"agent": map[string]any{
 				"type":        "string",
-				"description": "Name of the agent YAML to use for the sub-agent (optional, uses default if empty)",
+				"description": "Name of the agent YAML to use for the sub-agent (optional, inherits the parent if empty)",
 			},
 			"task": map[string]any{
 				"type":        "string",
@@ -42,22 +38,17 @@ func (d *DelegateTask) InputSchema() map[string]any {
 				"type":        "string",
 				"description": "Additional context to provide to the sub-agent (optional)",
 			},
-			"max_turns": map[string]any{
-				"type":        "integer",
-				"description": "Maximum turns for the sub-agent (optional, default 5)",
-			},
 		},
 		"required": []string{"task"},
 	}
 }
 
 // Execute runs the tool.
-func (d *DelegateTask) Execute(ctx context.Context, input json.RawMessage) (tool.Result, error) {
+func (DelegateTask) Execute(ctx context.Context, input json.RawMessage) (tool.Result, error) {
 	var args struct {
-		Agent    string `json:"agent"`
-		Task     string `json:"task"`
-		Context  string `json:"context"`
-		MaxTurns int    `json:"max_turns"`
+		Agent   string `json:"agent"`
+		Task    string `json:"task"`
+		Context string `json:"context"`
 	}
 	if err := json.Unmarshal(input, &args); err != nil {
 		return tool.Result{}, fmt.Errorf("parse delegate_task input: %w", err)
@@ -65,27 +56,44 @@ func (d *DelegateTask) Execute(ctx context.Context, input json.RawMessage) (tool
 	if args.Task == "" {
 		return tool.Result{}, fmt.Errorf("task is required")
 	}
-
-	cfg := subagent.Config{
+	spawn, ok := loop.SpawnFrom(ctx)
+	if !ok || spawn.NewProvider == nil {
+		return tool.Result{}, fmt.Errorf("sub-agent spawning is not configured")
+	}
+	if !spawn.Subagent.Enabled && spawn.Subagent != (loop.SubagentLimits{}) {
+		return tool.Result{}, fmt.Errorf("sub-agent is disabled")
+	}
+	result, err := subagent.Run(ctx, subagent.Config{
 		AgentName: args.Agent,
 		Task:      args.Task,
 		Context:   args.Context,
-		MaxTurns:  args.MaxTurns,
-		Depth:     d.Depth + 1,
-	}
-
-	// Get the parent event channel from context (set by the loop).
-	parentOut := loop.GetParentEventChan(ctx)
-
-	result, err := subagent.Run(ctx, cfg, d.Deps, parentOut)
+		Depth:     spawn.Depth + 1,
+		Limits:    spawn.Subagent,
+	}, spawnDeps(spawn), loop.GetParentEventChan(ctx))
 	if err != nil {
 		return tool.Result{}, err
 	}
-
 	out, _ := json.Marshal(map[string]any{
-		"response": result.Response,
-		"status":   result.Status,
-		"turns":    result.Turns,
+		"response":   result.Response,
+		"status":     result.Status,
+		"turns":      result.Turns,
+		"session_id": result.SessionID,
 	})
 	return tool.Result{Output: out}, nil
+}
+
+func spawnDeps(spawn loop.Spawn) subagent.Deps {
+	return subagent.Deps{
+		AgentsDir:       spawn.AgentsDir,
+		Registry:        spawn.Registry,
+		NewProvider:     spawn.NewProvider,
+		Logger:          spawn.Logger,
+		Policy:          spawn.Policy,
+		Approver:        spawn.Approver,
+		Store:           spawn.Store,
+		WorkDir:         spawn.WorkDir,
+		UserID:          spawn.UserID,
+		ParentSessionID: spawn.SessionID,
+		ParentAgent:     spawn.Agent,
+	}
 }

@@ -93,6 +93,7 @@ export async function upsertProvider(data: {
   auth_style?: string
   default_model?: string
   display_name?: string
+  models?: string[]
   models_path?: string
   vision?: boolean
   context_window?: number
