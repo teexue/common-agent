@@ -45,13 +45,13 @@ export function InputBar(props: InputBarProps) {
           onChange={setText}
           onKeyDown={handleKeyDown}
           isStreaming={!!props.isStreaming}
+          fileInputRef={fileInputRef}
+          onFileSelect={handleFileSelect}
         />
         <InputBarToolbar
           accessory={props.accessory}
           tokenUsage={props.tokenUsage}
           isStreaming={!!props.isStreaming}
-          fileInputRef={fileInputRef}
-          onFileSelect={handleFileSelect}
           showOptimize={!!props.onOptimize}
           optimizing={props.optimizing}
           optimizeDisabled={
@@ -74,27 +74,41 @@ function PromptField({
   onChange,
   onKeyDown,
   isStreaming,
+  fileInputRef,
+  onFileSelect,
 }: {
   text: string
   onChange: (v: string) => void
   onKeyDown: (e: React.KeyboardEvent) => void
   isStreaming: boolean
+  fileInputRef: React.RefObject<HTMLInputElement | null>
+  onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
 }) {
   const { t } = useTranslation()
   return (
-    <Textarea
-      value={text}
-      onChange={(e) => onChange(e.target.value)}
-      onKeyDown={onKeyDown}
-      placeholder={
-        isStreaming
-          ? t("conversation.placeholderStreaming")
-          : t("conversation.placeholderIdle")
-      }
-      disabled={false}
-      className="max-h-[calc(6lh+1rem)] min-h-[calc(1lh+1rem)] resize-none overflow-y-auto overscroll-contain border-0 bg-transparent px-3.5 pt-3 pb-1 text-sm shadow-none focus-visible:ring-0"
-      rows={1}
-    />
+    <div className="flex items-start gap-0.5 pt-2.5 pr-3 pb-1 pl-2">
+      <AttachFilesButton onClick={() => fileInputRef.current?.click()} />
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={onFileSelect}
+      />
+      <Textarea
+        value={text}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder={
+          isStreaming
+            ? t("conversation.placeholderStreaming")
+            : t("conversation.placeholderIdle")
+        }
+        disabled={false}
+        className="max-h-[6lh] min-h-6 flex-1 resize-none overflow-y-auto overscroll-contain border-0 bg-transparent px-1.5 py-0 text-sm leading-6 shadow-none focus-visible:ring-0"
+        rows={1}
+      />
+    </div>
   )
 }
 
@@ -102,8 +116,6 @@ function InputBarToolbar({
   accessory,
   tokenUsage,
   isStreaming,
-  fileInputRef,
-  onFileSelect,
   showOptimize,
   optimizing,
   optimizeDisabled,
@@ -115,8 +127,6 @@ function InputBarToolbar({
   accessory?: React.ReactNode
   tokenUsage?: SessionTokenUsage
   isStreaming: boolean
-  fileInputRef: React.RefObject<HTMLInputElement | null>
-  onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
   showOptimize: boolean
   optimizing?: boolean
   optimizeDisabled: boolean
@@ -127,11 +137,9 @@ function InputBarToolbar({
 }) {
   return (
     <div className="flex flex-nowrap items-center gap-2 px-2 pb-2">
-      <ToolbarStart
-        accessory={accessory}
-        fileInputRef={fileInputRef}
-        onFileSelect={onFileSelect}
-      />
+      <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+        {accessory}
+      </div>
       {tokenUsage ? (
         <div className="shrink-0">
           <TokenUsageIndicator usage={tokenUsage} />
@@ -146,30 +154,6 @@ function InputBarToolbar({
         onOptimizeClick={onOptimizeClick}
         onSend={onSend}
         onStop={onStop}
-      />
-    </div>
-  )
-}
-
-function ToolbarStart({
-  accessory,
-  fileInputRef,
-  onFileSelect,
-}: {
-  accessory?: React.ReactNode
-  fileInputRef: React.RefObject<HTMLInputElement | null>
-  onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
-}) {
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
-      <AttachFilesButton onClick={() => fileInputRef.current?.click()} />
-      {accessory}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={onFileSelect}
       />
     </div>
   )

@@ -16,7 +16,7 @@ export function AttachFilesButton({ onClick }: { onClick: () => void }) {
           <Button
             variant="ghost"
             size="icon-xs"
-            className="h-6 w-6 shrink-0 rounded-md text-muted-foreground hover:text-foreground"
+            className="h-6 w-6 shrink-0 rounded-md leading-none text-muted-foreground hover:text-foreground"
             onClick={onClick}
           >
             <Plus className="h-3.5 w-3.5" />
