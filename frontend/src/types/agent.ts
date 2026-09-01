@@ -155,6 +155,10 @@ export interface PermissionsConfig {
   always_deny?: string[]
 }
 
+export type FileAttachment =
+  | { kind: "image"; name: string; dataUrl: string }
+  | { kind: "text"; name: string; text: string }
+
 export interface ConversationEntry {
   id: string
   role: "user" | "assistant" | "tool" | "system"
@@ -165,6 +169,7 @@ export interface ConversationEntry {
   isStreaming?: boolean
   compactionSummary?: string
   usage?: TokenUsage
+  attachments?: FileAttachment[]
 }
 
 export interface TokenUsage {

@@ -13,6 +13,7 @@ import {
 } from "./use-provider-fields"
 import { useProviderDetail } from "./use-provider-detail"
 import { useProviderModels, useProviderSave } from "./use-provider-save"
+import { useSyncProviderVision } from "./use-provider-vision"
 
 function applyVendorPreset(
   v: VendorInfo,
@@ -29,7 +30,7 @@ function applyVendorPreset(
   f.setDefaultModel(v.default_model)
   f.setModelsPath(defaultModelsPath(style))
   f.setModelsPathTouched(false)
-  f.setVision(v.vision)
+  f.setVision(false)
   f.setDisplayName(v.display_name)
   f.setEnabledModels([])
 }
@@ -48,7 +49,7 @@ function applyStyleChange(
   f.setAuthStyle(vendorAuth(selectedVendor, style))
 }
 
-export function useProviderForm(
+function useProviderFormState(
   provider: ProviderInfo | undefined,
   onSaved: () => void
 ) {
@@ -65,11 +66,6 @@ export function useProviderForm(
   })
   const requiresKey = vendorRequiresKey(vendors.selectedVendor)
   const canFetch = fields.isEdit || !requiresKey || !!fields.apiKey.trim()
-  const canSave =
-    !!fields.name.trim() &&
-    fields.enabledModels.length > 0 &&
-    fields.enabledModels.includes(fields.defaultModel.trim()) &&
-    (fields.isEdit || !requiresKey || !!fields.apiKey.trim())
   const models = useProviderModels({
     canFetch,
     name: fields.name,
@@ -85,25 +81,39 @@ export function useProviderForm(
     contextWindow: detail.detail?.context_window,
     onSaved,
   })
+  return { vendors, fields, detail, models, requiresKey, canFetch, save }
+}
+
+export function useProviderForm(
+  provider: ProviderInfo | undefined,
+  onSaved: () => void
+) {
+  const s = useProviderFormState(provider, onSaved)
+  useSyncProviderVision({
+    setVision: s.fields.setVision,
+    models: s.models.models,
+    fetching: s.models.fetching,
+    defaultModel: s.fields.defaultModel,
+    capabilities: s.detail.detail?.capabilities,
+  })
+  const canSave =
+    !!s.fields.name.trim() &&
+    s.fields.enabledModels.length > 0 &&
+    s.fields.enabledModels.includes(s.fields.defaultModel.trim()) &&
+    (s.fields.isEdit || !s.requiresKey || !!s.fields.apiKey.trim())
   return {
-    vendors,
-    fields,
-    detail,
-    models,
-    requiresKey,
-    canFetch,
+    ...s,
     canSave,
-    save,
     applyVendor: (v: VendorInfo) => {
-      vendors.setVendorName(v.name)
-      applyVendorPreset(v, fields, detail.clearDetail)
+      s.vendors.setVendorName(v.name)
+      applyVendorPreset(v, s.fields, s.detail.clearDetail)
     },
     onStyleChange: (style: StyleOption) =>
       applyStyleChange(
         style,
-        fields,
-        vendors.selectedVendor,
-        detail.clearDetail
+        s.fields,
+        s.vendors.selectedVendor,
+        s.detail.clearDetail
       ),
   }
 }

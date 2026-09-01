@@ -1,42 +1,75 @@
 import { useCallback, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
+import type { TFunction } from "i18next"
+import { useToast } from "@/components/ui/toast"
 import { isComposingEvent } from "@/lib/keys"
-import type { ImageAttachment } from "@/components/conversation/input-bar"
+import { readFiles, type AttachError } from "@/lib/attachments"
+import type { FileAttachment } from "@/types/agent"
 
-function useImageAttachments() {
-  const [images, setImages] = useState<ImageAttachment[]>([])
+function useFileAttachments(visionEnabled: boolean) {
+  const { t } = useTranslation()
+  const toast = useToast()
+  const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files
-      if (!files) return
-      for (const file of Array.from(files)) {
-        if (!file.type.startsWith("image/")) continue
-        const reader = new FileReader()
-        reader.onload = () => {
-          if (typeof reader.result === "string") {
-            setImages((prev) => [
-              ...prev,
-              { dataUrl: reader.result as string, name: file.name },
-            ])
-          }
-        }
-        reader.readAsDataURL(file)
-      }
+      const files = Array.from(e.target.files ?? [])
       e.target.value = ""
+      if (files.length === 0) return
+      void readFiles(files).then((result) => {
+        for (const err of result.errors) toast.warning(attachErrorText(t, err))
+        const ok = acceptedAttachments(result.ok, visionEnabled, t, toast)
+        if (ok.length > 0) setAttachments((prev) => [...prev, ...ok])
+      })
     },
-    []
+    [t, toast, visionEnabled]
   )
-  const removeImage = (index: number) =>
-    setImages((prev) => prev.filter((_, i) => i !== index))
-  return { images, setImages, fileInputRef, handleFileSelect, removeImage }
+  const removeAttachment = (index: number) =>
+    setAttachments((prev) => prev.filter((_, i) => i !== index))
+  return {
+    attachments,
+    setAttachments,
+    fileInputRef,
+    handleFileSelect,
+    removeAttachment,
+  }
+}
+
+function acceptedAttachments(
+  items: FileAttachment[],
+  visionEnabled: boolean,
+  t: TFunction,
+  toast: { warning: (msg: string) => void }
+): FileAttachment[] {
+  if (visionEnabled) return items
+  const kept: FileAttachment[] = []
+  for (const item of items) {
+    if (item.kind === "image") {
+      toast.warning(t("conversation.attachNoVision", { name: item.name }))
+      continue
+    }
+    kept.push(item)
+  }
+  return kept
+}
+
+function attachErrorText(t: TFunction, err: AttachError): string {
+  if (err.code === "unsupported") {
+    return t("conversation.attachUnsupported", { name: err.name })
+  }
+  if (err.code === "too_large") {
+    return t("conversation.attachTooLarge", { name: err.name })
+  }
+  return t("conversation.attachReadFailed", { name: err.name })
 }
 
 interface UseInputBarOpts {
-  onSend: (text: string, images: ImageAttachment[]) => void
+  onSend: (text: string, attachments: FileAttachment[]) => void
   onStop?: () => void
   onOptimize?: (text: string) => Promise<string>
   disabled: boolean
   isStreaming?: boolean
+  visionEnabled?: boolean
   optimizing?: boolean
 }
 
@@ -46,11 +79,11 @@ export function useInputBar({
   onOptimize,
   disabled,
   isStreaming,
+  visionEnabled,
   optimizing,
 }: UseInputBarOpts) {
   const [text, setText] = useState("")
-  const { images, setImages, fileInputRef, handleFileSelect, removeImage } =
-    useImageAttachments()
+  const files = useFileAttachments(!!visionEnabled)
 
   const handleOptimize = async () => {
     if (!text.trim() || !onOptimize || optimizing) return
@@ -63,10 +96,10 @@ export function useInputBar({
 
   const handleSend = () => {
     const trimmed = text.trim()
-    if ((!trimmed && images.length === 0) || disabled) return
-    onSend(trimmed, images)
+    if ((!trimmed && files.attachments.length === 0) || disabled) return
+    onSend(trimmed, files.attachments)
     setText("")
-    setImages([])
+    files.setAttachments([])
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -80,10 +113,10 @@ export function useInputBar({
   return {
     text,
     setText,
-    images,
-    fileInputRef,
-    handleFileSelect,
-    removeImage,
+    attachments: files.attachments,
+    fileInputRef: files.fileInputRef,
+    handleFileSelect: files.handleFileSelect,
+    removeAttachment: files.removeAttachment,
     handleOptimize,
     handleSend,
     handleKeyDown,

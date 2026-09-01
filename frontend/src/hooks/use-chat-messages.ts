@@ -1,4 +1,5 @@
 import type { AgentEvent, ConversationEntry } from "@/types/agent"
+import { parseUserContent, type ContentPart } from "@/lib/attachments"
 
 export interface BackendMsg {
   role: string
@@ -7,6 +8,7 @@ export interface BackendMsg {
   tool_calls?: Array<{ id: string; name: string; arguments: unknown }>
   tool_call_id?: string
   name?: string
+  content_parts?: ContentPart[]
 }
 
 export function fromBackendMessages(msgs: BackendMsg[]): ConversationEntry[] {
@@ -23,12 +25,7 @@ export function fromBackendMessages(msgs: BackendMsg[]): ConversationEntry[] {
     if (msg.role === "system") continue
 
     if (msg.role === "user") {
-      entries.push({
-        id: `loaded-user-${entries.length}`,
-        role: "user",
-        content: msg.content ?? "",
-        timestamp: Date.now(),
-      })
+      entries.push(userEntryFromBackend(msg, entries.length))
     }
 
     if (msg.role === "assistant") {
@@ -56,6 +53,22 @@ export function fromBackendMessages(msgs: BackendMsg[]): ConversationEntry[] {
     }
   }
   return entries
+}
+
+function userEntryFromBackend(
+  msg: BackendMsg,
+  index: number
+): ConversationEntry {
+  const parsed = parseUserContent(msg.content ?? "", msg.content_parts)
+  return {
+    id: `loaded-user-${index}`,
+    role: "user",
+    content: parsed.text,
+    timestamp: Date.now(),
+    ...(parsed.attachments.length > 0
+      ? { attachments: parsed.attachments }
+      : {}),
+  }
 }
 
 function tryParseJSON(s: string): unknown {

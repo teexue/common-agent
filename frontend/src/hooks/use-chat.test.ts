@@ -264,6 +264,18 @@ describe("chatReducer token usage", () => {
     expect(state.contextWindow).toBe(1_000_000)
   })
 
+  it("stores user attachments on ADD_USER_MESSAGE", () => {
+    const state = chatReducer(baseState(), {
+      type: "ADD_USER_MESSAGE",
+      text: "see",
+      attachments: [{ kind: "text", name: "a.txt", text: "hello" }],
+    })
+    expect(state.messages[0].content).toBe("see")
+    expect(state.messages[0].attachments).toEqual([
+      { kind: "text", name: "a.txt", text: "hello" },
+    ])
+  })
+
   it("leaves usage untouched when a done event omits token fields", () => {
     let state: ChatState = {
       ...baseState(),

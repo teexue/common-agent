@@ -79,9 +79,16 @@ export function DiffBlock({ lines }: { lines: DiffLine[] }) {
   )
 }
 
-export function FileContentBlock({ text }: { text: string }) {
+export function FileContentBlock({
+  text,
+  startLine = 1,
+}: {
+  text: string
+  startLine?: number
+}) {
   const lines = text === "" ? [] : text.split("\n")
   if (lines.length === 0) return null
+  const first = startLine > 0 ? startLine : 1
   return (
     <div className="max-h-56 overflow-auto">
       {lines.map((l, i) => (
@@ -90,7 +97,7 @@ export function FileContentBlock({ text }: { text: string }) {
           className="flex gap-2 px-2.5 font-mono text-[11px] leading-relaxed whitespace-pre"
         >
           <span className="w-6 shrink-0 text-right text-muted-foreground/50 select-none">
-            {i + 1}
+            {first + i}
           </span>
           <span className="min-w-0 flex-1 break-all text-foreground">{l}</span>
         </div>

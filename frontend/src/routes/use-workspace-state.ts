@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import type { AgentInfo, ProviderInfo, StreamStatus } from "@/types/agent"
 import type { useChat } from "@/hooks/use-chat"
+import { providerSupportsVision } from "@/lib/provider-models"
 
 export function useWorkspaceAgent(agents: AgentInfo[], pathname: string) {
   const [agent, setAgent] = useState(() => {
@@ -34,9 +35,7 @@ export function useWorkspaceDerived(
       ? "error"
       : "idle"
   const providerName = runModel.provider || agentInfo?.provider || ""
-  const visionEnabled = providerName
-    ? (providers.find((p) => p.name === providerName)?.vision ?? false)
-    : false
+  const visionEnabled = providerSupportsVision(providers, providerName)
   const listWindow = agentInfo?.context_window ?? agentInfo?.contextWindow ?? 0
   const tokenUsage = {
     inputTokens: chat.inputTokens,

@@ -66,7 +66,7 @@ func TestOpenAIListModels(t *testing.T) {
 			t.Fatalf("auth = %q", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":[{"id":"kimi-k2.6"},{"id":"kimi-k2.5"}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"kimi-k2.6"},{"id":"kimi-vl","architecture":{"input_modalities":["text","image"]}}]}`))
 	}))
 	defer srv.Close()
 
@@ -80,6 +80,12 @@ func TestOpenAIListModels(t *testing.T) {
 	}
 	if len(models) != 2 || models[0].ID != "kimi-k2.6" {
 		t.Fatalf("models = %#v", models)
+	}
+	if models[0].Vision {
+		t.Fatalf("plain model should not advertise vision: %#v", models[0])
+	}
+	if !models[1].Vision {
+		t.Fatalf("image input_modalities should advertise vision: %#v", models[1])
 	}
 }
 

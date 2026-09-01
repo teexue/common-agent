@@ -63,10 +63,7 @@ func (o *OpenAI) Capabilities() Capabilities {
 
 // openAIModelsResponse is the shape of GET /models from OpenAI-compatible APIs.
 type openAIModelsResponse struct {
-	Data []struct {
-		ID      string `json:"id"`
-		Context int    `json:"context_length,omitempty"`
-	} `json:"data"`
+	Data []catalogModelRow `json:"data"`
 }
 
 // ListModels fetches available models from the vendor's model-list endpoint.
@@ -94,7 +91,7 @@ func (o *OpenAI) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 	models := make([]ModelInfo, 0, len(out.Data))
 	for _, m := range out.Data {
-		models = append(models, ModelInfo{ID: m.ID, ContextWindow: m.Context})
+		models = append(models, m.toModelInfo())
 	}
 	return models, nil
 }

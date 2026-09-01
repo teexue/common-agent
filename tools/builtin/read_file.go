@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/teexue/common-agent/core/tool"
@@ -23,7 +22,8 @@ func (ReadFile) Name() string { return "read_file" }
 // Description returns a human-readable description.
 func (ReadFile) Description() string {
 	return "Read the contents of a file. Returns the file content as text. " +
-		"Large files are paginated: use offset to read the next chunk."
+		"offset is always a 1-based line number from the first line of the file. " +
+		"If truncated is true, call again with offset=next_offset (also from line 1)."
 }
 
 // InputSchema returns the JSON Schema for the tool's input.
@@ -42,7 +42,7 @@ func (ReadFile) InputSchema() map[string]any {
 			},
 			"offset": map[string]any{
 				"type":        "integer",
-				"description": "Byte offset to start reading from (default 0). Use to paginate large files.",
+				"description": "1-based line number from the start of the file (default 1).",
 			},
 			"max_bytes": map[string]any{
 				"type":        "integer",
@@ -53,17 +53,10 @@ func (ReadFile) InputSchema() map[string]any {
 	}
 }
 
-// Execute runs the tool. Large files are read in [offset, offset+maxBytes);
-// the response reports total_size and truncated so the caller can page
-// through the rest with a higher offset.
+// Execute runs the tool. offset is a 1-based line number from the first line.
 func (r ReadFile) Execute(ctx context.Context, input json.RawMessage) (tool.Result, error) {
-	var args struct {
-		Path     string `json:"path"`
-		Encoding string `json:"encoding"`
-		Offset   int64  `json:"offset"`
-		MaxBytes int    `json:"max_bytes"`
-	}
-	if err := json.Unmarshal(input, &args); err != nil {
+	args, err := parseReadFileArgs(input)
+	if err != nil {
 		return tool.Result{}, fmt.Errorf("parse read_file input: %w", err)
 	}
 
@@ -73,19 +66,10 @@ func (r ReadFile) Execute(ctx context.Context, input json.RawMessage) (tool.Resu
 		return tool.Result{}, err
 	}
 
-	maxBytes := args.MaxBytes
-	if maxBytes <= 0 {
-		maxBytes = defaultMaxReadBytes
-	}
-	if args.Offset < 0 {
-		args.Offset = 0
-	}
-
 	info, err := os.Stat(safePath)
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("stat file: %w", err)
 	}
-	totalSize := info.Size()
 
 	f, err := os.Open(safePath)
 	if err != nil {
@@ -93,39 +77,42 @@ func (r ReadFile) Execute(ctx context.Context, input json.RawMessage) (tool.Resu
 	}
 	defer f.Close()
 
-	if args.Offset > 0 {
-		if _, err := f.Seek(args.Offset, io.SeekStart); err != nil {
-			return tool.Result{}, fmt.Errorf("seek file: %w", err)
-		}
+	startLine := args.Offset
+	if startLine < 1 {
+		startLine = 1
 	}
-	// LimitRead caps at maxBytes so a huge file can't be loaded whole.
-	data, err := io.ReadAll(io.LimitReader(f, int64(maxBytes)))
+	data, nextLine, truncated, err := readFileRange(f, startLine, args.MaxBytes)
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("read file: %w", err)
 	}
+	return encodeReadOutput(args, data, readMeta{
+		startLine: startLine, nextLine: nextLine,
+		truncated: truncated, totalSize: info.Size(),
+	})
+}
 
-	read := len(data)
-	truncated := args.Offset+int64(read) < totalSize
+type readMeta struct {
+	startLine, nextLine, totalSize int64
+	truncated                      bool
+}
 
-	var content string
+func encodeReadOutput(args readFileArgs, data []byte, meta readMeta) (tool.Result, error) {
+	content := string(data)
 	if args.Encoding == "base64" {
 		content = encodeBase64(data)
-	} else {
-		content = string(data)
-		if truncated {
-			content += "\n...[truncated, call read_file again with offset=" +
-				fmt.Sprintf("%d", args.Offset+int64(read)) + "]"
-		}
 	}
-
-	out, _ := json.Marshal(map[string]any{
+	body := map[string]any{
 		"path":       args.Path,
-		"total_size": totalSize,
-		"offset":     args.Offset,
-		"read":       read,
-		"truncated":  truncated,
+		"total_size": meta.totalSize,
+		"offset":     meta.startLine,
+		"read":       len(data),
+		"truncated":  meta.truncated,
 		"encoding":   args.Encoding,
 		"content":    content,
-	})
+	}
+	if meta.truncated {
+		body["next_offset"] = meta.nextLine
+	}
+	out, _ := json.Marshal(body)
 	return tool.Result{Output: out}, nil
 }

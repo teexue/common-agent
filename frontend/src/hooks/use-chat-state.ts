@@ -17,7 +17,10 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   if (action.type === "ADD_USER_MESSAGE") {
     return {
       ...state,
-      messages: [...state.messages, createUserEntry(action.text)],
+      messages: [
+        ...state.messages,
+        createUserEntry(action.text, action.attachments),
+      ],
       error: null,
     }
   }

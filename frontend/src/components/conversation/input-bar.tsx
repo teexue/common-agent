@@ -1,20 +1,16 @@
 import { useTranslation } from "react-i18next"
 import { Textarea } from "@/components/ui/textarea"
 import { useInputBar } from "@/hooks/use-input-bar"
-import { AttachImageButton, InputBarFooterRight } from "./input-bar-actions"
-import { InputBarImages } from "./input-bar-images"
+import { AttachFilesButton, InputBarFooterRight } from "./input-bar-actions"
+import { InputBarAttachments } from "./input-bar-attachments"
 import {
   TokenUsageIndicator,
   type SessionTokenUsage,
 } from "./token-usage-indicator"
-
-export interface ImageAttachment {
-  dataUrl: string
-  name: string
-}
+import type { FileAttachment } from "@/types/agent"
 
 interface InputBarProps {
-  onSend: (text: string, images: ImageAttachment[]) => void
+  onSend: (text: string, attachments: FileAttachment[]) => void
   onStop?: () => void
   onOptimize?: (text: string) => Promise<string>
   disabled: boolean
@@ -29,17 +25,20 @@ export function InputBar(props: InputBarProps) {
   const {
     text,
     setText,
-    images,
+    attachments,
     fileInputRef,
     handleFileSelect,
-    removeImage,
+    removeAttachment,
     handleOptimize,
     handleSend,
     handleKeyDown,
   } = useInputBar(props)
   return (
     <div className="shrink-0 px-5 pt-2 pb-5">
-      <InputBarImages images={images} onRemove={removeImage} />
+      <InputBarAttachments
+        attachments={attachments}
+        onRemove={removeAttachment}
+      />
       <div className="relative rounded-2xl border border-border bg-card shadow-sm transition-shadow focus-within:border-primary/30 focus-within:shadow-md">
         <PromptField
           text={text}
@@ -51,7 +50,6 @@ export function InputBar(props: InputBarProps) {
           accessory={props.accessory}
           tokenUsage={props.tokenUsage}
           isStreaming={!!props.isStreaming}
-          visionEnabled={props.visionEnabled}
           fileInputRef={fileInputRef}
           onFileSelect={handleFileSelect}
           showOptimize={!!props.onOptimize}
@@ -59,7 +57,9 @@ export function InputBar(props: InputBarProps) {
           optimizeDisabled={
             props.disabled || !text.trim() || !!props.optimizing
           }
-          sendDisabled={props.disabled || (!text.trim() && images.length === 0)}
+          sendDisabled={
+            props.disabled || (!text.trim() && attachments.length === 0)
+          }
           onOptimizeClick={handleOptimize}
           onSend={handleSend}
           onStop={props.onStop}
@@ -102,7 +102,6 @@ function InputBarToolbar({
   accessory,
   tokenUsage,
   isStreaming,
-  visionEnabled,
   fileInputRef,
   onFileSelect,
   showOptimize,
@@ -116,7 +115,6 @@ function InputBarToolbar({
   accessory?: React.ReactNode
   tokenUsage?: SessionTokenUsage
   isStreaming: boolean
-  visionEnabled?: boolean
   fileInputRef: React.RefObject<HTMLInputElement | null>
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
   showOptimize: boolean
@@ -131,7 +129,6 @@ function InputBarToolbar({
     <div className="flex flex-nowrap items-center gap-2 px-2 pb-2">
       <ToolbarStart
         accessory={accessory}
-        visionEnabled={visionEnabled}
         fileInputRef={fileInputRef}
         onFileSelect={onFileSelect}
       />
@@ -156,25 +153,20 @@ function InputBarToolbar({
 
 function ToolbarStart({
   accessory,
-  visionEnabled,
   fileInputRef,
   onFileSelect,
 }: {
   accessory?: React.ReactNode
-  visionEnabled?: boolean
   fileInputRef: React.RefObject<HTMLInputElement | null>
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
 }) {
   return (
     <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
+      <AttachFilesButton onClick={() => fileInputRef.current?.click()} />
       {accessory}
-      {visionEnabled && (
-        <AttachImageButton onClick={() => fileInputRef.current?.click()} />
-      )}
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
         multiple
         className="hidden"
         onChange={onFileSelect}

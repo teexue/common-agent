@@ -1,5 +1,7 @@
 import { useCallback, type Dispatch, type MutableRefObject } from "react"
 import { fetchSession } from "@/lib/api"
+import { buildSendPrompt, imagesFromAttachments } from "@/lib/attachments"
+import type { FileAttachment } from "@/types/agent"
 import type { ChatAction } from "./use-chat-state"
 import { fromBackendMessages } from "./use-chat-messages"
 import type { BackendMsg } from "./use-chat-messages"
@@ -12,7 +14,7 @@ export interface SendMessageOpts {
   text: string
   agent: string
   workDir?: string
-  images?: { dataUrl: string; name: string }[]
+  attachments?: FileAttachment[]
   model?: string
   provider?: string
 }
@@ -41,19 +43,23 @@ export function useChatSend(
       cancelStream(dispatch, abortRef)
       const controller = new AbortController()
       abortRef.current = controller
-      dispatch({ type: "ADD_USER_MESSAGE", text: opts.text })
+      dispatch({
+        type: "ADD_USER_MESSAGE",
+        text: opts.text,
+        attachments: opts.attachments,
+      })
       const entryId = `assistant-${Date.now()}`
       dispatch({ type: "START_ASSISTANT", entryId })
       try {
         await sendRunRequest({
           agent: opts.agent,
-          prompt: opts.text,
+          prompt: buildSendPrompt(opts.text, opts.attachments ?? []),
           sessionId: sessionIdRef.current,
           workDir: opts.workDir,
           signal: controller.signal,
           entryId,
           dispatch,
-          images: opts.images,
+          images: imagesFromAttachments(opts.attachments),
           model: opts.model,
           provider: opts.provider,
         })

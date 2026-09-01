@@ -4,6 +4,9 @@ import {
   enabledModelsOf,
   modelChoiceKey,
   parseModelChoice,
+  providerSupportsVision,
+  visionFromCapabilities,
+  visionFromFetchedModels,
   withCurrentChatOption,
 } from "./provider-models"
 import type { ProviderInfo } from "@/types/agent"
@@ -85,5 +88,46 @@ describe("modelChoiceKey", () => {
       provider: "openai",
       model: "gpt-4o",
     })
+  })
+})
+
+describe("visionFromFetchedModels", () => {
+  const models = [{ id: "text-only" }, { id: "vl", vision: true }]
+  it("returns false when the list never advertised vision", () => {
+    expect(visionFromFetchedModels([{ id: "a" }, { id: "b" }], "a")).toBe(false)
+  })
+  it("returns true/false from the selected model when the list advertised vision", () => {
+    expect(visionFromFetchedModels(models, "vl")).toBe(true)
+    expect(visionFromFetchedModels(models, "text-only")).toBe(false)
+    expect(visionFromFetchedModels(models, "missing")).toBe(false)
+  })
+  it("returns undefined until a list is loaded", () => {
+    expect(visionFromFetchedModels(null, "vl")).toBeUndefined()
+    expect(visionFromFetchedModels([], "vl")).toBeUndefined()
+  })
+})
+
+describe("visionFromCapabilities", () => {
+  it("returns undefined without capability tokens", () => {
+    expect(visionFromCapabilities(undefined)).toBeUndefined()
+    expect(visionFromCapabilities([])).toBeUndefined()
+  })
+  it("reads the vision token", () => {
+    expect(visionFromCapabilities(["completion", "tools"])).toBe(false)
+    expect(visionFromCapabilities(["completion", "vision"])).toBe(true)
+  })
+})
+
+describe("providerSupportsVision", () => {
+  it("defaults to false when the provider is missing or unmarked", () => {
+    expect(providerSupportsVision([], "p")).toBe(false)
+    expect(
+      providerSupportsVision([provider({ name: "p", vision: false })], "p")
+    ).toBe(false)
+  })
+  it("follows the saved provider vision flag", () => {
+    expect(
+      providerSupportsVision([provider({ name: "p", vision: true })], "p")
+    ).toBe(true)
   })
 })

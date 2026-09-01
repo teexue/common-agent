@@ -76,6 +76,8 @@
     "workdirUseGlobal": "Clear session directory and use the global setting",
     "workdirAdd": "Add directory…",
     "workdirReset": "Use default",
+    "workdirForget": "Remove from recents",
+    "workdirClearRecents": "Clear recents",
     "exportMarkdown": "Export Markdown",
     "exportJson": "Export JSON",
     "toolCallsCount": "{{count}} tool calls",
@@ -109,7 +111,13 @@
     "noEnabledModels": "Enable models in provider settings first",
     "tokenUsageTooltip": "Input {{input}} · Output {{output}} · Context window {{window}} ({{percent}}%)",
     "sessionTotalTooltip": "Session total: {{total}} tokens",
-    "cacheHitTooltip": "Cache hit: {{cached}} ({{pct}}% hit rate)"
+    "cacheHitTooltip": "Cache hit: {{cached}} ({{pct}}% hit rate)",
+    "attachFiles": "Attach images or files",
+    "attachedFileEmpty": "(empty file)",
+    "attachUnsupported": "{{name}} is not a supported image or text file",
+    "attachTooLarge": "{{name}} is too large to attach",
+    "attachReadFailed": "Could not read {{name}}",
+    "attachNoVision": "{{name}} is an image; this model does not support vision"
   },
   "layout": {
     "expandSidebar": "Expand sidebar",
@@ -479,6 +487,7 @@
     "fetchModelsLoading": "Fetching model list…",
     "fetchModelsEmpty": "No models returned",
     "providerVision": "Vision",
+    "providerVisionHint": "Checked automatically when the model list or detail reports multimodal; otherwise off.",
     "modelDetailTitle": "Model detail",
     "modelDetailQuery": "Query detail",
     "modelDetailLoading": "Querying…",

@@ -1,4 +1,8 @@
-import type { ConversationEntry, ToolCallEntry } from "@/types/agent"
+import type {
+  ConversationEntry,
+  FileAttachment,
+  ToolCallEntry,
+} from "@/types/agent"
 
 export function matchesToolCall(
   tc: ToolCallEntry,
@@ -50,12 +54,16 @@ export function updateToolCall(
   }))
 }
 
-export function createUserEntry(text: string): ConversationEntry {
+export function createUserEntry(
+  text: string,
+  attachments?: FileAttachment[]
+): ConversationEntry {
   return {
     id: `user-${Date.now()}`,
     role: "user",
     content: text,
     timestamp: Date.now(),
+    ...(attachments && attachments.length > 0 ? { attachments } : {}),
   }
 }
 

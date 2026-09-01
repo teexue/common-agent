@@ -89,9 +89,7 @@ func (a *Anthropic) Capabilities() Capabilities {
 
 // anthropicModelsResponse is the shape of GET /v1/models from the Anthropic API.
 type anthropicModelsResponse struct {
-	Data []struct {
-		ID string `json:"id"`
-	} `json:"data"`
+	Data []catalogModelRow `json:"data"`
 }
 
 // ListModels fetches available models from the vendor's model-list endpoint.
@@ -120,7 +118,7 @@ func (a *Anthropic) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 	models := make([]ModelInfo, 0, len(out.Data))
 	for _, m := range out.Data {
-		models = append(models, ModelInfo{ID: m.ID})
+		models = append(models, m.toModelInfo())
 	}
 	return models, nil
 }

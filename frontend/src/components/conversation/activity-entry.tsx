@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Minimize2 } from "lucide-react"
 import { MarkdownRenderer } from "@/components/shared/markdown-renderer"
 import { ThinkingBlock } from "./thinking-block"
 import { ToolCallGroup } from "./tool-call-group"
+import { UserMessage } from "./user-message"
 import type { ConversationEntry } from "@/types/agent"
 
 interface ActivityEntryProps {
@@ -13,18 +14,6 @@ interface ActivityEntryProps {
   onApproveTool?: (approvalId: string) => void
   onDenyTool?: (approvalId: string) => void
   isActive?: boolean
-}
-
-function UserMessage({ entry }: { entry: ConversationEntry }) {
-  return (
-    <div className="flex justify-end">
-      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-gradient-to-br from-accent via-primary/10 to-primary/25 px-3.5 py-2 shadow-md shadow-primary/15">
-        <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-foreground">
-          {entry.content}
-        </p>
-      </div>
-    </div>
-  )
 }
 
 function GeneratingPulse() {

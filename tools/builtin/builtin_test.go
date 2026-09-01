@@ -78,7 +78,7 @@ func TestReadFileMaxBytes(t *testing.T) {
 	if err := json.Unmarshal(res.Output, &out); err != nil {
 		t.Fatal(err)
 	}
-	if got := out["content"]; got != "01234\n...[truncated, call read_file again with offset=5]" {
+	if got := out["content"]; got != "01234" {
 		t.Fatalf("unexpected content %q", got)
 	}
 	if out["total_size"].(float64) != 10 {
@@ -87,9 +87,33 @@ func TestReadFileMaxBytes(t *testing.T) {
 	if out["truncated"].(bool) != true {
 		t.Fatalf("expected truncated true")
 	}
+}
 
-	// Pagination: reading from offset 5 returns the remainder.
-	input2, _ := json.Marshal(map[string]any{"path": "big.txt", "max_bytes": 5, "offset": 5})
+func TestReadFileOffset(t *testing.T) {
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "lines.txt"), []byte("L1\nL2\nL3\nL4\nL5\n"), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rf := builtin.ReadFile{WorkDir: dir}
+
+	input, _ := json.Marshal(map[string]any{"path": "lines.txt", "offset": 3})
+	res, err := rf.Execute(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(res.Output, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out["content"] != "L3\nL4\nL5\n" {
+		t.Fatalf("expected from line 3, got %q", out["content"])
+	}
+	if out["offset"].(float64) != 3 {
+		t.Fatalf("expected offset 3, got %v", out["offset"])
+	}
+
+	input2, _ := json.Marshal(map[string]any{"path": "lines.txt", "offset": "4"})
 	res2, err := rf.Execute(context.Background(), input2)
 	if err != nil {
 		t.Fatal(err)
@@ -98,11 +122,27 @@ func TestReadFileMaxBytes(t *testing.T) {
 	if err := json.Unmarshal(res2.Output, &out2); err != nil {
 		t.Fatal(err)
 	}
-	if out2["content"] != "56789" {
-		t.Fatalf("expected '56789', got %v", out2["content"])
+	if out2["content"] != "L4\nL5\n" {
+		t.Fatalf("string offset should start at line 4, got %q", out2["content"])
 	}
-	if out2["truncated"].(bool) != false {
-		t.Fatalf("expected truncated false for tail read")
+
+	input3, _ := json.Marshal(map[string]any{"path": "lines.txt", "offset": 1, "max_bytes": 6})
+	res3, err := rf.Execute(context.Background(), input3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out3 map[string]any
+	if err := json.Unmarshal(res3.Output, &out3); err != nil {
+		t.Fatal(err)
+	}
+	if out3["truncated"].(bool) != true {
+		t.Fatal("expected truncated when max_bytes cuts mid-file")
+	}
+	if out3["content"] != "L1\nL2\n" {
+		t.Fatalf("unexpected paginated content %q", out3["content"])
+	}
+	if out3["next_offset"].(float64) != 3 {
+		t.Fatalf("expected next_offset 3 from start of file, got %v", out3["next_offset"])
 	}
 }
 

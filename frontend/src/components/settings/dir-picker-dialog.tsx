@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { FolderOpen } from "lucide-react"
+import { FolderOpen, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -12,7 +12,7 @@ import {
 import { fetchDirList, createDir, type DirListResponse } from "@/lib/api"
 import { DirToolbar } from "./dir-picker-nav"
 import { DirEntryList } from "./dir-picker-list"
-import { basename } from "./dir-picker-path"
+import { basename, removeWorkdirHistory } from "./dir-picker-path"
 import { errMessage } from "./select-value"
 import { cn } from "@/lib/utils"
 
@@ -197,25 +197,63 @@ function DirRecents({
   onGo: (path: string) => void
 }) {
   const { t } = useTranslation()
+  const [items, setItems] = useState(recents)
+  if (items.length === 0) return null
   return (
     <div className="flex w-32 shrink-0 flex-col gap-0.5 bg-muted/30 p-1.5">
       <p className="px-1.5 py-1 text-[10px] text-muted-foreground">
         {t("settings.dirRecents")}
       </p>
-      {recents.map((dir) => (
-        <button
+      {items.map((dir) => (
+        <DirRecentItem
           key={dir}
-          type="button"
-          title={dir}
-          onClick={() => onGo(dir)}
-          className={cn(
-            "truncate rounded-md px-1.5 py-1 text-left font-mono text-[11px] hover:bg-muted",
-            dir === current && "bg-muted text-foreground"
-          )}
-        >
-          {basename(dir)}
-        </button>
+          dir={dir}
+          active={dir === current}
+          forgetLabel={t("conversation.workdirForget")}
+          onGo={onGo}
+          onForget={() => setItems(removeWorkdirHistory(dir))}
+        />
       ))}
+    </div>
+  )
+}
+
+function DirRecentItem({
+  dir,
+  active,
+  forgetLabel,
+  onGo,
+  onForget,
+}: {
+  dir: string
+  active: boolean
+  forgetLabel: string
+  onGo: (path: string) => void
+  onForget: () => void
+}) {
+  return (
+    <div
+      className={cn(
+        "group flex items-center rounded-md hover:bg-muted",
+        active && "bg-muted text-foreground"
+      )}
+    >
+      <button
+        type="button"
+        title={dir}
+        onClick={() => onGo(dir)}
+        className="min-w-0 flex-1 truncate px-1.5 py-1 text-left font-mono text-[11px]"
+      >
+        {basename(dir)}
+      </button>
+      <button
+        type="button"
+        title={forgetLabel}
+        onClick={onForget}
+        className="flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground"
+      >
+        <X className="h-3 w-3" />
+      </button>
     </div>
   )
 }

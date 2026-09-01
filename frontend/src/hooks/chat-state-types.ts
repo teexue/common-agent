@@ -1,4 +1,8 @@
-import type { ConversationEntry, ToolCallEntry } from "@/types/agent"
+import type {
+  ConversationEntry,
+  FileAttachment,
+  ToolCallEntry,
+} from "@/types/agent"
 
 export interface ChatState {
   messages: ConversationEntry[]
@@ -19,7 +23,7 @@ export interface ChatState {
 }
 
 export type ChatAction =
-  | { type: "ADD_USER_MESSAGE"; text: string }
+  | { type: "ADD_USER_MESSAGE"; text: string; attachments?: FileAttachment[] }
   | { type: "START_ASSISTANT"; entryId: string }
   | { type: "APPEND_TEXT"; entryId: string; content: string }
   | { type: "APPEND_REASONING"; entryId: string; content: string }

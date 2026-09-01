@@ -1,10 +1,10 @@
 import { useCallback, useState } from "react"
-import { InputBar, type ImageAttachment } from "./input-bar"
+import { InputBar } from "./input-bar"
 import type { SessionTokenUsage } from "./token-usage-indicator"
 import { useAutoScroll } from "@/hooks/use-auto-scroll"
 import type { MessageSearch } from "@/hooks/use-message-search"
 import { optimizePrompt } from "@/lib/api"
-import type { ConversationEntry } from "@/types/agent"
+import type { ConversationEntry, FileAttachment } from "@/types/agent"
 import { ApprovalBar } from "./workspace-approval-bar"
 import { WorkspaceEmptyState } from "./workspace-empty-state"
 import { FileChangeSummary } from "./workspace-file-changes"
@@ -14,7 +14,7 @@ interface WorkspacePanelProps {
   messages: ConversationEntry[]
   isStreaming: boolean
   error: string | null
-  onSendMessage: (text: string, images: ImageAttachment[]) => void
+  onSendMessage: (text: string, attachments: FileAttachment[]) => void
   onStop?: () => void
   selectedToolCallId: string | null
   onSelectToolCall: (id: string) => void

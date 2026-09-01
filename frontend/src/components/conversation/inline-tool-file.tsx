@@ -17,17 +17,20 @@ export function ReadFile({ input, output }: ToolRenderProps) {
   const content = str(output?.content)
   const lines = lineCount(content)
   const truncated = output?.truncated === true
+  const start = num(output?.offset) ?? num(input?.offset) ?? 1
+  const startLine = start > 0 ? start : 1
   return (
     <FilePanel
       path={path}
       meta={
         <>
           {lines > 0 && <Meta>{`${lines} lines`}</Meta>}
+          {startLine > 1 && <Meta>{`@${startLine}`}</Meta>}
           {truncated && <Meta tone="destructive">truncated</Meta>}
         </>
       }
     >
-      {content && <FileContentBlock text={content} />}
+      {content && <FileContentBlock text={content} startLine={startLine} />}
     </FilePanel>
   )
 }

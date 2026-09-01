@@ -1,11 +1,5 @@
 import { useTranslation } from "react-i18next"
-import {
-  CornerDownLeft,
-  ImagePlus,
-  Loader2,
-  Sparkles,
-  Square,
-} from "lucide-react"
+import { CornerDownLeft, Loader2, Plus, Sparkles, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -13,7 +7,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
-export function AttachImageButton({ onClick }: { onClick: () => void }) {
+export function AttachFilesButton({ onClick }: { onClick: () => void }) {
   const { t } = useTranslation()
   return (
     <Tooltip>
@@ -22,16 +16,14 @@ export function AttachImageButton({ onClick }: { onClick: () => void }) {
           <Button
             variant="ghost"
             size="icon-xs"
-            className="h-6 w-6 rounded-md text-muted-foreground hover:text-foreground"
+            className="h-6 w-6 shrink-0 rounded-md text-muted-foreground hover:text-foreground"
             onClick={onClick}
           >
-            <ImagePlus className="h-3.5 w-3.5" />
+            <Plus className="h-3.5 w-3.5" />
           </Button>
         }
       />
-      <TooltipContent>
-        {t("conversation.attachImage", "添加图片")}
-      </TooltipContent>
+      <TooltipContent>{t("conversation.attachFiles")}</TooltipContent>
     </Tooltip>
   )
 }

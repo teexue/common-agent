@@ -75,6 +75,8 @@
     "workdirUseGlobal": "清除会话目录，改用全局设置",
     "workdirAdd": "添加目录…",
     "workdirReset": "使用默认",
+    "workdirForget": "从最近中移除",
+    "workdirClearRecents": "清空最近",
     "exportMarkdown": "导出 Markdown",
     "exportJson": "导出 JSON",
     "toolCallsCount": "{{count}} 个工具调用",
@@ -108,7 +110,13 @@
     "noEnabledModels": "请先在提供商设置中勾选可用模型",
     "tokenUsageTooltip": "输入 {{input}} · 输出 {{output}} · 上下文窗口 {{window}}（{{percent}}%）",
     "sessionTotalTooltip": "本次会话累计消耗 {{total}} tokens",
-    "cacheHitTooltip": "缓存命中：{{cached}}（命中率 {{pct}}%）"
+    "cacheHitTooltip": "缓存命中：{{cached}}（命中率 {{pct}}%）",
+    "attachFiles": "添加图片或文件",
+    "attachedFileEmpty": "（空文件）",
+    "attachUnsupported": "{{name}} 不是支持的图片或文本文件",
+    "attachTooLarge": "{{name}} 过大，无法添加",
+    "attachReadFailed": "无法读取 {{name}}",
+    "attachNoVision": "{{name}} 是图片，当前模型不支持视觉"
   },
   "layout": {
     "expandSidebar": "展开侧边栏",
@@ -478,6 +486,7 @@
     "fetchModelsLoading": "正在拉取模型列表…",
     "fetchModelsEmpty": "未拉取到模型",
     "providerVision": "视觉",
+    "providerVisionHint": "能从模型列表或详情读到多模态时自动勾选；读不到则默认关闭。",
     "modelDetailTitle": "模型详情",
     "modelDetailQuery": "查询详情",
     "modelDetailLoading": "查询中…",

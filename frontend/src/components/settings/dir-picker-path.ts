@@ -23,6 +23,22 @@ export function pushWorkdirHistory(dir: string): string[] {
     0,
     HISTORY_MAX
   )
+  return saveWorkdirHistory(next)
+}
+
+export function removeWorkdirHistory(dir: string): string[] {
+  return saveWorkdirHistory(loadWorkdirHistory().filter((d) => d !== dir))
+}
+
+export function clearWorkdirHistory(): string[] {
+  return saveWorkdirHistory([])
+}
+
+function saveWorkdirHistory(next: string[]): string[] {
+  if (next.length === 0) {
+    localStorage.removeItem(HISTORY_KEY)
+    return next
+  }
   localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
   return next
 }

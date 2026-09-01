@@ -11,7 +11,7 @@ export function VisionToggle({
 }) {
   const { t } = useTranslation()
   return (
-    <div className="flex items-center gap-2">
+    <div className="space-y-1">
       <button
         type="button"
         onClick={onToggle}
@@ -19,6 +19,9 @@ export function VisionToggle({
       >
         <Eye className="h-3.5 w-3.5" /> {t("settings.providerVision")}
       </button>
+      <p className="text-[11px] text-muted-foreground">
+        {t("settings.providerVisionHint")}
+      </p>
     </div>
   )
 }

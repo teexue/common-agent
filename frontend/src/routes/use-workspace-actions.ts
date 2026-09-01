@@ -1,6 +1,6 @@
 import { useCallback } from "react"
 import type { NavigateFunction } from "react-router"
-import type { AgentInfo } from "@/types/agent"
+import type { AgentInfo, FileAttachment } from "@/types/agent"
 import type { useChat } from "@/hooks/use-chat"
 import { resolveApproval, updateSessionWorkdir } from "@/lib/api"
 
@@ -29,7 +29,7 @@ export function useWorkspaceSend(
   >
 ) {
   return useCallback(
-    (text: string, images?: { dataUrl: string; name: string }[]) =>
+    (text: string, attachments?: FileAttachment[]) =>
       opts.chat.sendMessage({
         text,
         agent:
@@ -38,7 +38,7 @@ export function useWorkspaceSend(
           opts.agentInfo?.name ||
           "",
         workDir: opts.workDir || undefined,
-        images,
+        attachments,
         model: opts.runModel.model || undefined,
         provider: opts.runModel.provider || undefined,
       }),
