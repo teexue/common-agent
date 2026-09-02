@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/shared/page-header"
 import { PageMain, PageShell } from "@/components/shared/page-shell"
 import { InterfaceSection } from "./settings-pref-sections"
 import { WorkDirSection } from "./settings-workdir-section"
+import { ShellSection } from "./settings-shell-section"
 import { SubagentSection } from "./settings-subagent-section"
 import { AppSection, BackgroundSection } from "./settings-info-sections"
 
@@ -20,6 +21,7 @@ export function SettingsPage() {
       <PageMain contentClassName="mx-auto w-full max-w-3xl space-y-4 pb-10">
         <InterfaceSection />
         <WorkDirSection />
+        <ShellSection />
         <SubagentSection />
         <BackgroundSection />
         <AppSection />

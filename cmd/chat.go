@@ -35,6 +35,7 @@ type chatState struct {
 	reg      *registry.Registry
 	store    session.Store
 	subagent loop.SubagentLimits
+	shell    string
 }
 
 func runChat(args []string, logger *slog.Logger) {
@@ -77,6 +78,7 @@ func runChat(args []string, logger *slog.Logger) {
 		registerRuntimeTools(state.reg, paths, settings, creds, logger)
 	}
 	state.subagent = wireSubagent(state.agent, settings, state.reg)
+	state.shell = settings.Shell
 
 	tui.PrintWelcome(state.agent.Name, state.agent.Provider, state.agent.Model)
 
@@ -173,6 +175,7 @@ func runChatLoop(rl *readline.Instance, state *chatState) {
 			AgentsDir:   state.paths.agentsDir,
 			NewProvider: resolveProvider(state.catalog, state.mock),
 			Subagent:    state.subagent,
+			Shell:       state.shell,
 		})
 		runCancel()
 		if err != nil {

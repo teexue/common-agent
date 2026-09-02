@@ -1,16 +1,32 @@
 package config_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/provider"
+	"github.com/teexue/common-agent/core/store"
 )
 
+func bindTestDB(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	db, err := config.OpenAndBind(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+		config.BindDB(nil)
+	})
+	return home
+}
+
 func TestCredentialsRoundTrip(t *testing.T) {
-	dir := t.TempDir()
+	dir := bindTestDB(t)
 	if err := config.SetCredential(dir, "MOONSHOT_API_KEY", "sk-test"); err != nil {
 		t.Fatal(err)
 	}
@@ -20,17 +36,17 @@ func TestCredentialsRoundTrip(t *testing.T) {
 	if got := config.GetCredential("MOONSHOT_API_KEY"); got != "sk-test" {
 		t.Fatalf("got %q", got)
 	}
-	info, err := os.Stat(config.CredentialsFile(dir))
+	info, err := os.Stat(store.StateFile(dir))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("credentials mode = %o, want 600", info.Mode().Perm())
+		t.Fatalf("state.db mode = %o, want 600", info.Mode().Perm())
 	}
 }
 
 func TestUpsertProvider(t *testing.T) {
-	dir := t.TempDir()
+	dir := bindTestDB(t)
 	spec := config.ProviderSpec{
 		Name:         "moonshot",
 		APIStyle:     provider.StyleOpenAI,
@@ -42,17 +58,21 @@ func TestUpsertProvider(t *testing.T) {
 	if err := config.UpsertProvider(dir, spec); err != nil {
 		t.Fatal(err)
 	}
-	catalog, err := provider.LoadCatalog(config.ProvidersFile(dir), nil)
+	catalog, err := config.DB().LoadCatalog(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(catalog.Names()) != 1 {
 		t.Fatalf("providers = %v", catalog.Names())
 	}
+	env, ok := config.LookupAPIKeyEnv("moonshot")
+	if !ok || env != "MOONSHOT_API_KEY" {
+		t.Fatalf("LookupAPIKeyEnv = %q ok=%v", env, ok)
+	}
 }
 
 func TestMergeProviderModelWindow(t *testing.T) {
-	dir := t.TempDir()
+	dir := bindTestDB(t)
 	spec := config.ProviderSpec{
 		Name:         "ollama",
 		APIStyle:     provider.StyleOllama,
@@ -75,7 +95,7 @@ func TestMergeProviderModelWindow(t *testing.T) {
 	if changed {
 		t.Fatal("same window should not change")
 	}
-	catalog, err := provider.LoadCatalog(config.ProvidersFile(dir), nil)
+	catalog, err := config.DB().LoadCatalog(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,5 +120,13 @@ func TestEnsureDirs(t *testing.T) {
 	}
 	if entries, err := os.ReadDir(config.AgentsDir(dir)); err == nil && len(entries) != 0 {
 		t.Fatalf("agents dir should be empty, got %d entries", len(entries))
+	}
+}
+
+func TestLoadSettingsRequiresDB(t *testing.T) {
+	config.BindDB(nil)
+	_, err := config.LoadSettings(t.TempDir())
+	if !errors.Is(err, config.ErrDBNotBound) {
+		t.Fatalf("got %v, want ErrDBNotBound", err)
 	}
 }

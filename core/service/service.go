@@ -42,6 +42,10 @@ type Service struct {
 	Retriever        *knowledge.Retriever
 	Embedder         embedding.Embedder
 	KnowledgeRuntime *knowledge.Runtime
+
+	// Hub fans out in-flight HTTP run events so a client can disconnect
+	// (navigate away or refresh) without cancelling the loop.
+	Hub *RunHub
 }
 
 // New creates a Service instance.
@@ -64,6 +68,7 @@ func New(cfg ServiceConfig) *Service {
 		Retriever:        cfg.Retriever,
 		Embedder:         cfg.Embedder,
 		KnowledgeRuntime: cfg.KnowledgeRuntime,
+		Hub:              NewRunHub(),
 	}
 }
 

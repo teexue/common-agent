@@ -20,69 +20,64 @@ func TestListUsers(t *testing.T) {
 
 	users, err := db.ListUsers()
 	require.NoError(t, err)
-	require.Len(t, users, 3) // usr_local + alice + bob
+	require.Len(t, users, 2)
 
 	byID := map[string]store.User{}
 	for _, u := range users {
 		byID[u.ID] = u
 	}
-	assert.Equal(t, store.RoleAdmin, byID[store.DefaultUserID].Role)
 	assert.Equal(t, store.RoleMember, byID[alice.ID].Role)
 	assert.Equal(t, store.RoleAdmin, byID[bob.ID].Role)
-	assert.Equal(t, "bob", byID[bob.ID].Name) // display name defaults to username
+	assert.Equal(t, "bob", byID[bob.ID].Name)
 }
 
 func TestUpdateUserRole_LastAdminProtection(t *testing.T) {
 	db := openTestDB(t)
+	alice, err := db.CreateUser("alice", "secret1", "", store.RoleAdmin)
+	require.NoError(t, err)
 
-	// usr_local is the only admin: demoting it must fail.
-	require.Error(t, db.UpdateUserRole(store.DefaultUserID, store.RoleMember))
+	require.Error(t, db.UpdateUserRole(alice.ID, store.RoleMember))
 
-	role, err := db.GetUserRole(store.DefaultUserID)
+	role, err := db.GetUserRole(alice.ID)
 	require.NoError(t, err)
 	assert.Equal(t, store.RoleAdmin, role)
 
-	// With a second admin, demotion succeeds.
-	alice, err := db.CreateUser("alice", "secret1", "", store.RoleAdmin)
+	bob, err := db.CreateUser("bob", "secret2", "", store.RoleAdmin)
 	require.NoError(t, err)
-	require.NoError(t, db.UpdateUserRole(store.DefaultUserID, store.RoleMember))
+	require.NoError(t, db.UpdateUserRole(alice.ID, store.RoleMember))
 
-	role, err = db.GetUserRole(store.DefaultUserID)
+	role, err = db.GetUserRole(alice.ID)
 	require.NoError(t, err)
 	assert.Equal(t, store.RoleMember, role)
 
-	// Promote back and demote alice.
-	require.NoError(t, db.UpdateUserRole(store.DefaultUserID, store.RoleAdmin))
-	require.NoError(t, db.UpdateUserRole(alice.ID, store.RoleMember))
+	require.NoError(t, db.UpdateUserRole(alice.ID, store.RoleAdmin))
+	require.NoError(t, db.UpdateUserRole(bob.ID, store.RoleMember))
 
-	// Invalid role rejected; unknown user not found.
-	require.Error(t, db.UpdateUserRole(store.DefaultUserID, "root"))
+	require.Error(t, db.UpdateUserRole(alice.ID, "root"))
 	require.ErrorIs(t, db.UpdateUserRole("usr_missing", store.RoleAdmin), os.ErrNotExist)
 }
 
 func TestDeleteUser_LastAdminProtection(t *testing.T) {
 	db := openTestDB(t)
-
-	// Cannot delete the only admin.
-	require.Error(t, db.DeleteUser(store.DefaultUserID))
-
 	alice, err := db.CreateUser("alice", "secret1", "", store.RoleAdmin)
 	require.NoError(t, err)
 
-	// Two admins now: deleting usr_local works.
-	require.NoError(t, db.DeleteUser(store.DefaultUserID))
-	assert.False(t, db.HasUser(store.DefaultUserID))
-
-	// Deleting the remaining admin fails again.
 	require.Error(t, db.DeleteUser(alice.ID))
 
-	// Members are always deletable; their API keys go with them.
-	bob, err := db.CreateUser("bob", "secret2", "", store.RoleMember)
+	bob, err := db.CreateUser("bob", "secret2", "", store.RoleAdmin)
 	require.NoError(t, err)
-	_, key, err := db.AddAPIKey(bob.ID, "b1", "*", nil)
+
+	require.NoError(t, db.DeleteUser(alice.ID))
+	assert.False(t, db.HasUser(alice.ID))
+
+	require.Error(t, db.DeleteUser(bob.ID))
+
+	carol, err := db.CreateUser("carol", "secret3", "", store.RoleMember)
 	require.NoError(t, err)
-	require.NoError(t, db.DeleteUser(bob.ID))
-	assert.False(t, db.HasUser(bob.ID))
+	_, key, err := db.AddAPIKey(carol.ID, "b1", "*", nil)
+	require.NoError(t, err)
+	require.NoError(t, db.DeleteUser(carol.ID))
+	assert.False(t, db.HasUser(carol.ID))
 	assert.False(t, db.HasAPIKeyID(key.ID))
 
 	require.ErrorIs(t, db.DeleteUser("usr_missing"), os.ErrNotExist)
@@ -108,8 +103,10 @@ func TestResetUserPassword(t *testing.T) {
 
 func TestGetUserRole(t *testing.T) {
 	db := openTestDB(t)
+	alice, err := db.CreateUser("alice", "secret1", "", store.RoleAdmin)
+	require.NoError(t, err)
 
-	role, err := db.GetUserRole(store.DefaultUserID)
+	role, err := db.GetUserRole(alice.ID)
 	require.NoError(t, err)
 	assert.Equal(t, store.RoleAdmin, role)
 
@@ -120,7 +117,6 @@ func TestGetUserRole(t *testing.T) {
 func TestAllowRegistration(t *testing.T) {
 	db := openTestDB(t)
 
-	// Default is closed.
 	assert.False(t, db.GetAllowRegistration())
 
 	require.NoError(t, db.SetAllowRegistration(true))

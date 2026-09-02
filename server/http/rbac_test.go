@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/store"
 )
 
@@ -20,7 +21,10 @@ func setupRBACServer(t *testing.T) (*Server, *store.DB) {
 	srv, dir, _ := setupTestServerWithStore(t)
 	db, err := store.Open(dir)
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() {
+		_ = db.Close()
+		config.BindDB(nil)
+	})
 	require.NoError(t, srv.SetStateDB(db))
 	return srv, db
 }
@@ -136,6 +140,7 @@ func TestRBAC_MemberForbiddenAdminRoutes(t *testing.T) {
 		{"DELETE", "/v1/providers/openai"},
 		{"PUT", "/v1/embedding"},
 		{"PUT", "/v1/subagent"},
+		{"PUT", "/v1/shell"},
 		{"GET", "/v1/auth/keys"},
 	} {
 		w := doJSON(t, router, tc.method, tc.path, memberToken, map[string]any{})
@@ -153,7 +158,7 @@ func TestRBAC_MemberForbiddenAdminRoutes(t *testing.T) {
 		Users []store.UserInfo `json:"users"`
 	}
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&list))
-	assert.Len(t, list.Users, 3) // usr_local + alice + bob
+	assert.Len(t, list.Users, 2) // alice + bob
 }
 
 func TestRBAC_ScopedAPIKey(t *testing.T) {

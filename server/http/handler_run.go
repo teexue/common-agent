@@ -62,39 +62,22 @@ func (s *Server) handleRun(c *gin.Context) {
 		Source:    "http",
 	}, s.approver)
 	if err != nil {
-		code := "run_error"
-		msgKey := "api.error.run_error"
-		status := http.StatusBadRequest
-		if _, ok := err.(*service.ArgError); ok {
-			code = "invalid_request"
-			msgKey = "api.error.invalid_request"
-		} else if _, ok := err.(*service.ServerError); ok {
-			code = "provider_error"
-			msgKey = "api.error.provider_error"
-			status = http.StatusInternalServerError
-		}
-		respondErrorDetails(c, errorDetails{Status: status, Code: code, MsgKey: msgKey, Details: err.Error()})
+		respondServiceError(c, err, errorDetails{
+			Status: http.StatusBadRequest, Code: "run_error", MsgKey: "api.error.run_error",
+		})
 		return
 	}
 
-	defer func() {
-		result.Cleanup(s.registry)
-	}()
-
-	runCtx := c.Request.Context()
-	if s.shutdownCtx != nil {
-		var cancel context.CancelFunc
-		runCtx, cancel = mergeContext(s.shutdownCtx, c.Request.Context())
-		defer cancel()
-	}
-
+	runCtx, cancel := s.detachRunContext()
 	events, err := loop.Run(runCtx, result.Config)
 	if err != nil {
+		cancel()
+		result.Cleanup(s.registry)
 		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "run_error", MsgKey: "api.error.run_error", Details: err.Error()})
 		return
 	}
 
-	s.streamEvents(c, events, result.Config.Agent.Name, result.Session.ID)
+	s.publishAndStream(c, result, events, cancel)
 }
 
 func (s *Server) streamEvents(c *gin.Context, events <-chan event.Event, agentName, sessionID string) {

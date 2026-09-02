@@ -206,18 +206,8 @@ func LoadAndValidate(path string, toolNames []string) (*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
-	nameSet := make(map[string]bool, len(toolNames))
-	for _, n := range toolNames {
-		nameSet[n] = true
-	}
-	var missing []string
-	for _, t := range a.Tools {
-		if !nameSet[t] {
-			missing = append(missing, t)
-		}
-	}
-	if len(missing) > 0 {
-		return nil, fmt.Errorf("agent %q references unregistered tools: %v", a.Name, missing)
+	if err := validateToolRefs(a, toolNames); err != nil {
+		return nil, err
 	}
 	return a, nil
 }
@@ -228,6 +218,13 @@ func LoadByNameAndValidate(dir, ref string, toolNames []string) (*Agent, error) 
 	if err != nil {
 		return nil, err
 	}
+	if err := validateToolRefs(a, toolNames); err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+func validateToolRefs(a *Agent, toolNames []string) error {
 	nameSet := make(map[string]bool, len(toolNames))
 	for _, n := range toolNames {
 		nameSet[n] = true
@@ -239,9 +236,9 @@ func LoadByNameAndValidate(dir, ref string, toolNames []string) (*Agent, error) 
 		}
 	}
 	if len(missing) > 0 {
-		return nil, fmt.Errorf("agent %q references unregistered tools: %v", a.Name, missing)
+		return fmt.Errorf("agent %q references unregistered tools: %v", a.Name, missing)
 	}
-	return a, nil
+	return nil
 }
 
 // AgentLoadError records a single agent YAML file that failed to load.

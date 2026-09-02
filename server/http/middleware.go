@@ -22,7 +22,7 @@ func (s *Server) authMiddleware() gin.HandlerFunc {
 			return
 		}
 		if !enabled {
-			id := auth.Identity{UserID: auth.DefaultUserID, Role: store.RoleAdmin}
+			id := auth.Identity{Role: store.RoleAdmin}
 			c.Set(ginIdentityKey, id)
 			c.Request = c.Request.WithContext(auth.WithIdentity(c.Request.Context(), id))
 			c.Next()
@@ -70,11 +70,11 @@ func extractRequestToken(c *gin.Context) string {
 
 func identityFromGin(c *gin.Context) auth.Identity {
 	if v, ok := c.Get(ginIdentityKey); ok {
-		if id, ok := v.(auth.Identity); ok && id.UserID != "" {
+		if id, ok := v.(auth.Identity); ok {
 			return id
 		}
 	}
-	return auth.Identity{UserID: auth.DefaultUserID}
+	return auth.Identity{}
 }
 
 // requireAdmin allows only identities with the admin role (403 otherwise).

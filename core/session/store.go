@@ -18,6 +18,8 @@ type SessionMeta struct {
 	Metadata  map[string]string `json:"metadata,omitempty"`
 	CreatedAt time.Time         `json:"created_at"`
 	UpdatedAt time.Time         `json:"updated_at"`
+	// Running is not persisted; ListSessions sets it from the in-memory run hub.
+	Running bool `json:"running,omitempty"`
 }
 
 // Store is the persistence interface for sessions.

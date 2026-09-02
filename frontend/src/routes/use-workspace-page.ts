@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { useLocation, useNavigate } from "react-router"
 import { useTheme } from "@/components/theme-provider"
 import { useChat } from "@/hooks/use-chat"
+import { useWorkspaceChat } from "./chat-context"
 import { useAgentManager } from "@/hooks/use-agent-manager"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
 import { useMessageSearch } from "@/hooks/use-message-search"
 import { deleteSession, fetchProviders } from "@/lib/api"
 import type { ProviderInfo } from "@/types/agent"
-import { setSessionRunning, useSessionStore } from "./session-store"
+import { useSessionStore } from "./session-store"
 import {
   useWorkspaceMiscActions,
   useWorkspaceSend,
@@ -61,7 +62,7 @@ function useWorkspaceUi() {
 }
 
 export function useWorkspacePage() {
-  const chat = useChat()
+  const chat = useWorkspaceChat()
   const { theme, setTheme } = useTheme()
   const location = useLocation()
   const navigate = useNavigate()
@@ -109,9 +110,6 @@ function useWorkspaceSideEffects(ctx: {
   agent: ReturnType<typeof useWorkspaceAgent>
 }) {
   const { chat, location, navigate, sessMgr, ui, agent } = ctx
-  useEffect(() => {
-    setSessionRunning(chat.sessionId, chat.isStreaming)
-  }, [chat.sessionId, chat.isStreaming])
   const setProviders = ui.setProviders
   useEffect(() => {
     fetchProviders()

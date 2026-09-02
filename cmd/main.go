@@ -176,7 +176,7 @@ func runCLI(args []string, logger *slog.Logger) {
 	events, err := loop.Run(context.Background(), loop.Config{
 		Provider: p, Registry: reg, Agent: a, Session: sess, Prompt: optimizedPrompt,
 		AgentsDir: paths.agentsDir, NewProvider: resolveProvider(catalog, *mock),
-		Subagent: limits,
+		Subagent: limits, Shell: settings.Shell,
 	})
 	if err != nil {
 		logger.Error("log.agent.run", "error", err)

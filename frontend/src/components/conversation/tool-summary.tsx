@@ -80,6 +80,7 @@ const NODE: Record<string, (obj: Record<string, unknown>) => ReactNode> = {
   read_file: (obj) => (typeof obj.path === "string" ? obj.path : null),
   create_directory: (obj) => (typeof obj.path === "string" ? obj.path : null),
   list_directory: (obj) => (typeof obj.path === "string" ? obj.path : null),
+  delete_file: (obj) => (typeof obj.path === "string" ? obj.path : null),
   write_file: writeFileNode,
   edit_file: editFileNode,
   run_command: runCommandNode,

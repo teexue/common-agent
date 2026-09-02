@@ -20,7 +20,6 @@ import (
 
 type runtimePaths struct {
 	home      string
-	providers string
 	agentsDir string
 }
 
@@ -29,20 +28,12 @@ func defaultPaths() (runtimePaths, error) {
 	if err != nil {
 		return runtimePaths{}, err
 	}
-	return runtimePaths{
-		home:      home,
-		providers: config.ProvidersFile(home),
-		agentsDir: config.AgentsDir(home),
-	}, nil
+	return runtimePaths{home: home, agentsDir: config.AgentsDir(home)}, nil
 }
 
 func resolvePaths(homeFlag string) (runtimePaths, error) {
 	if homeFlag != "" {
-		return runtimePaths{
-			home:      homeFlag,
-			providers: config.ProvidersFile(homeFlag),
-			agentsDir: config.AgentsDir(homeFlag),
-		}, nil
+		return runtimePaths{home: homeFlag, agentsDir: config.AgentsDir(homeFlag)}, nil
 	}
 	return defaultPaths()
 }
@@ -90,11 +81,8 @@ func bootstrapRuntime(paths runtimePaths, useMock bool, logger *slog.Logger) (*p
 
 func printPaths(paths runtimePaths) {
 	fmt.Println(i18n.T("cli.paths.home", "path", paths.home))
-	fmt.Println(i18n.T("cli.paths.providers", "path", paths.providers))
 	fmt.Println(i18n.T("cli.paths.agents", "path", paths.agentsDir))
-	fmt.Println(i18n.T("cli.paths.settings", "path", config.SettingsFile(paths.home)))
-	fmt.Println(i18n.T("cli.paths.credentials", "path", config.CredentialsFile(paths.home)))
-	fmt.Println("state.db:", store.StateFile(paths.home))
+	fmt.Println(i18n.T("cli.paths.state", "path", store.StateFile(paths.home)))
 }
 
 // registerRuntimeTools registers knowledge tools backed by the user's

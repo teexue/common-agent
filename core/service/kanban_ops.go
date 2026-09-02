@@ -77,9 +77,6 @@ func (s *Service) CreateKanbanItem(userID string, req CreateKanbanRequest) (*sto
 		return nil, err
 	}
 	now := time.Now().UTC()
-	if userID == "" {
-		userID = store.DefaultUserID
-	}
 	row := &store.KanbanRow{
 		ID:        kanban.NewID(),
 		UserID:    userID,

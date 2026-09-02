@@ -194,7 +194,7 @@ func (db *DB) migrateAPIKeysFile() error {
 			created = time.Now().UTC()
 		}
 		row := APIKey{
-			ID: id, UserID: DefaultUserID, Name: k.Name,
+			ID: id, UserID: "", Name: k.Name,
 			KeyHash: HashAPIKey(k.Key), Prefix: KeyPrefix(k.Key),
 			Scopes: "*", Enabled: true,
 			CreatedAt: created,
@@ -253,9 +253,6 @@ func (db *DB) migrateSessionsDir() error {
 			updated, _ = time.Parse(time.RFC3339, sf.UpdatedAt)
 		}
 		userID := sf.UserID
-		if userID == "" {
-			userID = DefaultUserID
-		}
 		msgJSON := "[]"
 		if len(sf.Messages) > 0 {
 			msgJSON = string(sf.Messages)

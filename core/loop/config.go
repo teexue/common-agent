@@ -63,6 +63,11 @@ type Config struct {
 	// When empty, tools use their registered default.
 	WorkDir string
 
+	// Shell is the preferred command interpreter id for run_command
+	// (bash, powershell, pwsh, cmd, sh). Empty means auto-detect
+	// (Git Bash first on Windows).
+	Shell string
+
 	// Images are attached to the user prompt as multimodal content parts.
 	Images []provider.ContentPart
 

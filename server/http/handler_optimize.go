@@ -41,18 +41,9 @@ func (s *Server) handleOptimizePrompt(c *gin.Context) {
 		result, err = s.svc.OptimizePrompt(c.Request.Context(), req.Prompt, opts)
 	}
 	if err != nil {
-		code := "optimize_error"
-		msgKey := "api.error.optimize_error"
-		status := http.StatusBadRequest
-		if _, ok := err.(*service.ArgError); ok {
-			code = "invalid_request"
-			msgKey = "api.error.invalid_request"
-		} else if _, ok := err.(*service.ServerError); ok {
-			code = "provider_error"
-			msgKey = "api.error.provider_error"
-			status = http.StatusInternalServerError
-		}
-		respondErrorDetails(c, errorDetails{Status: status, Code: code, MsgKey: msgKey, Details: err.Error()})
+		respondServiceError(c, err, errorDetails{
+			Status: http.StatusBadRequest, Code: "optimize_error", MsgKey: "api.error.optimize_error",
+		})
 		return
 	}
 

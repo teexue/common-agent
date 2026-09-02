@@ -14,8 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/teexue/common-agent/core/agent"
+	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/loop"
+	"github.com/teexue/common-agent/core/mcp"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
@@ -188,14 +190,13 @@ system_prompt: hi
 tools: [get_time]
 `), 0o644))
 
-	// Global MCP server in ~/.common-agent/mcp.yaml (here: home/mcp.yaml).
-	require.NoError(t, os.WriteFile(filepath.Join(home, "mcp.yaml"), []byte(`servers:
-  - name: global-srv
-    type: stdio
-    command: /bin/sh
-    args:
-      - `+script+`
-`), 0o644))
+	bindConfigDB(t, home)
+	require.NoError(t, config.UpsertGlobalMCP(home, mcp.ServerConfig{
+		Name:    "global-srv",
+		Type:    "stdio",
+		Command: "/bin/sh",
+		Args:    []string{script},
+	}))
 
 	reg := registry.New()
 	builtin.RegisterAll(reg, "")

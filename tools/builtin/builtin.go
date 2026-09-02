@@ -43,6 +43,7 @@ func RegisterAll(r *registry.Registry, workDir string) {
 	r.MustRegister(ListDirectory{WorkDir: workDir})
 	r.MustRegister(EditFile{WorkDir: workDir})
 	r.MustRegister(CreateDirectory{WorkDir: workDir})
+	r.MustRegister(DeleteFile{WorkDir: workDir})
 	r.MustRegister(SearchFiles{WorkDir: workDir})
 
 	// Command execution

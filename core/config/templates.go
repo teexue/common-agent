@@ -95,6 +95,7 @@ tools:
   - list_directory
   - run_command
   - search_files
+  - delete_file
   - get_time
 max_turns: 0
 max_tokens: 8000
@@ -134,6 +135,7 @@ tools:
   - run_command
   - search_files
   - create_directory
+  - delete_file
   - web_fetch
   - get_time
 max_turns: 0
@@ -166,6 +168,7 @@ system_prompt: |
   - Use search_files to find relevant code patterns
   - Use edit_file for precise, targeted modifications
   - Use write_file for creating new files
+  - Use delete_file to remove files that are no longer needed
   - Run tests and build commands to verify changes
   - Explain your reasoning before making significant changes
 
@@ -182,6 +185,7 @@ tools:
   - run_command
   - search_files
   - create_directory
+  - delete_file
   - web_fetch
   - get_time
 max_turns: 0

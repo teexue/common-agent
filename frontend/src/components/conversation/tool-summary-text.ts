@@ -98,6 +98,7 @@ const EXTRACT: Record<string, (obj: Record<string, unknown>) => string | null> =
     read_file: pathOf,
     create_directory: pathOf,
     list_directory: pathOf,
+    delete_file: pathOf,
     write_file: writeFileText,
     edit_file: editFileText,
     run_command: (obj) =>

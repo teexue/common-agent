@@ -277,7 +277,7 @@ func saveWizardAPIKey(home, apiKeyEnv string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println(i18n.T("cli.config.key_saved", "env", apiKeyEnv, "path", config.CredentialsFile(home)))
+	fmt.Println(i18n.T("cli.config.key_saved", "env", apiKeyEnv, "path", store.StateFile(home)))
 }
 
 func runConfigSetProviderFlags(args []string) {

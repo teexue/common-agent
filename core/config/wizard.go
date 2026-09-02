@@ -9,7 +9,6 @@ import (
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/store"
 	"github.com/teexue/common-agent/core/tui"
-	"gopkg.in/yaml.v3"
 )
 
 // ProviderSpec is CLI input for configuring a provider.
@@ -266,10 +265,10 @@ func defaultBaseURLHint(style provider.APIStyle) string {
 	}
 }
 
-// UpsertProvider adds or updates a provider (SQLite when bound, else providers.yaml).
+// UpsertProvider adds or updates a provider in state.db.
 // For updates, empty APIKeyEnv preserves the existing value.
 func UpsertProvider(home string, spec ProviderSpec) error {
-	providers, err := loadProvidersForUpsert(home)
+	providers, err := listProviderEntries()
 	if err != nil {
 		return err
 	}
@@ -278,32 +277,37 @@ func UpsertProvider(home string, spec ProviderSpec) error {
 	if err := spec.validate(); err != nil {
 		return err
 	}
-	return writeProviderEntry(home, spec.Name, spec.toEntry(existing), providers)
+	_ = home
+	return writeProviderEntry(spec.Name, spec.toEntry(existing))
 }
 
-func loadProvidersForUpsert(home string) (map[string]provider.ProfileEntry, error) {
-	if stateDB != nil {
-		return stateDB.ListProviderEntries()
-	}
-	if err := ensureHome(home); err != nil {
+func listProviderEntries() (map[string]provider.ProfileEntry, error) {
+	db, err := requireDB()
+	if err != nil {
 		return nil, err
 	}
-	providers := map[string]provider.ProfileEntry{}
-	data, err := os.ReadFile(ProvidersFile(home))
+	return db.ListProviderEntries()
+}
+
+// LookupAPIKeyEnv returns the persisted api_key_env for a named provider.
+func LookupAPIKeyEnv(name string) (string, bool) {
+	entries, err := listProviderEntries()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return providers, nil
-		}
-		return nil, fmt.Errorf("read providers: %w", err)
+		return "", false
 	}
-	var file provider.CatalogFile
-	if err := yaml.Unmarshal(data, &file); err != nil {
-		return nil, fmt.Errorf("parse providers: %w", err)
+	entry, ok := entries[name]
+	if !ok || entry.APIKeyEnv == "" {
+		return "", false
 	}
-	if file.Providers != nil {
-		providers = file.Providers
+	return entry.APIKeyEnv, true
+}
+
+func writeProviderEntry(name string, entry provider.ProfileEntry) error {
+	db, err := requireDB()
+	if err != nil {
+		return err
 	}
-	return providers, nil
+	return db.UpsertProviderEntry(name, entry)
 }
 
 func (spec *ProviderSpec) applyDefaults(existing provider.ProfileEntry) {
@@ -353,44 +357,15 @@ func (spec ProviderSpec) toEntry(existing provider.ProfileEntry) provider.Profil
 	return entry
 }
 
-func writeProviderEntry(home, name string, entry provider.ProfileEntry, providers map[string]provider.ProfileEntry) error {
-	if stateDB != nil {
-		return stateDB.UpsertProviderEntry(name, entry)
-	}
-	providers[name] = entry
-	data, err := yaml.Marshal(provider.CatalogFile{Providers: providers})
-	if err != nil {
-		return fmt.Errorf("marshal providers: %w", err)
-	}
-	return os.WriteFile(ProvidersFile(home), data, 0o644)
-}
-
-func loadProviderEntries(home string) (map[string]provider.ProfileEntry, error) {
-	if stateDB != nil {
-		return stateDB.ListProviderEntries()
-	}
-	data, err := os.ReadFile(ProvidersFile(home))
-	if err != nil {
-		return nil, fmt.Errorf("read providers: %w", err)
-	}
-	var file provider.CatalogFile
-	if err := yaml.Unmarshal(data, &file); err != nil {
-		return nil, fmt.Errorf("parse providers: %w", err)
-	}
-	if file.Providers == nil {
-		return map[string]provider.ProfileEntry{}, nil
-	}
-	return file.Providers, nil
-}
-
 // MergeProviderModelWindow records a discovered context window for one model
 // on an existing provider. Returns changed=false when the stored value already
 // matches, so callers can skip a catalog reload.
 func MergeProviderModelWindow(home, name, model string, window int) (bool, error) {
+	_ = home
 	if name == "" || model == "" || window <= 0 {
 		return false, nil
 	}
-	providers, err := loadProviderEntries(home)
+	providers, err := listProviderEntries()
 	if err != nil {
 		return false, err
 	}
@@ -402,52 +377,23 @@ func MergeProviderModelWindow(home, name, model string, window int) (bool, error
 		return false, nil
 	}
 	entry.ModelWindows = provider.MergeModelWindows(entry.ModelWindows, map[string]int{model: window})
-	if stateDB != nil {
-		if err := stateDB.UpsertProviderEntry(name, entry); err != nil {
-			return false, err
-		}
-		return true, nil
-	}
-	providers[name] = entry
-	out, err := yaml.Marshal(provider.CatalogFile{Providers: providers})
-	if err != nil {
-		return false, fmt.Errorf("marshal providers: %w", err)
-	}
-	if err := os.WriteFile(ProvidersFile(home), out, 0o644); err != nil {
+	if err := writeProviderEntry(name, entry); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-// DeleteProvider removes a provider (SQLite when bound, else providers.yaml).
+// DeleteProvider removes a provider from state.db.
 func DeleteProvider(home string, name string) error {
+	_ = home
 	if name == "" {
 		return fmt.Errorf("provider name is required")
 	}
-	if stateDB != nil {
-		return stateDB.DeleteProviderEntry(name)
-	}
-	path := ProvidersFile(home)
-	data, err := os.ReadFile(path)
+	db, err := requireDB()
 	if err != nil {
-		return fmt.Errorf("read providers: %w", err)
+		return err
 	}
-	var file provider.CatalogFile
-	if err := yaml.Unmarshal(data, &file); err != nil {
-		return fmt.Errorf("parse providers: %w", err)
-	}
-	if file.Providers == nil {
-		return fmt.Errorf("provider %q not found", name)
-	}
-	if _, ok := file.Providers[name]; !ok {
-		return fmt.Errorf("provider %q not found", name)
-	}
-	delete(file.Providers, name)
-	out, err := yaml.Marshal(file)
-	if err != nil {
-		return fmt.Errorf("marshal providers: %w", err)
-	}
-	return os.WriteFile(path, out, 0o644)
+	return db.DeleteProviderEntry(name)
 }
 
 func (s ProviderSpec) validate() error {

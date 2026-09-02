@@ -5,15 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
-
-// DefaultUserID is the legacy local user used for open mode and file migrations.
-const DefaultUserID = "usr_local"
 
 // DB wraps a GORM connection to ~/.common-agent/state.db.
 type DB struct {
@@ -26,7 +22,7 @@ func StateFile(home string) string {
 	return filepath.Join(home, "state.db")
 }
 
-// Open opens (or creates) state.db, runs AutoMigrate, and ensures the default user.
+// Open opens (or creates) state.db and runs AutoMigrate.
 func Open(home string) (*DB, error) {
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		return nil, fmt.Errorf("create home: %w", err)
@@ -57,10 +53,6 @@ func Open(home string) (*DB, error) {
 
 	db := &DB{DB: gdb, home: home}
 	if err := db.autoMigrate(); err != nil {
-		_ = sqlDB.Close()
-		return nil, err
-	}
-	if err := db.ensureDefaultUser(); err != nil {
 		_ = sqlDB.Close()
 		return nil, err
 	}
@@ -108,30 +100,8 @@ func (db *DB) autoMigrate() error {
 	return nil
 }
 
-func (db *DB) ensureDefaultUser() error {
-	var count int64
-	if err := db.Model(&User{}).Where("id = ?", DefaultUserID).Count(&count).Error; err != nil {
-		return err
-	}
-	if count == 0 {
-		if err := db.Create(&User{
-			ID:        DefaultUserID,
-			Username:  "local",
-			Name:      "local",
-			CreatedAt: time.Now().UTC(),
-		}).Error; err != nil {
-			return err
-		}
-	}
-	// Backfill username for installs migrated before multi-user.
-	return db.Model(&User{}).
-		Where("id = ? AND (username = '' OR username IS NULL)", DefaultUserID).
-		Update("username", "local").Error
-}
-
-// ensureAdminUser promotes a user to admin when the users table has no admin.
-// The earliest-created real user wins; usr_local is promoted only when it is
-// the sole account.
+// ensureAdminUser promotes the earliest user when no admin exists yet.
+// An empty users table is valid; the first RegisterUser becomes admin.
 func (db *DB) ensureAdminUser() error {
 	var n int64
 	if err := db.Model(&User{}).Where("role = ?", RoleAdmin).Count(&n).Error; err != nil {
@@ -141,9 +111,9 @@ func (db *DB) ensureAdminUser() error {
 		return nil
 	}
 	var u User
-	err := db.Where("id <> ?", DefaultUserID).Order("created_at asc").First(&u).Error
+	err := db.Order("created_at asc").First(&u).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		err = db.Where("id = ?", DefaultUserID).First(&u).Error
+		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("find user to promote: %w", err)

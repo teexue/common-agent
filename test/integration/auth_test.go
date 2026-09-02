@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/store"
 )
 
@@ -17,7 +18,10 @@ func TestAuthRequired(t *testing.T) {
 	srv := newRunServer(t, runAgentYAML, textMock())
 	db, err := store.Open(t.TempDir())
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() {
+		_ = db.Close()
+		config.BindDB(nil)
+	})
 	require.NoError(t, srv.SetStateDB(db))
 
 	ts := httptest.NewServer(srv.Handler())

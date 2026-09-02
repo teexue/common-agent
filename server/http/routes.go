@@ -46,6 +46,7 @@ func (s *Server) mountAdminRoutes(v1 *gin.RouterGroup) {
 	admin.POST("/providers/models/detail", s.handleProviderModelDetailTest)
 	admin.PUT("/embedding", s.handleEmbeddingPut)
 	admin.PUT("/subagent", s.handleSubagentPut)
+	admin.PUT("/shell", s.handleShellPut)
 	if s.requestLogger != nil {
 		admin.GET("/audit/requests", s.handleAuditRequests)
 		admin.GET("/audit/requests/detail", s.handleAuditRequestDetail)
@@ -102,6 +103,7 @@ func (s *Server) mountProviderRoutes(v1 *gin.RouterGroup) {
 	providers.GET("/embedding", s.handleEmbeddingGet)
 	providers.GET("/embedding/vendors", s.handleEmbeddingVendors)
 	providers.GET("/subagent", s.handleSubagentGet)
+	providers.GET("/shell", s.handleShellGet)
 }
 
 func (s *Server) mountSkillRoutes(v1 *gin.RouterGroup) {
@@ -120,6 +122,8 @@ func (s *Server) mountSessionRoutes(v1 *gin.RouterGroup) {
 	}
 	sessions := v1.Group("", requireScope(auth.ScopeSessions))
 	sessions.GET("/sessions", s.handleSessionsList)
+	sessions.GET("/sessions/:id/events", s.handleSessionEvents)
+	sessions.POST("/sessions/:id/abort", s.handleSessionAbort)
 	sessions.GET("/sessions/:id", s.handleSessionsGet)
 	sessions.PATCH("/sessions/:id", s.handleSessionPatch)
 	sessions.DELETE("/sessions/:id", s.handleSessionsDelete)

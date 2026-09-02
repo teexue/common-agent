@@ -6,6 +6,7 @@ import { useTheme } from "@/components/theme-provider"
 import { AppLayout } from "@/components/layout/app-layout"
 import { useShellNav, shellLayoutProps } from "./shell-hooks"
 import { ShellNavProvider } from "./shell-context"
+import { ChatProvider } from "./chat-context"
 import { useWorkspaceChrome } from "./workspace-chrome"
 
 function ShellLayout() {
@@ -29,7 +30,9 @@ export function AuthenticatedShell() {
   return (
     <RequireAuth>
       <BackgroundProvider>
-        <ShellLayout />
+        <ChatProvider>
+          <ShellLayout />
+        </ChatProvider>
       </BackgroundProvider>
     </RequireAuth>
   )

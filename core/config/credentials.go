@@ -6,116 +6,58 @@ import (
 	"sync"
 
 	"github.com/teexue/common-agent/core/store"
-	"gopkg.in/yaml.v3"
 )
 
-// CredentialStore is a thread-safe store for API credentials.
+// CredentialStore is a thread-safe store for API credentials backed by SQLite.
 type CredentialStore struct {
-	mu    sync.RWMutex
-	cache map[string]string
-	home  string
-	db    *store.DB
+	inner *store.CredentialStore
 }
 
-// NewCredentialStore creates a store from SQLite when bound, else credentials.yaml.
+// NewCredentialStore loads credentials from the bound state.db.
 func NewCredentialStore(home string) (*CredentialStore, error) {
-	if stateDB != nil {
-		inner, err := store.NewCredentialStore(stateDB)
-		if err != nil {
-			return nil, err
-		}
-		cs := &CredentialStore{home: home, db: stateDB, cache: map[string]string{}}
-		for _, k := range inner.Keys() {
-			cs.cache[k] = inner.Get(k)
-		}
-		return cs, nil
-	}
-	cs := &CredentialStore{home: home}
-	if err := cs.loadFile(); err != nil {
+	_ = home
+	db, err := requireDB()
+	if err != nil {
 		return nil, err
 	}
-	return cs, nil
-}
-
-func (cs *CredentialStore) loadFile() error {
-	path := CredentialsFile(cs.home)
-	data, err := os.ReadFile(path)
+	inner, err := store.NewCredentialStore(db)
 	if err != nil {
-		if os.IsNotExist(err) {
-			cs.cache = map[string]string{}
-			return nil
-		}
-		return fmt.Errorf("read credentials: %w", err)
+		return nil, err
 	}
-	var creds map[string]string
-	if err := yaml.Unmarshal(data, &creds); err != nil {
-		return fmt.Errorf("parse credentials: %w", err)
-	}
-	cs.cache = creds
-	return nil
+	return &CredentialStore{inner: inner}, nil
 }
 
 // Set stores a credential key-value pair and persists.
 func (cs *CredentialStore) Set(envName, value string) error {
-	if envName == "" {
-		return fmt.Errorf("env name is required")
+	if cs == nil || cs.inner == nil {
+		return fmt.Errorf("credential store is not configured")
 	}
-	if value == "" {
-		return fmt.Errorf("value is required")
-	}
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-	if cs.cache == nil {
-		cs.cache = map[string]string{}
-	}
-	cs.cache[envName] = value
-	if cs.db != nil {
-		return cs.db.Save(&store.Credential{EnvName: envName, Value: value}).Error
-	}
-	return cs.writeFileLocked()
+	return cs.inner.Set(envName, value)
 }
 
 // Get returns a stored credential by env var name.
 func (cs *CredentialStore) Get(envName string) string {
-	cs.mu.RLock()
-	defer cs.mu.RUnlock()
-	if cs.cache == nil {
+	if cs == nil || cs.inner == nil {
 		return ""
 	}
-	return cs.cache[envName]
+	return cs.inner.Get(envName)
 }
 
 // Lookup returns env first, then store.
 func (cs *CredentialStore) Lookup(envName string) string {
-	if v := os.Getenv(envName); v != "" {
-		return v
+	if cs == nil || cs.inner == nil {
+		return os.Getenv(envName)
 	}
-	return cs.Get(envName)
+	return cs.inner.Lookup(envName)
 }
 
 // Keys returns configured env var names.
 func (cs *CredentialStore) Keys() []string {
-	cs.mu.RLock()
-	defer cs.mu.RUnlock()
-	keys := make([]string, 0, len(cs.cache))
-	for k := range cs.cache {
-		keys = append(keys, k)
+	if cs == nil || cs.inner == nil {
+		return nil
 	}
-	return keys
+	return cs.inner.Keys()
 }
-
-func (cs *CredentialStore) writeFileLocked() error {
-	if err := ensureHome(cs.home); err != nil {
-		return err
-	}
-	data, err := yaml.Marshal(cs.cache)
-	if err != nil {
-		return fmt.Errorf("marshal credentials: %w", err)
-	}
-	return os.WriteFile(CredentialsFile(cs.home), data, 0o600)
-}
-
-// --- Legacy package-level API (deprecated) ---
 
 var (
 	legacyStore *CredentialStore
@@ -134,7 +76,7 @@ func initLegacy() error {
 	}
 	cs, err := NewCredentialStore(home)
 	if err != nil {
-		cs = &CredentialStore{home: home, cache: map[string]string{}}
+		return err
 	}
 	legacyStore = cs
 	return nil

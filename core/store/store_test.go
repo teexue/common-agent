@@ -16,7 +16,14 @@ import (
 	"github.com/teexue/common-agent/core/store"
 )
 
-func TestOpen_BootstrapUser(t *testing.T) {
+func createTestUser(t *testing.T, db *store.DB) *store.User {
+	t.Helper()
+	u, err := db.CreateUser("alice", "secret1", "Alice", store.RoleAdmin)
+	require.NoError(t, err)
+	return u
+}
+
+func TestOpen_NoDefaultUser(t *testing.T) {
 	dir := t.TempDir()
 	db, err := store.Open(dir)
 	require.NoError(t, err)
@@ -27,25 +34,19 @@ func TestOpen_BootstrapUser(t *testing.T) {
 	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 
 	var n int64
-	require.NoError(t, db.Model(&store.User{}).Where("id = ?", store.DefaultUserID).Count(&n).Error)
-	assert.Equal(t, int64(1), n)
-
-	// usr_local is promoted to admin when it is the only account.
-	role, err := db.GetUserRole(store.DefaultUserID)
-	require.NoError(t, err)
-	assert.Equal(t, store.RoleAdmin, role)
+	require.NoError(t, db.Model(&store.User{}).Count(&n).Error)
+	assert.Equal(t, int64(0), n)
 }
 
-func TestEnsureAdmin_PromotesEarliestRealUser(t *testing.T) {
+func TestEnsureAdmin_PromotesEarliestUser(t *testing.T) {
 	dir := t.TempDir()
 	db, err := store.Open(dir)
 	require.NoError(t, err)
 
 	alice, err := db.CreateUser("alice", "secret1", "Alice", store.RoleMember)
 	require.NoError(t, err)
-	// Demote usr_local so no admin remains, simulating a pre-RBAC install.
 	require.NoError(t, db.Model(&store.User{}).
-		Where("id = ?", store.DefaultUserID).Update("role", store.RoleMember).Error)
+		Where("id = ?", alice.ID).Update("role", store.RoleMember).Error)
 	require.NoError(t, db.Close())
 
 	db, err = store.Open(dir)
@@ -55,10 +56,6 @@ func TestEnsureAdmin_PromotesEarliestRealUser(t *testing.T) {
 	role, err := db.GetUserRole(alice.ID)
 	require.NoError(t, err)
 	assert.Equal(t, store.RoleAdmin, role)
-
-	role, err = db.GetUserRole(store.DefaultUserID)
-	require.NoError(t, err)
-	assert.Equal(t, store.RoleMember, role)
 }
 
 func TestAPIKey_AddVerifyJWT(t *testing.T) {
@@ -67,7 +64,9 @@ func TestAPIKey_AddVerifyJWT(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	raw, entry, err := db.AddAPIKey(store.DefaultUserID, "default", "", nil)
+	owner := createTestUser(t, db)
+
+	raw, entry, err := db.AddAPIKey(owner.ID, "default", "", nil)
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(raw, "ca_"))
 	assert.Len(t, raw, 3+48)
@@ -91,7 +90,7 @@ func TestAPIKey_AddVerifyJWT(t *testing.T) {
 	assert.Equal(t, entry.UserID, id.UserID)
 	assert.Equal(t, entry.ID, id.KeyID)
 
-	require.NoError(t, db.DeleteAPIKey(entry.ID, store.DefaultUserID))
+	require.NoError(t, db.DeleteAPIKey(entry.ID, owner.ID))
 	_, err = tokens.Parse(tok)
 	require.Error(t, err)
 }
@@ -152,7 +151,9 @@ func TestVerifyAPIKey_EnabledExpiryLastUsed(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	raw, entry, err := db.AddAPIKey(store.DefaultUserID, "k1", "agents,sessions", nil)
+	owner := createTestUser(t, db)
+
+	raw, entry, err := db.AddAPIKey(owner.ID, "k1", "agents,sessions", nil)
 	require.NoError(t, err)
 
 	// Unknown key does not authenticate.
@@ -179,7 +180,7 @@ func TestVerifyAPIKey_EnabledExpiryLastUsed(t *testing.T) {
 	// Re-enable, then expire it.
 	require.NoError(t, db.UpdateAPIKey(entry.ID, "", store.APIKeyPatch{Enabled: ptr(true)}))
 	past := time.Now().Add(-time.Hour)
-	raw2, _, err := db.AddAPIKey(store.DefaultUserID, "k2", "*", &past)
+	raw2, _, err := db.AddAPIKey(owner.ID, "k2", "*", &past)
 	require.NoError(t, err)
 	got, err = db.VerifyAPIKey(raw2)
 	require.NoError(t, err)
@@ -187,7 +188,7 @@ func TestVerifyAPIKey_EnabledExpiryLastUsed(t *testing.T) {
 
 	// Future expiry still authenticates.
 	future := time.Now().Add(time.Hour)
-	raw3, _, err := db.AddAPIKey(store.DefaultUserID, "k3", "*", &future)
+	raw3, _, err := db.AddAPIKey(owner.ID, "k3", "*", &future)
 	require.NoError(t, err)
 	got, err = db.VerifyAPIKey(raw3)
 	require.NoError(t, err)
@@ -200,12 +201,14 @@ func TestUpdateAPIKey_Patch(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	_, entry, err := db.AddAPIKey(store.DefaultUserID, "k1", "*", nil)
+	owner := createTestUser(t, db)
+
+	_, entry, err := db.AddAPIKey(owner.ID, "k1", "*", nil)
 	require.NoError(t, err)
 
 	name := "renamed"
 	scopes := "agents"
-	require.NoError(t, db.UpdateAPIKey(entry.ID, store.DefaultUserID, store.APIKeyPatch{
+	require.NoError(t, db.UpdateAPIKey(entry.ID, owner.ID, store.APIKeyPatch{
 		Name: &name, Scopes: &scopes,
 	}))
 	got, err := db.GetAPIKey(entry.ID)
@@ -259,9 +262,4 @@ func TestOpen_UpgradesLegacySchema(t *testing.T) {
 	require.NotNil(t, got)
 	assert.Equal(t, "*", got.Scopes)
 	assert.True(t, got.Enabled)
-
-	// Sole usr_local account is promoted to admin.
-	role, err := db.GetUserRole(store.DefaultUserID)
-	require.NoError(t, err)
-	assert.Equal(t, store.RoleAdmin, role)
 }

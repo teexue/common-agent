@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/store"
 )
 
@@ -20,7 +21,10 @@ func setupAuthServer(t *testing.T) (*Server, *store.DB) {
 	srv, dir := setupTestServer(t)
 	db, err := store.Open(dir)
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() {
+		_ = db.Close()
+		config.BindDB(nil)
+	})
 	require.NoError(t, srv.SetStateDB(db))
 	return srv, db
 }

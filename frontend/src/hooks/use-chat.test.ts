@@ -350,6 +350,16 @@ describe("chatReducer token usage", () => {
     expect(loaded.contextWindow).toBe(0)
   })
 
+  it("marks a live resume as streaming", () => {
+    const live = chatReducer(baseState(), {
+      type: "LOAD_LIVE",
+      sessionId: "s1",
+      messages: [],
+    })
+    expect(live.isStreaming).toBe(true)
+    expect(live.sessionId).toBe("s1")
+  })
+
   it("restores latest-request usage from persisted session metadata", () => {
     const state = chatReducer(baseState(), {
       type: "LOAD_SESSION",

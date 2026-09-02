@@ -16,7 +16,7 @@ import (
 // their names to the agent's tool whitelist so the loop exposes them to the
 // LLM.
 //
-// Global servers (from ~/.common-agent/mcp.yaml) are merged with the agent's
+// Global servers (from state.db) are merged with the agent's
 // own mcp_servers; on name collision the agent-level config wins.
 //
 // Returns the manager (so the caller can close it after the run) and the

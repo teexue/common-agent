@@ -91,17 +91,14 @@ type Session struct {
 	UpdatedAt time.Time
 }
 
-// New creates a session owned by the default local user.
+// New creates a session with a random ID.
 func New(agentName string) *Session {
-	return NewForUser(agentName, "usr_local")
+	return NewForUser(agentName, "")
 }
 
 // NewForUser creates a session with a random ID owned by userID.
 func NewForUser(agentName, userID string) *Session {
 	now := time.Now().UTC()
-	if userID == "" {
-		userID = "usr_local"
-	}
 	return &Session{
 		ID:        newID("sess"),
 		UserID:    userID,

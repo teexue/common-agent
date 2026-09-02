@@ -1,13 +1,11 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/teexue/common-agent/core/config"
-	"github.com/teexue/common-agent/core/service"
 )
 
 func (s *Server) handleSubagentGet(c *gin.Context) {
@@ -32,17 +30,9 @@ func (s *Server) handleSubagentPut(c *gin.Context) {
 		return
 	}
 	if err := s.svc.SaveSubagentSettings(view); err != nil {
-		var arg *service.ArgError
-		if errors.As(err, &arg) {
-			respondErrorDetails(c, errorDetails{
-				Status: http.StatusBadRequest, Code: "invalid_request",
-				MsgKey: "api.error.invalid_request", Details: arg.Error(),
-			})
-			return
-		}
-		respondErrorDetails(c, errorDetails{
+		respondServiceError(c, err, errorDetails{
 			Status: http.StatusInternalServerError, Code: "config_error",
-			MsgKey: "api.error.config_error", Details: err.Error(),
+			MsgKey: "api.error.config_error",
 		})
 		return
 	}

@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/teexue/common-agent/core/auth"
+	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/store"
 )
 
@@ -48,28 +48,18 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
-// handleAuthStatus is a public probe for the login gate (no credentials required).
 func (s *Server) handleAuthStatus(c *gin.Context) {
 	enabled, _ := s.authEnabled()
-	var hasUsers, allowRegistration bool
-	if s.stateDB != nil {
-		n, err := s.stateDB.CountUsersWithPassword()
-		hasUsers = err == nil && n > 0
-		allowRegistration = s.stateDB.GetAllowRegistration()
-	}
+	st := s.svc.AuthProbe()
 	c.JSON(http.StatusOK, gin.H{
 		"auth_required":      enabled,
-		"has_users":          hasUsers,
-		"allow_registration": allowRegistration,
+		"has_users":          st.HasUsers,
+		"allow_registration": st.AllowRegistration,
 	})
 }
 
-// handleAuthRegister creates a password user and returns a login JWT.
-// The first password user becomes admin (usr_local doesn't count);
-// afterwards registration requires the allow_registration setting and new
-// users are members.
 func (s *Server) handleAuthRegister(c *gin.Context) {
-	if s.stateDB == nil || s.tokens == nil {
+	if s.tokens == nil {
 		respondError(c, http.StatusServiceUnavailable, "not_configured", "api.error.auth_keys_not_configured")
 		return
 	}
@@ -78,21 +68,9 @@ func (s *Server) handleAuthRegister(c *gin.Context) {
 		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
-	role := store.RoleMember
-	n, err := s.stateDB.CountUsersWithPassword()
+	u, err := s.svc.RegisterUser(req.Username, req.Password, req.Name)
 	if err != nil {
-		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
-		return
-	}
-	if n == 0 {
-		role = store.RoleAdmin
-	} else if !s.stateDB.GetAllowRegistration() {
-		respondError(c, http.StatusForbidden, "registration_disabled", "api.error.registration_disabled")
-		return
-	}
-	u, err := s.stateDB.CreateUser(req.Username, req.Password, req.Name, role)
-	if err != nil {
-		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
+		respondRegisterError(c, err)
 		return
 	}
 	token, err := s.tokens.IssueLogin(u.ID)
@@ -101,15 +79,28 @@ func (s *Server) handleAuthRegister(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{
-		"token":   token,
-		"user":    u.ToUserInfo(),
-		"user_id": u.ID,
+		"token": token, "user": u.ToUserInfo(), "user_id": u.ID,
 	})
 }
 
-// handleAuthLogin verifies username/password and returns a login JWT.
+func respondRegisterError(c *gin.Context, err error) {
+	if respondAuthConfigError(c, err) {
+		return
+	}
+	if errors.Is(err, service.ErrRegistrationDisabled) {
+		respondError(c, http.StatusForbidden, "registration_disabled", "api.error.registration_disabled")
+		return
+	}
+	var sev *service.ServerError
+	if errors.As(err, &sev) {
+		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
+		return
+	}
+	respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
+}
+
 func (s *Server) handleAuthLogin(c *gin.Context) {
-	if s.stateDB == nil || s.tokens == nil {
+	if s.tokens == nil {
 		respondError(c, http.StatusServiceUnavailable, "not_configured", "api.error.auth_keys_not_configured")
 		return
 	}
@@ -118,8 +109,11 @@ func (s *Server) handleAuthLogin(c *gin.Context) {
 		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
-	u, err := s.stateDB.AuthenticateUser(req.Username, req.Password)
+	u, err := s.svc.AuthenticateUser(req.Username, req.Password)
 	if err != nil {
+		if respondAuthConfigError(c, err) {
+			return
+		}
 		respondError(c, http.StatusUnauthorized, "unauthorized", "api.error.invalid_credentials")
 		return
 	}
@@ -129,20 +123,13 @@ func (s *Server) handleAuthLogin(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"token":   token,
-		"user":    u.ToUserInfo(),
-		"user_id": u.ID,
+		"token": token, "user": u.ToUserInfo(), "user_id": u.ID,
 	})
 }
 
-// handleAuthKeysList returns redacted API keys and auth status.
 func (s *Server) handleAuthKeysList(c *gin.Context) {
-	if s.stateDB == nil {
-		c.JSON(http.StatusOK, gin.H{"enabled": false, "keys": []store.APIKeyInfo{}})
-		return
-	}
 	id := identityFromGin(c)
-	keys, err := s.stateDB.ListAPIKeys(id.UserID)
+	keys, err := s.svc.ListAPIKeys(id.UserID)
 	if err != nil {
 		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
 		return
@@ -151,51 +138,34 @@ func (s *Server) handleAuthKeysList(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"enabled": enabled, "keys": keys, "user_id": id.UserID})
 }
 
-// handleAuthKeysCreate generates a server-side API key, returned exactly
-// once. No JWT is issued; clients authenticate with the raw key.
 func (s *Server) handleAuthKeysCreate(c *gin.Context) {
-	if s.stateDB == nil || s.tokens == nil {
-		respondError(c, http.StatusServiceUnavailable, "not_configured", "api.error.auth_keys_not_configured")
-		return
-	}
 	var req createAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
-	var expiresAt *time.Time
-	if req.ExpiresInDays > 0 {
-		t := time.Now().UTC().Add(time.Duration(req.ExpiresInDays) * 24 * time.Hour)
-		expiresAt = &t
-	}
-	userID := identityFromGin(c).UserID
-	if userID == "" {
-		userID = auth.DefaultUserID
-	}
-	rawKey, entry, err := s.stateDB.AddAPIKey(userID, req.Name, strings.Join(req.Scopes, ","), expiresAt)
+	created, err := s.svc.CreateAPIKey(service.CreateAPIKeyRequest{
+		UserID: identityFromGin(c).UserID, Name: req.Name,
+		Scopes: req.Scopes, ExpiresInDays: req.ExpiresInDays,
+	})
 	if err != nil {
+		if respondAuthConfigError(c, err) {
+			return
+		}
 		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
 		return
 	}
 	resp := createAPIKeyResponse{
-		ID:     entry.ID,
-		Key:    rawKey,
-		Prefix: entry.Prefix,
-		Scopes: parseScopes(entry.Scopes),
+		ID: created.Key.ID, Key: created.Raw, Prefix: created.Key.Prefix,
+		Scopes: parseScopes(created.Key.Scopes),
 	}
-	if entry.ExpiresAt != nil {
-		resp.ExpiresAt = entry.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z")
+	if created.Key.ExpiresAt != nil {
+		resp.ExpiresAt = created.Key.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z")
 	}
 	c.JSON(http.StatusCreated, resp)
 }
 
-// handleAuthKeysPatch updates name/scopes/enabled of an API key owned by
-// the current user.
 func (s *Server) handleAuthKeysPatch(c *gin.Context) {
-	if s.stateDB == nil {
-		respondError(c, http.StatusServiceUnavailable, "not_configured", "api.error.auth_keys_not_configured")
-		return
-	}
 	var req patchAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
@@ -206,38 +176,20 @@ func (s *Server) handleAuthKeysPatch(c *gin.Context) {
 		scopes := strings.Join(req.Scopes, ",")
 		patch.Scopes = &scopes
 	}
-	id := c.Param("id")
-	userID := identityFromGin(c).UserID
-	if err := s.stateDB.UpdateAPIKey(id, userID, patch); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			respondError(c, http.StatusNotFound, "not_found", "api.error.auth_key_not_found")
-			return
-		}
-		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
-		return
-	}
-	key, err := s.stateDB.GetAPIKey(id)
+	info, err := s.svc.PatchAPIKey(c.Param("id"), identityFromGin(c).UserID, patch)
 	if err != nil {
-		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
+		respondAuthKeyMutateError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, store.APIKeyInfo{
-		ID: key.ID, UserID: key.UserID, Name: key.Name,
-		Prefix: key.Prefix, Scopes: key.Scopes, Enabled: key.Enabled,
-		ExpiresAt: key.ExpiresAt, LastUsedAt: key.LastUsedAt,
-		CreatedAt: key.CreatedAt,
-	})
+	c.JSON(http.StatusOK, info)
 }
 
-// handleAuthKeysDelete removes an API key by id (revokes JWTs with that kid).
 func (s *Server) handleAuthKeysDelete(c *gin.Context) {
-	if s.stateDB == nil {
-		respondError(c, http.StatusServiceUnavailable, "not_configured", "api.error.auth_keys_not_configured")
-		return
-	}
 	id := c.Param("id")
-	userID := identityFromGin(c).UserID
-	if err := s.stateDB.DeleteAPIKey(id, userID); err != nil {
+	if err := s.svc.DeleteAPIKey(id, identityFromGin(c).UserID); err != nil {
+		if respondAuthConfigError(c, err) {
+			return
+		}
 		if errors.Is(err, os.ErrNotExist) {
 			respondError(c, http.StatusNotFound, "not_found", "api.error.auth_key_not_found")
 			return
@@ -248,9 +200,19 @@ func (s *Server) handleAuthKeysDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true, "id": id})
 }
 
-// handleAuthToken exchanges a raw API key for a JWT.
+func respondAuthKeyMutateError(c *gin.Context, err error) {
+	if respondAuthConfigError(c, err) {
+		return
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		respondError(c, http.StatusNotFound, "not_found", "api.error.auth_key_not_found")
+		return
+	}
+	respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_request", MsgKey: "api.error.invalid_request", Details: err.Error()})
+}
+
 func (s *Server) handleAuthToken(c *gin.Context) {
-	if s.stateDB == nil || s.tokens == nil {
+	if s.tokens == nil {
 		respondError(c, http.StatusServiceUnavailable, "not_configured", "api.error.auth_keys_not_configured")
 		return
 	}
@@ -259,23 +221,16 @@ func (s *Server) handleAuthToken(c *gin.Context) {
 		respondErrorDetails(c, errorDetails{Status: http.StatusBadRequest, Code: "invalid_json", MsgKey: "api.error.invalid_json", Details: err.Error()})
 		return
 	}
-	entry, err := s.stateDB.VerifyAPIKey(req.APIKey)
+	entry, err := s.svc.VerifyStoredAPIKey(req.APIKey)
 	if err != nil {
+		if respondAuthConfigError(c, err) {
+			return
+		}
 		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
 		return
 	}
 	if entry == nil {
-		// Also accept CLI ephemeral keys.
-		if id, ok := s.resolveCLIKey(req.APIKey); ok {
-			token, err := s.tokens.Issue(id)
-			if err != nil {
-				respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
-				return
-			}
-			c.JSON(http.StatusOK, gin.H{"token": token, "user_id": id.UserID, "key_id": id.KeyID})
-			return
-		}
-		respondError(c, http.StatusUnauthorized, "unauthorized", "api.error.unauthorized")
+		s.issueCLIToken(c, req.APIKey)
 		return
 	}
 	token, err := s.tokens.Issue(auth.Identity{UserID: entry.UserID, KeyID: entry.ID})
@@ -286,7 +241,19 @@ func (s *Server) handleAuthToken(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"token": token, "user_id": entry.UserID, "key_id": entry.ID})
 }
 
-// handleAuthMe returns the current identity and user profile when available.
+func (s *Server) issueCLIToken(c *gin.Context, rawKey string) {
+	if id, ok := s.resolveCLIKey(rawKey); ok {
+		token, err := s.tokens.Issue(id)
+		if err != nil {
+			respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "auth_error", MsgKey: "api.error.internal", Details: err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"token": token, "user_id": id.UserID, "key_id": id.KeyID})
+		return
+	}
+	respondError(c, http.StatusUnauthorized, "unauthorized", "api.error.unauthorized")
+}
+
 func (s *Server) handleAuthMe(c *gin.Context) {
 	id := identityFromGin(c)
 	resp := gin.H{
@@ -302,10 +269,8 @@ func (s *Server) handleAuthMe(c *gin.Context) {
 	if enabled, err := s.authEnabled(); err == nil {
 		resp["auth_enabled"] = enabled
 	}
-	if s.stateDB != nil && id.UserID != "" {
-		if u, err := s.stateDB.GetUser(id.UserID); err == nil {
-			resp["user"] = u.ToUserInfo()
-		}
+	if u, ok := s.svc.LookupUser(id.UserID); ok {
+		resp["user"] = u
 	}
 	c.JSON(http.StatusOK, resp)
 }

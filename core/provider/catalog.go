@@ -33,7 +33,7 @@ type Profile struct {
 	ModelWindows map[string]int
 }
 
-// ProfileEntry is a provider definition in providers.yaml.
+// ProfileEntry is a provider definition (SQLite spec JSON / catalog file YAML).
 type ProfileEntry struct {
 	APIStyle     APIStyle  `yaml:"api_style"`
 	BaseURL      string    `yaml:"base_url"`
@@ -54,13 +54,13 @@ type ProfileEntry struct {
 	ModelWindows map[string]int `yaml:"model_windows,omitempty" json:"model_windows,omitempty"`
 }
 
-// Catalog holds named provider profiles loaded from providers.yaml.
+// Catalog holds named provider profiles.
 type Catalog struct {
 	entries    map[string]ProfileEntry
 	credLookup func(string) string
 }
 
-// CatalogFile is the on-disk providers.yaml shape.
+// CatalogFile is the legacy providers.yaml shape used by file migration and tests.
 type CatalogFile struct {
 	Providers map[string]ProfileEntry `yaml:"providers"`
 }

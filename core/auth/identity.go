@@ -2,9 +2,6 @@ package auth
 
 import "context"
 
-// DefaultUserID is used for open/unauthenticated mode and CLI ephemeral keys.
-const DefaultUserID = "usr_local"
-
 // PasswordKeyID is the JWT kid for password-based login sessions.
 const PasswordKeyID = "pwd"
 
@@ -23,15 +20,15 @@ func WithIdentity(ctx context.Context, id Identity) context.Context {
 	return context.WithValue(ctx, ctxKey{}, id)
 }
 
-// IdentityFromContext returns the identity, or DefaultUserID when unset.
+// IdentityFromContext returns the identity stored on ctx, or a zero value.
 func IdentityFromContext(ctx context.Context) Identity {
 	if ctx == nil {
-		return Identity{UserID: DefaultUserID}
+		return Identity{}
 	}
-	if v, ok := ctx.Value(ctxKey{}).(Identity); ok && v.UserID != "" {
+	if v, ok := ctx.Value(ctxKey{}).(Identity); ok {
 		return v
 	}
-	return Identity{UserID: DefaultUserID}
+	return Identity{}
 }
 
 // IsPasswordSession reports whether the identity came from password login.

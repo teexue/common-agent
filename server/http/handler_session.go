@@ -13,8 +13,7 @@ import (
 )
 
 func (s *Server) handleSessionsList(c *gin.Context) {
-	if s.store == nil {
-		respondError(c, http.StatusServiceUnavailable, "session_error", "api.error.session_not_configured")
+	if !s.requireSessionStore(c) {
 		return
 	}
 	userID := identityFromGin(c).UserID
@@ -30,19 +29,8 @@ func (s *Server) handleSessionsList(c *gin.Context) {
 }
 
 func (s *Server) handleSessionsGet(c *gin.Context) {
-	if s.store == nil {
-		respondError(c, http.StatusServiceUnavailable, "session_error", "api.error.session_not_configured")
-		return
-	}
-	id := c.Param("id")
-	userID := identityFromGin(c).UserID
-	sess, err := s.svc.LoadSession(id, userID)
-	if err != nil {
-		if errors.Is(err, session.ErrNotFound) {
-			respondError(c, http.StatusNotFound, "not_found", "api.error.session_not_found")
-			return
-		}
-		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "session_error", MsgKey: "api.error.session_error", Details: err.Error()})
+	sess, ok := s.loadSessionOrRespond(c)
+	if !ok {
 		return
 	}
 
@@ -65,19 +53,8 @@ type SessionPatchRequest struct {
 }
 
 func (s *Server) handleSessionPatch(c *gin.Context) {
-	if s.store == nil {
-		respondError(c, http.StatusServiceUnavailable, "session_error", "api.error.session_not_configured")
-		return
-	}
-	id := c.Param("id")
-	userID := identityFromGin(c).UserID
-	sess, err := s.svc.LoadSession(id, userID)
-	if err != nil {
-		if errors.Is(err, session.ErrNotFound) {
-			respondError(c, http.StatusNotFound, "not_found", "api.error.session_not_found")
-			return
-		}
-		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "session_error", MsgKey: "api.error.session_error", Details: err.Error()})
+	sess, ok := s.loadSessionOrRespond(c)
+	if !ok {
 		return
 	}
 
@@ -97,15 +74,14 @@ func (s *Server) handleSessionPatch(c *gin.Context) {
 }
 
 func (s *Server) handleSessionsDelete(c *gin.Context) {
-	if s.store == nil {
-		respondError(c, http.StatusServiceUnavailable, "session_error", "api.error.session_not_configured")
+	if !s.requireSessionStore(c) {
 		return
 	}
 	id := c.Param("id")
 	userID := identityFromGin(c).UserID
 	if err := s.svc.DeleteSession(id, userID); err != nil {
 		if errors.Is(err, session.ErrNotFound) {
-			respondError(c, http.StatusNotFound, "not_found", "api.error.session_not_found")
+			writeSessionLoadError(c, err)
 			return
 		}
 		respondErrorDetails(c, errorDetails{Status: http.StatusInternalServerError, Code: "delete_error", MsgKey: "api.error.delete_error", Details: err.Error()})

@@ -33,10 +33,10 @@ func (s *Service) ListSessions(userID string) ([]session.SessionMeta, error) {
 			continue
 		}
 		uid := m.UserID
-		if uid == "" {
-			uid = store.DefaultUserID
-		}
 		if userID == "" || uid == userID {
+			if s.Hub != nil && s.Hub.Running(m.ID) {
+				m.Running = true
+			}
 			out = append(out, m)
 		}
 	}
@@ -58,11 +58,7 @@ func (s *Service) LoadSession(id, userID string) (*session.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	uid := sess.UserID
-	if uid == "" {
-		uid = store.DefaultUserID
-	}
-	if userID != "" && uid != userID {
+	if userID != "" && sess.UserID != userID {
 		return nil, session.ErrNotFound
 	}
 	return sess, nil
@@ -75,6 +71,9 @@ func (s *Service) DeleteSession(id, userID string) error {
 	}
 	if id == "" {
 		return fmt.Errorf("session id is required")
+	}
+	if s.Hub != nil {
+		s.Hub.AbortAndWait(id)
 	}
 	if gs, ok := s.Store.(*store.SessionStore); ok {
 		return gs.DeleteForUser(id, userID)

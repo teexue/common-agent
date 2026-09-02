@@ -46,6 +46,15 @@ export function WriteFile({ input }: ToolRenderProps) {
   )
 }
 
+export function DeleteFile({ input, output }: ToolRenderProps) {
+  const path = str(input?.path) || str(output?.path)
+  return (
+    <FilePanel path={path} meta={<Meta tone="destructive">deleted</Meta>}>
+      {null}
+    </FilePanel>
+  )
+}
+
 export function EditFile({ input, output }: ToolRenderProps) {
   const path = str(input?.path) || str(output?.path)
   const replacements = num(output?.replacements)

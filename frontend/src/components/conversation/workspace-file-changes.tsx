@@ -34,6 +34,10 @@ function tallyToolCall(
     entry.add += lineCount(typeof obj.content === "string" ? obj.content : "")
     return
   }
+  if (name === "delete_file") {
+    entry.del += 1
+    return
+  }
   const oldStr = typeof obj.old_string === "string" ? obj.old_string : ""
   const newStr = typeof obj.new_string === "string" ? obj.new_string : ""
   for (const l of diffLines(oldStr, newStr)) {
@@ -43,14 +47,19 @@ function tallyToolCall(
 }
 
 /** computeFileChanges tallies per-file added/deleted lines across completed
- * write_file / edit_file tool calls, preserving first-seen order. */
+ * write_file / edit_file / delete_file tool calls, preserving first-seen order. */
 function computeFileChanges(messages: ConversationEntry[]): FileChange[] {
   const order: string[] = []
   const map = new Map<string, FileChange>()
   for (const msg of messages) {
     for (const tc of msg.toolCalls ?? []) {
       if (tc.status !== "completed") continue
-      if (tc.name !== "write_file" && tc.name !== "edit_file") continue
+      if (
+        tc.name !== "write_file" &&
+        tc.name !== "edit_file" &&
+        tc.name !== "delete_file"
+      )
+        continue
       const obj = (tc.input ?? null) as Record<string, unknown> | null
       if (!obj || typeof obj.path !== "string") continue
       let entry = map.get(obj.path)

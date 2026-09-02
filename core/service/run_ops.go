@@ -121,6 +121,7 @@ func (s *Service) PrepareRun(ctx context.Context, req RunRequest, approver loop.
 		NewProvider:   s.NewProvider,
 		ContextWindow: s.savedContextWindow(a),
 		Subagent:      limits,
+		Shell:         s.preferredShell(),
 	}
 
 	return &RunResult{

@@ -1,8 +1,6 @@
 package config_test
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,8 +17,8 @@ func TestSubagentView_Defaults(t *testing.T) {
 	assert.Equal(t, 0, v.Timeout)
 }
 
-func TestSubagentView_YAMLRoundTrip(t *testing.T) {
-	home := t.TempDir()
+func TestSubagentView_RoundTrip(t *testing.T) {
+	home := bindTestDB(t)
 	enabled := false
 	require.NoError(t, config.SaveSettings(home, config.Settings{
 		DefaultAgent: "chat-assistant",
@@ -38,9 +36,6 @@ func TestSubagentView_YAMLRoundTrip(t *testing.T) {
 	assert.Equal(t, 9, v.MaxTurns)
 	assert.Equal(t, config.DefaultSubagentMaxDepth, v.MaxDepth)
 	assert.Equal(t, 30, v.Timeout)
-	data, err := os.ReadFile(filepath.Join(home, "config.yaml"))
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "max_turns: 9")
 }
 
 func TestSubagentView_IgnoresPersistedMaxDepth(t *testing.T) {

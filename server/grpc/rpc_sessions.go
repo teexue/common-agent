@@ -19,7 +19,7 @@ func (s *GRPCServer) ListSessions(ctx context.Context, _ *commonagentv1.ListSess
 	if err := s.checkAuth(ctx); err != nil {
 		return nil, err
 	}
-	metas, err := s.svc.ListSessions(auth.DefaultUserID)
+	metas, err := s.svc.ListSessions(auth.IdentityFromContext(ctx).UserID)
 	if err != nil {
 		return nil, status.Error(codes.FailedPrecondition, i18n.TCtx(ctx, "api.grpc.error.failed_precondition", "error", err.Error()))
 	}
@@ -41,7 +41,7 @@ func (s *GRPCServer) GetSession(ctx context.Context, req *commonagentv1.GetSessi
 	if err := s.checkAuth(ctx); err != nil {
 		return nil, err
 	}
-	sess, err := s.svc.LoadSession(req.Id, auth.DefaultUserID)
+	sess, err := s.svc.LoadSession(req.Id, auth.IdentityFromContext(ctx).UserID)
 	if err != nil {
 		if errors.Is(err, session.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, i18n.TCtx(ctx, "api.grpc.error.session_not_found", "id", req.Id))
@@ -71,7 +71,7 @@ func (s *GRPCServer) DeleteSession(ctx context.Context, req *commonagentv1.Delet
 	if err := s.checkAuth(ctx); err != nil {
 		return nil, err
 	}
-	if err := s.svc.DeleteSession(req.Id, auth.DefaultUserID); err != nil {
+	if err := s.svc.DeleteSession(req.Id, auth.IdentityFromContext(ctx).UserID); err != nil {
 		if errors.Is(err, session.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, i18n.TCtx(ctx, "api.grpc.error.session_not_found", "id", req.Id))
 		}

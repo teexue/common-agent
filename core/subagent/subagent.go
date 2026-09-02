@@ -52,6 +52,7 @@ type Deps struct {
 	Approver        loop.Approver
 	Store           session.Store
 	WorkDir         string
+	Shell           string
 	UserID          string
 	ParentSessionID string
 	ParentAgent     *agent.Agent
@@ -126,7 +127,7 @@ func childLoopConfig(cfg Config, deps Deps, a *agent.Agent, p provider.Provider,
 		Provider: p, Registry: deps.Registry, Agent: a,
 		Session: sess, Prompt: prompt,
 		Logger: deps.Logger, Policy: deps.Policy, Approver: deps.Approver,
-		Store: deps.Store, WorkDir: deps.WorkDir,
+		Store: deps.Store, WorkDir: deps.WorkDir, Shell: deps.Shell,
 		AgentsDir: deps.AgentsDir, NewProvider: deps.NewProvider,
 		Depth: cfg.Depth, Source: "subagent", Subagent: cfg.Limits,
 	}

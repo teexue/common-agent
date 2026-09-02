@@ -23,6 +23,7 @@ type Spawn struct {
 	Approver    Approver
 	Store       session.Store
 	WorkDir     string
+	Shell       string
 	Depth       int
 	UserID      string
 	SessionID   string
@@ -56,6 +57,7 @@ func spawnFromConfig(cfg Config) Spawn {
 		Approver:    cfg.Approver,
 		Store:       cfg.Store,
 		WorkDir:     cfg.WorkDir,
+		Shell:       cfg.Shell,
 		Depth:       cfg.Depth,
 		UserID:      userID,
 		SessionID:   sessID,

@@ -27,6 +27,7 @@ func TestListEmbeddingVendors(t *testing.T) {
 
 func TestSaveAndGetEmbeddingSettings(t *testing.T) {
 	home := t.TempDir()
+	bindConfigDB(t, home)
 	creds, err := config.NewCredentialStore(home)
 	require.NoError(t, err)
 
@@ -52,11 +53,12 @@ func TestSaveAndGetEmbeddingSettings(t *testing.T) {
 	assert.True(t, view.HasAPIKey)
 	assert.Equal(t, "DASHSCOPE_API_KEY", view.APIKeyEnv)
 
-	data, err := os.ReadFile(filepath.Join(home, "config.yaml"))
+	settings, err := config.LoadSettings(home)
 	require.NoError(t, err)
-	assert.Contains(t, string(data), "vendor: qwen")
-	assert.Contains(t, string(data), "dimensions: 1024")
-	assert.NotContains(t, string(data), "provider:")
+	require.NotNil(t, settings.Embedding)
+	assert.Equal(t, "qwen", settings.Embedding.Vendor)
+	assert.Equal(t, 1024, settings.Embedding.Dimensions)
+	assert.Empty(t, settings.Embedding.LegacyProvider)
 }
 
 func TestLoadSettingsIgnoresLegacyEmbeddingProvider(t *testing.T) {
@@ -70,6 +72,7 @@ embedding:
   api_key_env: EMB_KEY
   model: text-embedding-v3
 `), 0o644))
+	bindConfigDB(t, home)
 
 	settings, err := config.LoadSettings(home)
 	require.NoError(t, err)
@@ -80,6 +83,7 @@ embedding:
 
 func TestSaveEmbeddingOllamaNoKey(t *testing.T) {
 	home := t.TempDir()
+	bindConfigDB(t, home)
 	svc := &service.Service{HomeDir: home}
 	err := svc.SaveEmbeddingSettings(service.SaveEmbeddingRequest{
 		Vendor:  "ollama",

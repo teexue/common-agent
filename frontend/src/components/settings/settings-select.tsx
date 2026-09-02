@@ -17,18 +17,21 @@ export function SettingsSelect({
   options,
   onChange,
   placeholder,
+  disabled,
   triggerClassName = "h-9 w-full rounded-lg text-sm",
 }: {
   value: string
   options: SelectOption[]
   onChange: (value: string) => void
   placeholder?: string
+  disabled?: boolean
   triggerClassName?: string
 }) {
   const selected = options.find((o) => o.value === value)
   return (
     <Select
       value={value ? { value, label: selected?.label ?? value } : null}
+      disabled={disabled}
       onValueChange={(v) => {
         const next = selectString(v)
         if (next !== undefined) onChange(next)

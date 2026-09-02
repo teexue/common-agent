@@ -75,6 +75,9 @@ func attachRunContext(ctx context.Context, cfg Config) context.Context {
 	if cfg.WorkDir != "" {
 		ctx = WithWorkDir(ctx, cfg.WorkDir)
 	}
+	if cfg.Shell != "" {
+		ctx = WithShell(ctx, cfg.Shell)
+	}
 	ctx = provider.WithRunMeta(ctx, provider.RunMeta{
 		Agent:     cfg.Agent.Name,
 		SessionID: cfg.Session.ID,

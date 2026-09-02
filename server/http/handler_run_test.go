@@ -361,16 +361,14 @@ permissions:
 }
 
 func TestHandleRun_ClientDisconnect(t *testing.T) {
-	srv, _ := setupTestServerWithProvider(t, func(a *agent.Agent) (provider.Provider, error) {
-		return &provider.MockProvider{BlockOnStream: true}, nil
-	})
+	srv, _, store := setupTestServerWithStore(t)
+	srv.newProvider = func(a *agent.Agent) (provider.Provider, error) {
+		return &delayTextProvider{delay: 200 * time.Millisecond, text: "kept going"}, nil
+	}
+	srv.svc.NewProvider = srv.newProvider
 	router := srv.Handler()
 
-	body, _ := json.Marshal(RunRequest{
-		Agent:  "test",
-		Prompt: "hello",
-	})
-
+	body, _ := json.Marshal(RunRequest{Agent: "test", Prompt: "hello"})
 	ctx, cancel := context.WithCancel(context.Background())
 	req, _ := http.NewRequestWithContext(ctx, "POST", "/v1/agents/run", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -382,8 +380,15 @@ func TestHandleRun_ClientDisconnect(t *testing.T) {
 		close(done)
 	}()
 
-	// Give the handler a moment to start the SSE stream, then cancel.
-	time.Sleep(50 * time.Millisecond)
+	deadline := time.Now().Add(2 * time.Second)
+	var sessionID string
+	for time.Now().Before(deadline) && sessionID == "" {
+		sessionID = w.Header().Get("X-Session-Id")
+		time.Sleep(10 * time.Millisecond)
+	}
+	if sessionID == "" {
+		t.Fatal("expected X-Session-Id before disconnect")
+	}
 	cancel()
 
 	select {
@@ -392,24 +397,41 @@ func TestHandleRun_ClientDisconnect(t *testing.T) {
 		t.Fatal("handler did not return after context cancellation")
 	}
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", w.Code)
-	}
+	waitSessionText(t, store, sessionID, "kept going")
+}
 
-	events := parseSSEEvents(w.Body.String())
-	var foundError, foundDone bool
-	for _, ev := range events {
-		if ev["type"] == "error" && ev["code"] == "cancelled" {
-			foundError = true
+type delayTextProvider struct {
+	delay time.Duration
+	text  string
+}
+
+func (p *delayTextProvider) Stream(ctx context.Context, req provider.Request) (<-chan provider.Chunk, error) {
+	ch := make(chan provider.Chunk, 1)
+	go func() {
+		defer close(ch)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(p.delay):
 		}
-		if ev["type"] == "done" && ev["status"] == "cancelled" {
-			foundDone = true
+		ch <- provider.Chunk{TextDelta: p.text, Done: true}
+	}()
+	return ch, nil
+}
+
+func waitSessionText(t *testing.T, store session.Store, id, want string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		sess, err := store.Load(id)
+		if err == nil {
+			for _, msg := range sess.GetMessages() {
+				if msg.Role == provider.RoleAssistant && msg.Content == want {
+					return
+				}
+			}
 		}
+		time.Sleep(20 * time.Millisecond)
 	}
-	if !foundError {
-		t.Fatalf("expected cancelled error event, got %v", events)
-	}
-	if !foundDone {
-		t.Fatalf("expected done cancelled event, got %v", events)
-	}
+	t.Fatalf("session %s never persisted assistant %q", id, want)
 }

@@ -1,7 +1,7 @@
 import { asRecord, str } from "@/components/inspector/tool-detail-utils"
 import type { ToolCallEntry } from "@/types/agent"
 import { RunCommand } from "./inline-tool-command"
-import { EditFile, ReadFile, WriteFile } from "./inline-tool-file"
+import { EditFile, ReadFile, WriteFile, DeleteFile } from "./inline-tool-file"
 import { ListDirectory, SearchFiles } from "./inline-tool-fs"
 import { DelegateTask, Generic, GetTime, LoadSkill } from "./inline-tool-misc"
 import { CodeBlock, type ToolRenderProps } from "./inline-tool-primitives"
@@ -11,6 +11,7 @@ const RENDERERS: Record<string, (props: ToolRenderProps) => React.ReactNode> = {
   run_command: RunCommand,
   read_file: ReadFile,
   write_file: WriteFile,
+  delete_file: DeleteFile,
   edit_file: EditFile,
   create_directory: WriteFile,
   list_directory: ListDirectory,

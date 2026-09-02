@@ -12,6 +12,7 @@ const (
 	settingLocale       = "locale"
 	settingEmbedding    = "embedding"
 	settingSubagent     = "subagent"
+	settingShell        = "shell"
 )
 
 // SubagentSettings is the persisted global sub-agent section.
@@ -28,6 +29,7 @@ type Settings struct {
 	Locale       string
 	Embedding    *embedding.Config
 	Subagent     *SubagentSettings
+	Shell        string
 }
 
 // LoadSettings reads settings from the DB with defaults.
@@ -56,6 +58,11 @@ func (db *DB) LoadSettings() (Settings, error) {
 	if err := db.loadSubagent(&s); err != nil {
 		return Settings{}, err
 	}
+	v, err := db.getSetting(settingShell)
+	if err != nil {
+		return Settings{}, err
+	}
+	s.Shell = v
 	return s, nil
 }
 
@@ -79,6 +86,9 @@ func (db *DB) SaveSettings(s Settings) error {
 		emb = n
 	}
 	if err := db.saveJSONSetting(settingEmbedding, emb); err != nil {
+		return err
+	}
+	if err := db.setSetting(settingShell, s.Shell); err != nil {
 		return err
 	}
 	return db.saveJSONSetting(settingSubagent, s.Subagent)

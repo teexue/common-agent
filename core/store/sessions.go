@@ -36,9 +36,6 @@ func (s *SessionStore) Save(sess *session.Session) error {
 		metaJSON = string(b)
 	}
 	userID := sess.UserID
-	if userID == "" {
-		userID = DefaultUserID
-	}
 	row := SessionRow{
 		ID:           sess.ID,
 		UserID:       userID,
@@ -151,9 +148,6 @@ func rowToSession(row SessionRow) (*session.Session, error) {
 		}
 	}
 	userID := row.UserID
-	if userID == "" {
-		userID = DefaultUserID
-	}
 	return &session.Session{
 		ID:        row.ID,
 		UserID:    userID,

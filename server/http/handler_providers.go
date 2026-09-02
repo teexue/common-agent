@@ -3,13 +3,11 @@ package httpapi
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
 
 	"github.com/gin-gonic/gin"
-	"gopkg.in/yaml.v3"
 
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/provider"
@@ -246,7 +244,7 @@ func (s *Server) handleProviderUpsert(c *gin.Context) {
 	}
 
 	home := filepath.Dir(s.agentsDir)
-	existingEnv, _ := existingProviderAPIKeyEnv(home, req.Name)
+	existingEnv, _ := config.LookupAPIKeyEnv(req.Name)
 	vendorEnv := ""
 	hasVendor := false
 	if v, ok := provider.LookupVendor(req.Name); ok {
@@ -329,33 +327,6 @@ func resolveProviderAPIKeyEnv(name, requested, existing, vendorEnv string, hasVe
 	return defaultAPIKeyEnv(name)
 }
 
-func existingProviderAPIKeyEnv(home, name string) (string, bool) {
-	if db := config.DB(); db != nil {
-		entries, err := db.ListProviderEntries()
-		if err != nil {
-			return "", false
-		}
-		entry, ok := entries[name]
-		if !ok || entry.APIKeyEnv == "" {
-			return "", false
-		}
-		return entry.APIKeyEnv, true
-	}
-	data, err := os.ReadFile(config.ProvidersFile(home))
-	if err != nil {
-		return "", false
-	}
-	var file provider.CatalogFile
-	if err := yaml.Unmarshal(data, &file); err != nil {
-		return "", false
-	}
-	entry, ok := file.Providers[name]
-	if !ok || entry.APIKeyEnv == "" {
-		return "", false
-	}
-	return entry.APIKeyEnv, true
-}
-
 func (s *Server) handleProviderDelete(c *gin.Context) {
 	name := c.Param("name")
 	if name == "" {
@@ -394,7 +365,7 @@ func (s *Server) reloadCatalog() error {
 	if s.stateDB != nil {
 		cat, err = s.stateDB.LoadCatalog(lookup)
 	} else {
-		cat, err = provider.LoadCatalog(config.ProvidersFile(home), lookup)
+		return fmt.Errorf("state.db is not open")
 	}
 	if err != nil {
 		return err

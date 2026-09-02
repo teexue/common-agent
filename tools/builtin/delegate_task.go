@@ -92,6 +92,7 @@ func spawnDeps(spawn loop.Spawn) subagent.Deps {
 		Approver:        spawn.Approver,
 		Store:           spawn.Store,
 		WorkDir:         spawn.WorkDir,
+		Shell:           spawn.Shell,
 		UserID:          spawn.UserID,
 		ParentSessionID: spawn.SessionID,
 		ParentAgent:     spawn.Agent,

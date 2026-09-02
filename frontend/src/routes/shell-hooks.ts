@@ -3,6 +3,7 @@ import { useNavigate } from "react-router"
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
 import { useAgentManager } from "@/hooks/use-agent-manager"
 import { useSessionStore } from "./session-store"
+import { useWorkspaceChat } from "./chat-context"
 import { fetchSession } from "@/lib/api"
 
 export function useSessionList() {
@@ -15,6 +16,7 @@ export function useShellNav() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const { sessions, remove } = useSessionStore()
   const agentMgr = useAgentManager()
+  const chat = useWorkspaceChat()
 
   useKeyboardShortcuts({
     onToggleSidebar: () => setSidebarCollapsed((v) => !v),
@@ -35,6 +37,11 @@ export function useShellNav() {
     [navigate]
   )
 
+  const handleNewSession = useCallback(() => {
+    chat.clear()
+    navigate("/")
+  }, [chat, navigate])
+
   return {
     navigate,
     sidebarCollapsed,
@@ -48,7 +55,7 @@ export function useShellNav() {
     onOpenApiDocs: () => navigate("/api-docs"),
     onOpenUsage: () => navigate("/usage"),
     onOpenAdmin: () => navigate("/admin"),
-    onNewSession: () => navigate("/"),
+    onNewSession: handleNewSession,
     sessions,
     onResumeSession: handleResumeSession,
     onDeleteSession: remove,

@@ -131,6 +131,7 @@ func (s *Server) SetShutdownCtx(ctx context.Context) {
 // SetStateDB attaches the SQLite store and initializes JWT services.
 func (s *Server) SetStateDB(db *store.DB) error {
 	s.stateDB = db
+	config.BindDB(db)
 	if s.svc != nil {
 		s.svc.StateDB = db
 	}
@@ -280,7 +281,7 @@ func (s *Server) resolveCLIKey(raw string) (auth.Identity, bool) {
 	}
 	// Ephemeral CLI keys are operator credentials: full access.
 	return auth.Identity{
-		UserID: auth.DefaultUserID,
+		UserID: kid,
 		KeyID:  kid,
 		Role:   store.RoleAdmin,
 		Scopes: []string{auth.ScopeAll},

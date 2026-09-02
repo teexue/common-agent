@@ -3,7 +3,7 @@ import type { ChatAction } from "./use-chat-state"
 import { parseSSELine } from "./use-chat-messages"
 import { dispatchSSEEvent } from "./chat-sse"
 
-async function processSSEStream(
+export async function processSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   entryId: string,
   dispatch: (action: ChatAction) => void

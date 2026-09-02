@@ -27,7 +27,7 @@ func savePending(t *testing.T, db *store.DB, id string) {
 	now := time.Now().UTC()
 	require.NoError(t, db.SaveKanban(&store.KanbanRow{
 		ID:        id,
-		UserID:    store.DefaultUserID,
+		UserID:    "usr_owner",
 		Title:     "item " + id,
 		Prompt:    "run it",
 		Agent:     "agt_demo",

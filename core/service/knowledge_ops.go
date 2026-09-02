@@ -129,7 +129,7 @@ func (s *Service) SearchKnowledge(ctx context.Context, query string, kbIDs []str
 	return s.Retriever.Search(ctx, knowledge.SearchOptions{Query: query, KBIDs: kbIDs, TopK: topK})
 }
 
-// GetEmbeddingSettings returns the embedding section of config.yaml.
+// GetEmbeddingSettings returns the embedding section of user settings.
 func (s *Service) GetEmbeddingSettings() (embedding.ConfigView, error) {
 	home := s.HomeDir
 	if home == "" {

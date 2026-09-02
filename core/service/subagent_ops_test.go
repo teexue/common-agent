@@ -20,6 +20,7 @@ import (
 
 func TestSaveAndGetSubagentSettings(t *testing.T) {
 	home := t.TempDir()
+	bindConfigDB(t, home)
 	svc := &service.Service{HomeDir: home}
 	err := svc.SaveSubagentSettings(config.SubagentView{
 		Enabled: false, MaxTurns: 7, MaxDepth: 2, Timeout: 15,

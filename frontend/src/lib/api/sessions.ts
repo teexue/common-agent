@@ -60,3 +60,15 @@ export async function updateSessionWorkdir(
   const data = (await res.json()) as { metadata?: Record<string, string> }
   return data.metadata ?? {}
 }
+
+/** Asks the server to cancel an in-flight run. No-ops when nothing is running. */
+export async function abortSession(id: string): Promise<boolean> {
+  const res = await fetch(`/v1/sessions/${encodeURIComponent(id)}/abort`, {
+    method: "POST",
+    headers: langHeaders(),
+  })
+  if (res.status === 404) return false
+  await ensureOK(res, "api.abortSessionFailed")
+  const data = (await res.json()) as { aborted?: boolean }
+  return !!data.aborted
+}

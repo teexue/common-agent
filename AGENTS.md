@@ -65,8 +65,8 @@ sdk/{ts,python}
 
 - **工具执行**：Agent `tool_execution.mode` 控制并行（流式，默认）或串行；`tool_execution.max_parallel` 限制并发（默认 4）
 - **测试 Mock**：用 `provider.MockProvider`（每步可设 `Text` / `Reasoning` / `ToolCalls`）和 `provider.EchoThenReply()`，无需真实 LLM
-- **配置目录**：`~/.common-agent/` — `config.yaml`（设置）、`providers.yaml`（供应商）、`credentials.yaml`（API Key）、`agents/*.yaml`（Agent 定义）。禁止提交 credentials 或 `.env`
-- **凭证**：`config.NewCredentialStore(home)` 创建线程安全 store，将其 `Lookup` 传给 `provider.LoadCatalog`；包级旧函数已废弃
+- **配置目录**：`~/.common-agent/` — `state.db`（设置、供应商、凭证、会话等）、`agents/*.yaml`（Agent 定义）。禁止提交 credentials 或 `.env`。升级时会一次性把旧的 `config.yaml` / `providers.yaml` / `credentials.yaml` / `mcp.yaml` 迁入 SQLite。
+- **凭证**：`config.NewCredentialStore(home)` 创建线程安全 store（读 `state.db`），将其 `Lookup` 传给 catalog；包级旧函数已废弃
 - **工具命名**：snake_case，全局唯一（如 `read_file`）。通过 `registry.Register()` 显式注册，禁止 `init()` 魔法注册
 - **Provider 解析**：`cmd` 层按名从 catalog 解析并创建具体 `provider.Provider`；core 只依赖接口
 - **HTTP 客户端**：Provider 使用 `provider.DefaultHTTPClient()`（120s 超时），禁止 `http.DefaultClient`
