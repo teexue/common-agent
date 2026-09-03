@@ -155,3 +155,16 @@ func TestUsageSummary_TotalsJSON(t *testing.T) {
 		t.Errorf("TotalTokens = %d, want 35", totals.TotalTokens())
 	}
 }
+
+func TestUsageTotals_AnthropicExclusiveCache(t *testing.T) {
+	totals := UsageTotals{
+		InputTokens: 50, OutputTokens: 20,
+		CacheReadTokens: 1000, CacheCreationTokens: 100,
+	}
+	if totals.PromptTokens() != 1150 {
+		t.Errorf("PromptTokens = %d, want 1150", totals.PromptTokens())
+	}
+	if totals.TotalTokens() != 1170 {
+		t.Errorf("TotalTokens = %d, want 1170", totals.TotalTokens())
+	}
+}

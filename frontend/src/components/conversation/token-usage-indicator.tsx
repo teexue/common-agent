@@ -4,6 +4,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { formatTokenCount } from "@/lib/format"
+import { promptTokenCount } from "@/lib/token-usage"
 import { TokenUsageRing } from "./token-usage-ring"
 import { TokenUsageTooltipBody } from "./token-usage-tooltip"
 
@@ -12,27 +13,33 @@ export interface SessionTokenUsage {
   outputTokens: number
   contextWindow: number
   cacheReadTokens?: number
-  /** Cumulative usage across every run of the session (optional legacy). */
+  cacheCreationTokens?: number
   totalInputTokens?: number
   totalOutputTokens?: number
+  totalCacheReadTokens?: number
+  totalCacheCreationTokens?: number
+}
+
+function fillTone(ratio: number): string {
+  if (ratio >= 0.9) return "text-destructive"
+  if (ratio >= 0.7) return "text-warning"
+  return "text-primary"
 }
 
 /**
- * Compact token usage gauge: a small ring showing how much of the model's
- * context window the most recent LLM request consumed, with totals in the
- * largest unit (M > K). Hover for the input/output breakdown.
+ * Compact gauge: last request vs the model context window. Cache tokens
+ * that Anthropic reports exclusive of input_tokens are included in the fill.
  */
 export function TokenUsageIndicator({ usage }: { usage: SessionTokenUsage }) {
   const { inputTokens, outputTokens, contextWindow } = usage
   if (contextWindow <= 0) return null
-  const used = inputTokens + outputTokens
+  const prompt = promptTokenCount(
+    inputTokens,
+    usage.cacheReadTokens ?? 0,
+    usage.cacheCreationTokens ?? 0
+  )
+  const used = prompt + outputTokens
   const ratio = Math.min(used / contextWindow, 1)
-  const tone =
-    ratio >= 0.9
-      ? "text-destructive"
-      : ratio >= 0.7
-        ? "text-warning"
-        : "text-primary"
   return (
     <Tooltip>
       <TooltipTrigger
@@ -41,7 +48,7 @@ export function TokenUsageIndicator({ usage }: { usage: SessionTokenUsage }) {
             type="button"
             className="flex h-7 items-center gap-1.5 rounded-lg px-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            <TokenUsageRing ratio={ratio} tone={tone} />
+            <TokenUsageRing ratio={ratio} tone={fillTone(ratio)} />
             <span className="font-mono text-[11px] tabular-nums">
               {formatTokenCount(used)}
               <span className="mx-0.5 text-muted-foreground/50">/</span>

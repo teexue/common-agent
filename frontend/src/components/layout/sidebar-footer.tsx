@@ -6,6 +6,7 @@ import {
   KanbanSquare,
   Layers,
   LogOut,
+  ScrollText,
   Settings,
   ShieldCheck,
   type LucideIcon,
@@ -20,6 +21,7 @@ interface SidebarFooterProps {
   onOpenKanban?: () => void
   onOpenApiDocs?: () => void
   onOpenUsage?: () => void
+  onOpenRequestLogs?: () => void
   onOpenAdmin?: () => void
 }
 
@@ -48,8 +50,13 @@ function WorkspaceNav({
   onOpenKanban,
   onOpenApiDocs,
   onOpenUsage,
-}: Pick<SidebarFooterProps, "onOpenKanban" | "onOpenApiDocs" | "onOpenUsage">) {
+  onOpenRequestLogs,
+}: Pick<
+  SidebarFooterProps,
+  "onOpenKanban" | "onOpenApiDocs" | "onOpenUsage" | "onOpenRequestLogs"
+>) {
   const { t } = useTranslation()
+  const isAdmin = useAuth().user?.role === "admin"
   return (
     <>
       {onOpenKanban && (
@@ -71,6 +78,13 @@ function WorkspaceNav({
           icon={Coins}
           label={t("layout.usage")}
           onClick={onOpenUsage}
+        />
+      )}
+      {isAdmin && onOpenRequestLogs && (
+        <SidebarNavButton
+          icon={ScrollText}
+          label={t("layout.requestLogs")}
+          onClick={onOpenRequestLogs}
         />
       )}
     </>
@@ -131,6 +145,7 @@ export function SidebarFooter(props: SidebarFooterProps) {
         onOpenKanban={props.onOpenKanban}
         onOpenApiDocs={props.onOpenApiDocs}
         onOpenUsage={props.onOpenUsage}
+        onOpenRequestLogs={props.onOpenRequestLogs}
       />
       <Separator className="my-1.5" />
       <SystemNav

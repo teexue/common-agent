@@ -70,6 +70,14 @@ const MetadataKeyUsageContextWindow = "usage.context_window"
 // cumulative session total.
 const MetadataKeyUsageOutputTokens = "usage.output_tokens"
 
+// MetadataKeyUsageLastCacheReadTokens stores prompt-cache hits of the most
+// recent LLM request (unlike MetadataKeyUsageCacheReadTokens, which is cumulative).
+const MetadataKeyUsageLastCacheReadTokens = "usage.last_cache_read_tokens"
+
+// MetadataKeyUsageLastCacheCreationTokens stores prompt-cache writes of the
+// most recent LLM request.
+const MetadataKeyUsageLastCacheCreationTokens = "usage.last_cache_creation_tokens"
+
 // SourceKanban marks sessions created by kanban task runs.
 const SourceKanban = "kanban"
 
@@ -191,11 +199,14 @@ func (s *Session) SetMetadata(key, value string) {
 }
 
 // SetLastUsage records the real provider token usage of the most recent LLM
-// request. msgCount must be the number of messages in the session at request
-// time (before any messages added after the response).
-func (s *Session) SetLastUsage(inputTokens, outputTokens, msgCount int) {
+// request, including prompt-cache hits and writes. msgCount must be the number
+// of messages in the session at request time (before any messages added after
+// the response).
+func (s *Session) SetLastUsage(inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, msgCount int) {
 	s.SetMetadata(MetadataKeyUsageInputTokens, strconv.Itoa(inputTokens))
 	s.SetMetadata(MetadataKeyUsageOutputTokens, strconv.Itoa(outputTokens))
+	s.SetMetadata(MetadataKeyUsageLastCacheReadTokens, strconv.Itoa(cacheReadTokens))
+	s.SetMetadata(MetadataKeyUsageLastCacheCreationTokens, strconv.Itoa(cacheCreationTokens))
 	s.SetMetadata(MetadataKeyUsageMsgCount, strconv.Itoa(msgCount))
 }
 
@@ -217,6 +228,8 @@ func (s *Session) ClearUsage() {
 	defer s.mu.Unlock()
 	delete(s.Metadata, MetadataKeyUsageInputTokens)
 	delete(s.Metadata, MetadataKeyUsageOutputTokens)
+	delete(s.Metadata, MetadataKeyUsageLastCacheReadTokens)
+	delete(s.Metadata, MetadataKeyUsageLastCacheCreationTokens)
 	delete(s.Metadata, MetadataKeyUsageMsgCount)
 	s.touch()
 }

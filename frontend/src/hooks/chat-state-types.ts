@@ -12,14 +12,15 @@ export interface ChatState {
   /** Token usage of the most recent LLM request (overwritten each run). */
   inputTokens: number
   outputTokens: number
-  /** Cumulative prompt cache hits/writes across the session (0 until reported). */
   cacheReadTokens: number
   cacheCreationTokens: number
   /** Effective model context window in tokens (0 until known). */
   contextWindow: number
-  /** Cumulative input/output tokens across every run of this session. */
+  /** Cumulative input/output/cache across every run of this session. */
   totalInputTokens: number
   totalOutputTokens: number
+  totalCacheReadTokens: number
+  totalCacheCreationTokens: number
 }
 
 export type ChatAction =

@@ -73,7 +73,7 @@ function LogsBody({
   )
 }
 
-/** Filterable list of audited LLM requests (no page shell; embed inside a hub tab).
+/** Filterable list of audited LLM requests (no page shell).
  * `initialSession` seeds the session filter (used by deep links like
  * /request-logs?session=...). */
 export function RequestLogsPanel({

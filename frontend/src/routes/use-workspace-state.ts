@@ -42,8 +42,11 @@ export function useWorkspaceDerived(
     outputTokens: chat.outputTokens,
     contextWindow: chat.contextWindow > 0 ? chat.contextWindow : listWindow,
     cacheReadTokens: chat.cacheReadTokens,
+    cacheCreationTokens: chat.cacheCreationTokens,
     totalInputTokens: chat.totalInputTokens,
     totalOutputTokens: chat.totalOutputTokens,
+    totalCacheReadTokens: chat.totalCacheReadTokens,
+    totalCacheCreationTokens: chat.totalCacheCreationTokens,
   }
   return { hasAgents, agentLocked, status, visionEnabled, tokenUsage }
 }

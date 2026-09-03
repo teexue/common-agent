@@ -224,6 +224,8 @@ function baseState(): ChatState {
     contextWindow: 0,
     totalInputTokens: 0,
     totalOutputTokens: 0,
+    totalCacheReadTokens: 0,
+    totalCacheCreationTokens: 0,
   }
 }
 
@@ -368,16 +370,23 @@ describe("chatReducer token usage", () => {
       metadata: {
         "usage.input_tokens": "1302",
         "usage.output_tokens": "1900",
+        "usage.last_cache_read_tokens": "57500",
+        "usage.last_cache_creation_tokens": "100",
         "usage.cache_read_tokens": "58300",
         "usage.cache_creation_tokens": "300",
         "usage.context_window": "200000",
+        "usage.total_input_tokens": "1604",
+        "usage.total_output_tokens": "3300",
       },
     })
     expect(state.inputTokens).toBe(1302)
     expect(state.outputTokens).toBe(1900)
-    expect(state.cacheReadTokens).toBe(58300)
-    expect(state.cacheCreationTokens).toBe(300)
+    expect(state.cacheReadTokens).toBe(57500)
+    expect(state.cacheCreationTokens).toBe(100)
+    expect(state.totalCacheReadTokens).toBe(58300)
+    expect(state.totalCacheCreationTokens).toBe(300)
     expect(state.contextWindow).toBe(200000)
+    expect(state.totalInputTokens).toBe(1604)
   })
 
   it("ignores malformed usage metadata", () => {

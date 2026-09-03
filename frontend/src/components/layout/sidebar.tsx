@@ -16,6 +16,7 @@ interface SidebarProps {
   onOpenKanban?: () => void
   onOpenApiDocs?: () => void
   onOpenUsage?: () => void
+  onOpenRequestLogs?: () => void
   onOpenAdmin?: () => void
   onNewSession?: () => void
   sessions?: SessionMeta[]
@@ -75,14 +76,33 @@ function NewSessionButton({ onClick }: { onClick?: () => void }) {
   )
 }
 
-export function Sidebar({
-  collapsed,
+export function Sidebar(props: SidebarProps) {
+  if (props.collapsed) {
+    return (
+      <CollapsedSidebar
+        onToggle={props.onToggle}
+        onOpenSettings={props.onOpenSettings}
+        onOpenManage={props.onOpenManage}
+        onOpenKanban={props.onOpenKanban}
+        onOpenApiDocs={props.onOpenApiDocs}
+        onOpenUsage={props.onOpenUsage}
+        onOpenRequestLogs={props.onOpenRequestLogs}
+        onOpenAdmin={props.onOpenAdmin}
+        onNewSession={props.onNewSession}
+      />
+    )
+  }
+  return <ExpandedSidebar {...props} />
+}
+
+function ExpandedSidebar({
   onToggle,
   onOpenSettings,
   onOpenManage,
   onOpenKanban,
   onOpenApiDocs,
   onOpenUsage,
+  onOpenRequestLogs,
   onOpenAdmin,
   onNewSession,
   sessions = [],
@@ -91,21 +111,6 @@ export function Sidebar({
   onResumeSession,
   onDeleteSession,
 }: SidebarProps) {
-  if (collapsed) {
-    return (
-      <CollapsedSidebar
-        onToggle={onToggle}
-        onOpenSettings={onOpenSettings}
-        onOpenManage={onOpenManage}
-        onOpenKanban={onOpenKanban}
-        onOpenApiDocs={onOpenApiDocs}
-        onOpenUsage={onOpenUsage}
-        onOpenAdmin={onOpenAdmin}
-        onNewSession={onNewSession}
-      />
-    )
-  }
-
   return (
     <div className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-border bg-sidebar">
       <SidebarBrand onToggle={onToggle} />
@@ -126,6 +131,7 @@ export function Sidebar({
         onOpenKanban={onOpenKanban}
         onOpenApiDocs={onOpenApiDocs}
         onOpenUsage={onOpenUsage}
+        onOpenRequestLogs={onOpenRequestLogs}
         onOpenAdmin={onOpenAdmin}
       />
     </div>

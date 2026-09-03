@@ -185,7 +185,7 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 	// Persist the real prompt token count reported by the provider. This is
 	// the authoritative usage of the request that just completed.
 	if tokens.input > 0 {
-		tc.Config.Session.SetLastUsage(tokens.input, tokens.output, reqMsgCount)
+		tc.Config.Session.SetLastUsage(tokens.input, tokens.output, tokens.cacheRead, tokens.cacheCreation, reqMsgCount)
 	}
 	if cancelled {
 		emitCancelled(tc.Out, doneStats{

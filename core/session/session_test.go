@@ -131,10 +131,13 @@ func TestLastUsage(t *testing.T) {
 	if in != 0 || out != 0 || n != 0 {
 		t.Fatalf("initial usage = %d/%d/%d, want 0/0/0", in, out, n)
 	}
-	s.SetLastUsage(12345, 678, 42)
+	s.SetLastUsage(12345, 678, 80, 20, 42)
 	in, out, n = s.LastUsage()
 	if in != 12345 || out != 678 || n != 42 {
 		t.Fatalf("usage = %d/%d/%d, want 12345/678/42", in, out, n)
+	}
+	if got := s.GetMetadata()[session.MetadataKeyUsageLastCacheReadTokens]; got != "80" {
+		t.Fatalf("last cache read = %q, want 80", got)
 	}
 	s.ClearUsage()
 	in, out, n = s.LastUsage()

@@ -6,6 +6,7 @@ import {
   KanbanSquare,
   Layers,
   Plus,
+  ScrollText,
   Settings,
   ShieldCheck,
 } from "lucide-react"
@@ -25,6 +26,7 @@ export interface CollapsedSidebarProps {
   onOpenKanban?: () => void
   onOpenApiDocs?: () => void
   onOpenUsage?: () => void
+  onOpenRequestLogs?: () => void
   onOpenAdmin?: () => void
   onNewSession?: () => void
 }
@@ -57,27 +59,19 @@ function CollapsedIconButton({
   )
 }
 
-function CollapsedNavItems({
-  onOpenSettings,
-  onOpenManage,
+function CollapsedWorkspaceIcons({
   onOpenKanban,
   onOpenApiDocs,
   onOpenUsage,
-  onOpenAdmin,
-}: Omit<CollapsedSidebarProps, "onToggle" | "onNewSession">) {
+  onOpenRequestLogs,
+}: Pick<
+  CollapsedSidebarProps,
+  "onOpenKanban" | "onOpenApiDocs" | "onOpenUsage" | "onOpenRequestLogs"
+>) {
   const { t } = useTranslation()
-  const { user } = useAuth()
-  const isAdmin = user?.role === "admin"
+  const isAdmin = useAuth().user?.role === "admin"
   return (
     <>
-      {onOpenManage && (
-        <CollapsedIconButton
-          tooltip={t("layout.manage")}
-          onClick={onOpenManage}
-        >
-          <Layers className="h-3.5 w-3.5" />
-        </CollapsedIconButton>
-      )}
       {onOpenKanban && (
         <CollapsedIconButton
           tooltip={t("layout.kanban")}
@@ -99,6 +93,45 @@ function CollapsedNavItems({
           <Coins className="h-3.5 w-3.5" />
         </CollapsedIconButton>
       )}
+      {isAdmin && onOpenRequestLogs && (
+        <CollapsedIconButton
+          tooltip={t("layout.requestLogs")}
+          onClick={onOpenRequestLogs}
+        >
+          <ScrollText className="h-3.5 w-3.5" />
+        </CollapsedIconButton>
+      )}
+    </>
+  )
+}
+
+function CollapsedNavItems({
+  onOpenSettings,
+  onOpenManage,
+  onOpenKanban,
+  onOpenApiDocs,
+  onOpenUsage,
+  onOpenRequestLogs,
+  onOpenAdmin,
+}: Omit<CollapsedSidebarProps, "onToggle" | "onNewSession">) {
+  const { t } = useTranslation()
+  const isAdmin = useAuth().user?.role === "admin"
+  return (
+    <>
+      {onOpenManage && (
+        <CollapsedIconButton
+          tooltip={t("layout.manage")}
+          onClick={onOpenManage}
+        >
+          <Layers className="h-3.5 w-3.5" />
+        </CollapsedIconButton>
+      )}
+      <CollapsedWorkspaceIcons
+        onOpenKanban={onOpenKanban}
+        onOpenApiDocs={onOpenApiDocs}
+        onOpenUsage={onOpenUsage}
+        onOpenRequestLogs={onOpenRequestLogs}
+      />
       {isAdmin && onOpenAdmin && (
         <CollapsedIconButton tooltip={t("layout.admin")} onClick={onOpenAdmin}>
           <ShieldCheck className="h-3.5 w-3.5" />
@@ -121,6 +154,7 @@ export function CollapsedSidebar({
   onOpenKanban,
   onOpenApiDocs,
   onOpenUsage,
+  onOpenRequestLogs,
   onOpenAdmin,
   onNewSession,
 }: CollapsedSidebarProps) {
@@ -149,6 +183,7 @@ export function CollapsedSidebar({
         onOpenKanban={onOpenKanban}
         onOpenApiDocs={onOpenApiDocs}
         onOpenUsage={onOpenUsage}
+        onOpenRequestLogs={onOpenRequestLogs}
         onOpenAdmin={onOpenAdmin}
       />
     </div>

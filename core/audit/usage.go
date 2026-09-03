@@ -27,9 +27,21 @@ func (u *UsageTotals) add(rec RequestRecord) {
 	u.CacheCreationTokens += rec.CacheCreationInputTokens
 }
 
-// TotalTokens returns input + output tokens (cache reads are part of input).
+// PromptTokens is the prompt volume after accounting for provider cache
+// reporting: Anthropic lists cache exclusive of input_tokens, OpenAI
+// includes it. Cache that exceeds input is treated as extra tokens.
+func (u UsageTotals) PromptTokens() int {
+	cache := u.CacheReadTokens + u.CacheCreationTokens
+	if cache > u.InputTokens {
+		return u.InputTokens + cache
+	}
+	return u.InputTokens
+}
+
+// TotalTokens returns prompt + output tokens (cache exclusive of input is
+// included so Anthropic volume is not under-counted).
 func (u UsageTotals) TotalTokens() int {
-	return u.InputTokens + u.OutputTokens
+	return u.PromptTokens() + u.OutputTokens
 }
 
 // UsageDay aggregates usage for a single calendar day.

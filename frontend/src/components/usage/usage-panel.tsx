@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Coins, Loader2, RefreshCw } from "lucide-react"
+import { Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/select"
 import { EmptyState } from "@/components/shared/empty-state"
 import { fetchUsageSummary } from "@/lib/api"
-import { formatTokenCount } from "@/lib/format"
 import { useAuth } from "@/lib/auth"
 import { UsageBarChart, UsageTable } from "./usage-tables"
-import type { UsageSummary, UsageTotals } from "@/types/agent"
+import { UsageOverview } from "./usage-overview"
+import type { UsageSummary } from "@/types/agent"
 
 const DAY_VALUES = [0, 1, 7, 30] as const
 
@@ -111,41 +111,6 @@ function UsageToolbar({
   )
 }
 
-function UsageCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-2.5 rounded-xl border border-border bg-muted/50 p-2.5">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-        <Coins className="h-3.5 w-3.5 text-primary" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[10px] text-muted-foreground">{label}</p>
-        <p className="font-mono text-xs font-medium text-foreground">{value}</p>
-      </div>
-    </div>
-  )
-}
-
-function UsageTotalsRow({ total }: { total: UsageTotals }) {
-  const { t } = useTranslation()
-  return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <UsageCard
-        label={t("usage.totalTokens")}
-        value={formatTokenCount(total.input_tokens + total.output_tokens)}
-      />
-      <UsageCard
-        label={t("usage.inputTokens")}
-        value={formatTokenCount(total.input_tokens)}
-      />
-      <UsageCard
-        label={t("usage.outputTokens")}
-        value={formatTokenCount(total.output_tokens)}
-      />
-      <UsageCard label={t("usage.requests")} value={String(total.requests)} />
-    </div>
-  )
-}
-
 function UsageSection({
   title,
   children,
@@ -167,7 +132,7 @@ function UsageReport({ summary }: { summary: UsageSummary }) {
   const { t } = useTranslation()
   return (
     <div className="space-y-4">
-      <UsageTotalsRow total={summary.total} />
+      <UsageOverview total={summary.total} />
       <UsageSection title={t("usage.daily")}>
         <UsageBarChart days={summary.days} />
       </UsageSection>
@@ -194,7 +159,7 @@ function UsageReport({ summary }: { summary: UsageSummary }) {
   )
 }
 
-/** Aggregate token consumption panel (embeds inside the Admin hub). */
+/** Aggregate token consumption report. Admins see every user; others see own. */
 export function UsagePanel() {
   const { t } = useTranslation()
   const { user } = useAuth()

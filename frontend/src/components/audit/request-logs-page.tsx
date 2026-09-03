@@ -5,8 +5,7 @@ import { PageHeader } from "@/components/shared/page-header"
 import { PageMain, PageShell } from "@/components/shared/page-shell"
 import { RequestLogsPanel } from "./request-logs-panel"
 
-/** Standalone route wrapper for the audit log (also embedded in the Admin hub).
- * Supports a `?session=` deep link to pre-filter by session id. */
+/** Standalone request-log page. Supports `?session=` to pre-filter. */
 export function RequestLogsPage() {
   const { t } = useTranslation()
   const [searchParams] = useSearchParams()

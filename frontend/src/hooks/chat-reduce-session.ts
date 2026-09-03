@@ -9,6 +9,8 @@ const EMPTY_USAGE = {
   contextWindow: 0,
   totalInputTokens: 0,
   totalOutputTokens: 0,
+  totalCacheReadTokens: 0,
+  totalCacheCreationTokens: 0,
 }
 
 function applyStreamUsage(
@@ -23,6 +25,8 @@ function applyStreamUsage(
   | "contextWindow"
   | "totalInputTokens"
   | "totalOutputTokens"
+  | "totalCacheReadTokens"
+  | "totalCacheCreationTokens"
 > {
   return {
     inputTokens:
@@ -41,6 +45,10 @@ function applyStreamUsage(
     totalInputTokens: state.totalInputTokens + (action.totalInputTokens ?? 0),
     totalOutputTokens:
       state.totalOutputTokens + (action.totalOutputTokens ?? 0),
+    totalCacheReadTokens:
+      state.totalCacheReadTokens + (action.cacheReadTokens ?? 0),
+    totalCacheCreationTokens:
+      state.totalCacheCreationTokens + (action.cacheCreationTokens ?? 0),
   }
 }
 

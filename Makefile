@@ -1,5 +1,5 @@
 .PHONY: all build frontend backend clean release \
-	lint check check-standards test test-integration \
+	lint check check-standards test test-integration ensure-dist \
 	build-darwin-amd64 build-darwin-arm64 \
 	build-linux-amd64 build-linux-arm64 \
 	build-windows-amd64 build-windows-arm64
@@ -21,7 +21,13 @@ all: build
 # After check-standards is green, build must depend on check.
 build: check frontend backend
 
-lint:
+# go:embed all:dist in cmd/static.go requires the directory to exist and
+# contain at least one file. Frontend build replaces this with real assets.
+ensure-dist:
+	@mkdir -p cmd/dist
+	@touch cmd/dist/.keep
+
+lint: ensure-dist
 	go vet ./...
 	pnpm --dir frontend exec eslint src --max-warnings 0
 	pnpm --dir frontend run format:check
@@ -31,24 +37,25 @@ check-standards:
 
 check: lint check-standards
 
-test:
+test: ensure-dist
 	go test ./...
 	pnpm --dir frontend test
 
-test-integration:
+test-integration: ensure-dist
 	go test -tags=integration ./test/integration/...
 
 frontend:
 	pnpm --dir frontend run build
 
-backend:
+backend: ensure-dist
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY) $(PKG)
 
 clean:
-	rm -rf $(BIN_DIR)/ cmd/dist/*
-	@touch cmd/dist/.gitkeep
+	rm -rf $(BIN_DIR)/ cmd/dist
 
-# ── Cross-compile helpers ─────────────────────────────────────────
+build-darwin-amd64 build-darwin-arm64 \
+build-linux-amd64 build-linux-arm64 \
+build-windows-amd64 build-windows-arm64: ensure-dist
 
 define GO_CROSS
 	CGO_ENABLED=$(CGO) GOOS=$(1) GOARCH=$(2) \

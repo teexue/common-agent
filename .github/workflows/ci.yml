@@ -34,6 +34,9 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm --dir frontend install --frozen-lockfile
 
+      - name: Ensure cmd/dist for go embed
+        run: make ensure-dist
+
       - name: Check
         run: make check
 
@@ -49,6 +52,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
+
+      - name: Ensure cmd/dist for go embed
+        run: make ensure-dist
 
       - uses: golangci/golangci-lint-action@v8
         with:

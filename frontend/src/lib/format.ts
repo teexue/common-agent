@@ -73,19 +73,7 @@ function trimDecimal(v: number): string {
   return v.toFixed(1).replace(/\.0$/, "")
 }
 
-/**
- * Percentage of input tokens served from the prompt cache.
- * Cache-hit tokens count towards total input, so the share is
- * cached / (cached + fresh). Returns 0 when there is no input at all.
- */
-export function cacheHitPercent(
-  cachedTokens: number,
-  freshTokens: number
-): number {
-  const total = cachedTokens + freshTokens
-  if (total <= 0) return 0
-  return Math.round((cachedTokens / total) * 100)
-}
+export { cacheHitPercent } from "./token-usage"
 
 export function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr)

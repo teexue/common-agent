@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from "vitest"
 
 import i18n from "@/i18n"
 import {
-  cacheHitPercent,
   formatParameterSize,
   formatRelativeTime,
   formatTimestamp,
@@ -53,14 +52,5 @@ describe("format i18n", () => {
     expect(formatParameterSize("3B")).toBe("3B")
     expect(formatParameterSize("8x7B")).toBe("8x7B")
     expect(formatParameterSize("")).toBe("")
-  })
-
-  it("cacheHitPercent uses total input (cached + fresh) as denominator", () => {
-    // Real-world case: 57.5K cached vs 302 fresh input → ~99%, not 19000%+.
-    expect(cacheHitPercent(57_500, 302)).toBe(99)
-    expect(cacheHitPercent(100, 0)).toBe(100)
-    expect(cacheHitPercent(250, 250)).toBe(50)
-    expect(cacheHitPercent(0, 302)).toBe(0)
-    expect(cacheHitPercent(0, 0)).toBe(0)
   })
 })
