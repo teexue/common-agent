@@ -25,32 +25,31 @@
   </tr>
   <tr>
     <td align="center"><sub>资源管理 — Agent、工具、技能、知识库、提供商、MCP</sub></td>
-    <td align="center"><sub>看板 — 任务流转与人工审核</sub></td>
+    <td align="center"><sub>看板 — 入队执行，完成后待审核</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="screenshots/settings.jpg" alt="设置"/></td>
     <td width="50%"><img src="screenshots/admin.jpg" alt="管理后台"/></td>
   </tr>
   <tr>
-    <td align="center"><sub>设置 — 主题、语言、工作目录与背景</sub></td>
-    <td align="center"><sub>管理后台 — 用户、API Key、监控与审计</sub></td>
+    <td align="center"><sub>设置 — 外观、工作目录与运行偏好</sub></td>
+    <td align="center"><sub>管理后台 — 用户、API Key 与进程指标</sub></td>
   </tr>
 </table>
 
 ## 功能
 
-- **多种使用方式** — 内置 Web 界面、HTTP SSE 接口、gRPC 流式接口，以及 TypeScript / Python SDK
-- **配置驱动 Agent** — 一份 YAML 定义系统提示词、模型、工具与权限；也可复制已有 Agent 再调整
-- **多模型提供商** — 支持 OpenAI 兼容接口（DeepSeek、Moonshot 等）、Anthropic，以及本地 Ollama，可按 Agent 切换
-- **内置工具集** — 文件读写、目录浏览、内容搜索、Shell 命令、网页抓取等，开箱即用
-- **MCP 扩展** — 接入 MCP Server 外部工具，全局或按 Agent 配置
-- **权限与审批** — 细粒度工具权限策略，危险操作需人工确认后执行
-- **会话管理** — 对话持久化，支持多会话切换与历史回放；可为会话指定工作目录
-- **看板** — 任务卡片式管理，系统自动处理看板任务，完成后待人工审核，审核反馈可驱动重跑
-- **知识库** — 文档导入与检索，Agent 回答时自动引用
-- **技能系统** — 可复用的技能包（SKILL.md），按需加载扩展 Agent 能力
-- **Web 界面** — 会话、资源管理、主题切换、自定义背景（含动态壁纸）等
-- **可观测与审计** — 运行事件、健康检查与指标，支持审计查询
+- **接入方式** — 默认 Web 控制台；也可用终端对话、一次性命令行运行、HTTP SSE，以及 TypeScript / Python SDK；gRPC 需显式开启
+- **Agent 配置** — 每个助手一份 YAML：系统提示词、模型、工具白名单、审批与知识库；提供商、凭证、全局 MCP 和偏好设置存在本地 SQLite。界面可复制已有 Agent 再改
+- **模型提供商** — 内置 OpenAI、Anthropic、Moonshot、DeepSeek、智谱、通义、Ollama（本地与 Cloud）等预设，也可填写兼容端点；按 Agent 切换
+- **工具与 MCP** — 文件读写与编辑、目录、搜索、Shell、网页抓取、查询时间；可委派子 Agent。全局 MCP 在设置里配置，Agent YAML 可按助手覆盖
+- **工具审批** — 按工具名设置自动通过或拒绝，未列出的调用需人工确认后执行
+- **会话与压缩** — 对话持久化、多会话切换，会话可指定工作目录；用量接近上下文窗口时自动压缩
+- **看板** — 任务入队后由运行时执行，成功后进入待审核；拒绝可带反馈重跑，失败可重新入队
+- **知识库** — 导入文档并做向量检索，Agent 通过工具按需搜索
+- **技能** — SKILL.md 技能包（全局或按 Agent）；先提供目录，完整说明按需载入
+- **用量与日志** — Token 消耗按日、模型、会话汇总；管理员可查询每次 LLM 请求。顶栏有健康状态，管理后台有进程指标
+- **多用户** — 登录与角色；API Key 带权限范围
 - **国际化** — 中英文界面与消息
 
 ## 快速开始
