@@ -2,6 +2,7 @@
   <h1>Common Agent</h1>
   <p><strong>面向生产环境的通用 Agent Runtime 基座</strong></p>
   <p>
+    <a href="https://github.com/teexue/common-agent/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/teexue/common-agent?label=release"/></a>
     <img alt="Go" src="https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go"/>
     <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react"/>
     <img alt="License" src="https://img.shields.io/badge/License-MIT-yellow"/>
@@ -52,10 +53,43 @@
 - **多用户** — 登录与角色；API Key 带权限范围
 - **国际化** — 中英文界面与消息
 
-## 快速开始
+## 快速使用
+
+从 [Releases](https://github.com/teexue/common-agent/releases/latest) 下载对应平台的二进制，无需安装 Go 或 Node.js。无参数启动即打开 Web 控制台（默认 `http://localhost:8080`）。浏览器里注册第一个账户，该用户会成为管理员；随后在设置里填写模型提供商与 API Key 即可对话。关掉运行窗口或进程后服务会停止。
+
+按系统选择文件：
+
+| 系统 | 架构 | 文件 |
+|------|------|------|
+| Windows | x64 | `agent-server-windows-amd64.exe` |
+| Windows | ARM | `agent-server-windows-arm64.exe` |
+| macOS | Apple 芯片 | `agent-server-darwin-arm64` |
+| macOS | Intel | `agent-server-darwin-amd64` |
+| Linux | x64 | `agent-server-linux-amd64` |
+| Linux | ARM | `agent-server-linux-arm64` |
+
+### Windows
+
+双击 `.exe`。会弹出一个控制台窗口，保持打开，浏览器访问 [http://localhost:8080](http://localhost:8080)。
+
+若 SmartScreen 拦截，选「更多信息」再「仍要运行」。
+
+### macOS / Linux
+
+```bash
+chmod +x agent-server-darwin-arm64   # 换成你下载的文件名
+./agent-server-darwin-arm64
+```
+
+浏览器打开 [http://localhost:8080](http://localhost:8080)。macOS 若提示无法打开，在「系统设置 → 隐私与安全性」里允许，或执行 `xattr -d com.apple.quarantine agent-server-darwin-arm64` 后再运行。
+
+换端口：`./agent-server-linux-amd64 -addr :8090`。
+
+## 从源码构建
 
 ```bash
 make                            # 构建（需要 Go 和 Node.js）
-./bin/agent-server config init  # 初始化：配置模型提供商与 API Key
+./bin/agent-server config init  # 可选：命令行配置模型提供商与 API Key
 ./bin/agent-server              # 启动 Web 界面（默认 :8080）
 ```
+
