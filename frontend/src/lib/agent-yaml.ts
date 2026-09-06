@@ -39,7 +39,7 @@ export const EMPTY_FORM: AgentFormData = {
   systemPrompt: "You are a helpful assistant.",
   tools: [],
   maxTurns: 0,
-  maxTokens: 8000,
+  maxTokens: 0,
   execMode: "parallel",
   maxParallel: 4,
   autoApprove: [],

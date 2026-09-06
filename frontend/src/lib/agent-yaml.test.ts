@@ -1,6 +1,27 @@
 import { describe, expect, it } from "vitest"
 import { EMPTY_FORM, formDataToYaml } from "./agent-yaml"
 
+describe("formDataToYaml max_tokens", () => {
+  const base = {
+    ...EMPTY_FORM,
+    name: "demo",
+    provider: "openai",
+    model: "gpt-4o",
+    tools: ["echo"],
+  }
+
+  it("defaults to auto (0) and omits max_tokens", () => {
+    expect(EMPTY_FORM.maxTokens).toBe(0)
+    expect(formDataToYaml(base)).not.toContain("max_tokens:")
+  })
+
+  it("emits max_tokens when set", () => {
+    expect(formDataToYaml({ ...base, maxTokens: 16000 })).toContain(
+      "max_tokens: 16000"
+    )
+  })
+})
+
 describe("formDataToYaml optimize block", () => {
   const base = {
     ...EMPTY_FORM,
