@@ -3,19 +3,11 @@ package main
 import (
 	"fmt"
 	"log/slog"
-	"os"
 
-	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/config"
-	"github.com/teexue/common-agent/core/embedding"
 	"github.com/teexue/common-agent/core/i18n"
-	"github.com/teexue/common-agent/core/knowledge"
-	"github.com/teexue/common-agent/core/loop"
 	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/store"
-	"github.com/teexue/common-agent/core/subagent"
-	"github.com/teexue/common-agent/tools/builtin"
-	"github.com/teexue/common-agent/tools/registry"
 )
 
 type runtimePaths struct {
@@ -83,46 +75,4 @@ func printPaths(paths runtimePaths) {
 	fmt.Println(i18n.T("cli.paths.home", "path", paths.home))
 	fmt.Println(i18n.T("cli.paths.agents", "path", paths.agentsDir))
 	fmt.Println(i18n.T("cli.paths.state", "path", store.StateFile(paths.home)))
-}
-
-// registerRuntimeTools registers knowledge tools backed by the user's
-// home directory, mirroring the server wiring so CLI runs (run / chat) support
-// agents that reference them. Non-fatal: failures are logged and skipped.
-func registerRuntimeTools(reg *registry.Registry, paths runtimePaths, settings config.Settings, creds *config.CredentialStore, logger *slog.Logger) {
-	kbMgr, err := knowledge.NewManager(config.KnowledgeDir(paths.home))
-	if err != nil {
-		logger.Warn("log.knowledge.open", "error", err)
-		return
-	}
-	emb := runtimeEmbedder(settings, creds, logger)
-	builtin.RegisterKnowledge(reg, knowledge.NewRuntime(kbMgr, emb))
-}
-
-func runtimeEmbedder(settings config.Settings, creds *config.CredentialStore, logger *slog.Logger) embedding.Embedder {
-	if settings.Embedding == nil {
-		return nil
-	}
-	lookup := func(k string) string { return os.Getenv(k) }
-	if creds != nil {
-		lookup = creds.Lookup
-	}
-	emb, err := embedding.New(*settings.Embedding, lookup)
-	if err != nil {
-		logger.Warn("log.embedding.init_failed", "error", err)
-		return nil
-	}
-	return emb
-}
-
-func wireSubagent(a *agent.Agent, settings config.Settings, reg *registry.Registry) loop.SubagentLimits {
-	view := settings.SubagentView()
-	if reg != nil {
-		if _, ok := reg.Get(subagent.ToolName); ok {
-			subagent.ApplyToAgent(a, view.Enabled)
-		}
-	}
-	return loop.SubagentLimits{
-		Enabled: view.Enabled, MaxTurns: view.MaxTurns,
-		MaxDepth: config.DefaultSubagentMaxDepth, Timeout: view.Timeout,
-	}
 }

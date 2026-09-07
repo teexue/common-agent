@@ -7,7 +7,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/teexue/common-agent/core/agent"
+	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/store"
@@ -95,7 +95,7 @@ func sessionsResume(args []string, logger *slog.Logger) {
 		os.Exit(1)
 	}
 
-	catalog, _, stateDB, err := bootstrapRuntime(paths, *mock, logger)
+	catalog, creds, stateDB, err := bootstrapRuntime(paths, *mock, logger)
 	if err != nil {
 		logger.Error("log.cmd.bootstrap", "error", err)
 		os.Exit(1)
@@ -113,27 +113,32 @@ func sessionsResume(args []string, logger *slog.Logger) {
 		os.Exit(1)
 	}
 
-	a, err := agent.LoadByName(paths.agentsDir, service.NormalizeAgentName(loaded.Agent))
+	settings, err := config.LoadSettings(paths.home)
 	if err != nil {
-		logger.Error("log.agent.load", "error", err)
+		logger.Error("log.config.load_settings", "error", err)
 		os.Exit(1)
 	}
 
-	p, err := resolveProvider(catalog, *mock)(a)
-	if err != nil {
-		logger.Error("log.provider.create", "error", err)
-		os.Exit(1)
+	agentRef := service.NormalizeAgentName(loaded.Agent)
+	reg := newRegistry("")
+	svc := wireCLIService(cliServiceConfig{
+		paths: paths, reg: reg, catalog: catalog,
+		creds: creds, stateDB: stateDB, settings: settings,
+		mock: *mock, logger: logger,
+	})
+	// Resolve to the stable ID so /agent marking and later PrepareRun calls
+	// attribute sessions consistently.
+	agentName := agentRef
+	if a, err := svc.GetAgent(agentRef); err == nil {
+		agentName = a.ID
 	}
 
 	state := &chatState{
-		catalog:  catalog,
-		mock:     *mock,
-		paths:    paths,
-		agent:    a,
-		provider: p,
-		sess:     loaded,
-		reg:      newRegistry(""),
-		store:    sessStore,
+		svc:   svc,
+		paths: paths,
+		agent: agentName,
+		sess:  loaded,
+		reg:   reg,
 	}
 
 	fmt.Println(tui.Success(i18n.T("cli.sessions.resumed", "id", loaded.ID, "agent", loaded.Agent)))
@@ -146,8 +151,10 @@ func sessionsResume(args []string, logger *slog.Logger) {
 		os.Exit(1)
 	}
 	defer rl.Close()
+	state.readline = rl
+	defer withSignalContext(state)()
 
-	runChatLoop(rl, state)
+	runChatLoop(state)
 }
 
 func sessionsDelete(args []string, logger *slog.Logger) {

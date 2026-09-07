@@ -62,9 +62,7 @@ function closeStreaming(
     return {
       ...m,
       isStreaming: false,
-      outputTruncated: isTarget
-        ? !!action.truncated
-        : m.outputTruncated,
+      outputTruncated: isTarget ? !!action.truncated : m.outputTruncated,
       usage:
         isTarget && (action.inputTokens || action.outputTokens)
           ? {

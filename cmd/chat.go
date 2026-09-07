@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -16,26 +17,23 @@ import (
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/loop"
-	"github.com/teexue/common-agent/core/permission"
-	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
-	"github.com/teexue/common-agent/core/store"
 	"github.com/teexue/common-agent/core/tui"
 	"github.com/teexue/common-agent/tools/registry"
 )
 
+// chatState is the REPL-scoped wiring: one shared Service plus the currently
+// selected agent and session handles. Per-turn state (provider, policy, MCP,
+// skills) is rebuilt by PrepareRun each turn, matching the Web path.
 type chatState struct {
-	catalog  *provider.Catalog
-	mock     bool
+	svc      *service.Service
 	paths    runtimePaths
-	agent    *agent.Agent
-	provider provider.Provider
-	sess     *session.Session
+	agent    string
+	sess     *session.Session // nil = start a new session on the next turn
 	reg      *registry.Registry
-	store    session.Store
-	subagent loop.SubagentLimits
-	shell    string
+	readline *readline.Instance
+	sigCtx   context.Context // SIGINT/SIGTERM-cancelled base for run contexts
 }
 
 func runChat(args []string, logger *slog.Logger) {
@@ -69,18 +67,20 @@ func runChat(args []string, logger *slog.Logger) {
 		name = settings.DefaultAgent
 	}
 
-	state, err := newChatState(catalog, *mock, paths, name, stateDB)
+	reg := newRegistry("")
+	svc := wireCLIService(cliServiceConfig{
+		paths: paths, reg: reg, catalog: catalog,
+		creds: creds, stateDB: stateDB, settings: settings,
+		mock: *mock, logger: logger,
+	})
+
+	// Resolve the agent up front so a bad name fails before the REPL starts;
+	// later turns re-resolve through PrepareRun like the Web path does.
+	a, err := svc.GetAgent(name)
 	if err != nil {
-		logger.Error("log.chat.init", "error", err)
+		logger.Error("log.agent.load", "error", err)
 		os.Exit(1)
 	}
-	if !*mock {
-		registerRuntimeTools(state.reg, paths, settings, creds, logger)
-	}
-	state.subagent = wireSubagent(state.agent, settings, state.reg)
-	state.shell = settings.Shell
-
-	tui.PrintWelcome(state.agent.Name, state.agent.Provider, state.agent.Model)
 
 	rl, err := newChatReadline(paths.home)
 	if err != nil {
@@ -89,7 +89,19 @@ func runChat(args []string, logger *slog.Logger) {
 	}
 	defer rl.Close()
 
-	runChatLoop(rl, state)
+	// Track the stable ID so session attribution matches PrepareRun / resume.
+	state := &chatState{svc: svc, paths: paths, agent: a.ID, reg: reg, readline: rl}
+	defer withSignalContext(state)()
+	tui.PrintWelcome(a.Name, a.Provider, a.Model)
+	runChatLoop(state)
+}
+
+// withSignalContext registers SIGINT/SIGTERM cancellation for the REPL and
+// returns the stop func for the caller to defer.
+func withSignalContext(state *chatState) func() {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	state.sigCtx = ctx
+	return stop
 }
 
 func newChatReadline(home string) (*readline.Instance, error) {
@@ -103,41 +115,10 @@ func newChatReadline(home string) (*readline.Instance, error) {
 	})
 }
 
-func newChatState(catalog *provider.Catalog, mock bool, paths runtimePaths, agentName string, stateDB *store.DB) (*chatState, error) {
-	a, err := agent.LoadByName(paths.agentsDir, service.NormalizeAgentName(agentName))
-	if err != nil {
-		return nil, err
-	}
-	p, err := resolveProvider(catalog, mock)(a)
-	if err != nil {
-		return nil, err
-	}
-
-	var sessStore session.Store
-	if !mock && stateDB != nil {
-		sessStore = store.NewSessionStore(stateDB)
-	}
-
-	return &chatState{
-		catalog:  catalog,
-		mock:     mock,
-		paths:    paths,
-		agent:    a,
-		provider: p,
-		sess:     session.New(a.ID),
-		reg:      newRegistry(""), // uses current working directory
-		store:    sessStore,
-	}, nil
-}
-
 // runChatLoop runs the interactive chat REPL until the user exits.
-func runChatLoop(rl *readline.Instance, state *chatState) {
-	// Register signal handler once for the entire REPL session.
-	sigCtx, sigStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer sigStop()
-
+func runChatLoop(state *chatState) {
 	for {
-		line, err := rl.Readline()
+		line, err := state.readline.Readline()
 		if err != nil {
 			fmt.Println()
 			return
@@ -152,38 +133,59 @@ func runChatLoop(rl *readline.Instance, state *chatState) {
 			}
 			continue
 		}
-
-		var pol permission.Policy
-		if state.agent.Permissions != nil {
-			pol = permission.NewAgentPolicy(*state.agent.Permissions)
-		} else {
-			pol = permission.AllowAllPolicy{}
-		}
-
-		// Derive a per-run cancel context from the signal context.
-		runCtx, runCancel := context.WithCancel(sigCtx)
-		line = service.OptimizeUserPrompt(runCtx, state.agent, state.provider, line, nil)
-		events, err := loop.Run(runCtx, loop.Config{
-			Provider:    state.provider,
-			Registry:    state.reg,
-			Agent:       state.agent,
-			Session:     state.sess,
-			Prompt:      line,
-			Store:       state.store,
-			Policy:      pol,
-			Approver:    CLIApprover{},
-			AgentsDir:   state.paths.agentsDir,
-			NewProvider: resolveProvider(state.catalog, state.mock),
-			Subagent:    state.subagent,
-			Shell:       state.shell,
-		})
-		runCancel()
-		if err != nil {
-			fmt.Println(tui.Error(err.Error()))
-			continue
-		}
-		tui.PrintEvents(events)
+		runChatTurn(line, state)
 	}
+}
+
+// runChatTurn prepares and executes one user turn via the shared service.
+func runChatTurn(line string, state *chatState) {
+	runCtx, cancel := context.WithCancel(state.sigCtx)
+	defer cancel()
+
+	result, err := prepareChatTurn(line, state, runCtx)
+	if err != nil {
+		fmt.Println(tui.Error(err.Error()))
+		return
+	}
+	defer result.Cleanup(state.svc.Registry)
+	state.sess = result.Session
+
+	events, err := loop.Run(runCtx, result.Config)
+	if err != nil {
+		fmt.Println(tui.Error(err.Error()))
+		return
+	}
+	tui.PrintEvents(events)
+}
+
+// chatTurnRequest builds the PrepareRun request for one REPL turn. The first
+// turn (sess nil) passes no SessionID so PrepareRun creates the session; later
+// turns resume it by id. Without a store the conversation is replayed via
+// Messages so history survives across turns.
+func chatTurnRequest(line string, state *chatState) service.RunRequest {
+	req := service.RunRequest{Agent: state.agent, Prompt: line, Source: "chat"}
+	if state.sess == nil {
+		return req
+	}
+	if state.svc.Store != nil {
+		req.SessionID = state.sess.ID
+		return req
+	}
+	req.Messages = state.sess.GetMessages()
+	return req
+}
+
+// prepareChatTurn calls PrepareRun, falling back to a fresh session (history
+// replayed) when the persisted session was deleted while the REPL is open.
+func prepareChatTurn(line string, state *chatState, ctx context.Context) (*service.RunResult, error) {
+	req := chatTurnRequest(line, state)
+	result, err := state.svc.PrepareRun(ctx, req, CLIApprover{})
+	if err == nil || state.sess == nil || !errors.Is(err, session.ErrNotFound) {
+		return result, err
+	}
+	req.SessionID = ""
+	req.Messages = state.sess.GetMessages()
+	return state.svc.PrepareRun(ctx, req, CLIApprover{})
 }
 
 // handleChatCommand processes a /command input; returns true to exit the REPL.
@@ -197,16 +199,7 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 		tui.PrintHelp()
 		return false
 	case "/clear":
-		if state.store != nil {
-			if err := state.store.Save(state.sess); err != nil {
-				fmt.Println(tui.Error(i18n.T("tui.chat.save_session_failed", "error", err.Error())))
-			} else {
-				fmt.Println(tui.Muted(i18n.T("tui.chat.session_saved", "id", state.sess.ID)))
-			}
-		}
-		state.sess = session.New(state.agent.ID)
-		fmt.Println(tui.Success(i18n.T("tui.chat.session_cleared")))
-		return false
+		return handleClearCommand(state)
 	case "/agent":
 		return handleAgentCommand(parts, state)
 	case "/tools":
@@ -217,42 +210,59 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 	}
 }
 
+// handleClearCommand saves the current session (old /clear behavior) and
+// resets to a fresh session on the next turn.
+func handleClearCommand(state *chatState) bool {
+	if state.svc.Store != nil && state.sess != nil {
+		if err := state.svc.Store.Save(state.sess); err != nil {
+			fmt.Println(tui.Error(i18n.T("tui.chat.save_session_failed", "error", err.Error())))
+		} else {
+			fmt.Println(tui.Muted(i18n.T("tui.chat.session_saved", "id", state.sess.ID)))
+		}
+	}
+	state.sess = nil
+	fmt.Println(tui.Muted(i18n.T("tui.chat.session_cleared")))
+	return false
+}
+
 // handleAgentCommand handles the /agent command — list or switch agents.
 func handleAgentCommand(parts []string, state *chatState) bool {
 	if len(parts) < 2 {
-		names, err := agent.ListAvailable(state.paths.agentsDir)
-		if err != nil {
-			fmt.Println(tui.Error(err.Error()))
-			return false
-		}
-		if len(names) == 0 {
-			fmt.Println(tui.Muted(i18n.T("tui.chat.no_agents")))
-			return false
-		}
-		fmt.Println(tui.Muted(i18n.T("tui.chat.agents_header")))
-		for _, n := range names {
-			marker := " "
-			if n == state.agent.Name {
-				marker = tui.Success("●")
-			}
-			fmt.Printf("  %s %s\n", marker, n)
-		}
-		return false
+		return listChatAgents(state)
 	}
-	loaded, err := agent.LoadByName(state.paths.agentsDir, parts[1])
+	// Probe the agent through the service so failures surface before switching.
+	a, err := state.svc.GetAgent(parts[1])
 	if err != nil {
 		fmt.Println(tui.Error(err.Error()))
 		return false
 	}
-	p, err := resolveProvider(state.catalog, state.mock)(loaded)
+	// Track the stable ID so session attribution and lookups by ID stay
+	// consistent regardless of how the user referenced the agent.
+	state.agent = a.ID
+	state.sess = nil
+	fmt.Println(tui.Success(i18n.T("tui.chat.agent_switched", "agent", a.Name, "provider", a.Provider, "model", a.Model)))
+	return false
+}
+
+// listChatAgents prints the available agents with the active one marked.
+func listChatAgents(state *chatState) bool {
+	agents, err := agent.LoadAll(state.paths.agentsDir)
 	if err != nil {
 		fmt.Println(tui.Error(err.Error()))
 		return false
 	}
-	state.agent = loaded
-	state.provider = p
-	state.sess = session.New(loaded.ID)
-	fmt.Println(tui.Success(i18n.T("tui.chat.agent_switched", "agent", loaded.Name, "provider", loaded.Provider, "model", loaded.Model)))
+	if len(agents.Agents) == 0 {
+		fmt.Println(tui.Muted(i18n.T("tui.chat.no_agents")))
+		return false
+	}
+	fmt.Println(tui.Muted(i18n.T("tui.chat.agents_header")))
+	for _, a := range agents.Agents {
+		marker := " "
+		if a.ID == state.agent || a.Name == state.agent {
+			marker = tui.Success("●")
+		}
+		fmt.Printf("  %s %s\n", marker, a.Name)
+	}
 	return false
 }
 

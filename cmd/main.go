@@ -6,15 +6,19 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/config"
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/i18n"
 	"github.com/teexue/common-agent/core/loop"
+	"github.com/teexue/common-agent/core/provider"
 	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/session"
+	"github.com/teexue/common-agent/core/store"
 	"github.com/teexue/common-agent/core/tui"
 )
 
@@ -108,7 +112,14 @@ func (s *stringList) Set(v string) error {
 	return nil
 }
 
-func runCLI(args []string, logger *slog.Logger) {
+// runFlags holds parsed `run` subcommand options.
+type runFlags struct {
+	agent, prompt, format, home, locale string
+	session                             string
+	mock, cont, yes                     bool
+}
+
+func parseRunFlags(args []string) runFlags {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	agentName := fs.String("agent", "", i18n.T("cli.flag.agent"))
 	prompt := fs.String("prompt", "", i18n.T("cli.flag.prompt"))
@@ -116,74 +127,175 @@ func runCLI(args []string, logger *slog.Logger) {
 	homeFlag := fs.String("home", "", i18n.T("cli.flag.home_short"))
 	localeFlag := fs.String("locale", "", i18n.T("cli.flag.locale"))
 	mock := fs.Bool("mock", false, i18n.T("cli.flag.mock"))
+	sessionID := fs.String("session", "", i18n.T("cli.flag.session_run"))
+	continueFlag := fs.Bool("continue", false, i18n.T("cli.flag.continue_run"))
+	yes := fs.Bool("yes", false, i18n.T("cli.flag.yes"))
 	_ = fs.Parse(args)
-
-	if *format != "text" && *format != "json" {
-		fmt.Fprintln(os.Stderr, i18n.T("cli.error.format_invalid"))
-		os.Exit(1)
+	return runFlags{
+		agent: *agentName, prompt: *prompt, format: *format,
+		home: *homeFlag, locale: *localeFlag, session: *sessionID,
+		mock: *mock, cont: *continueFlag, yes: *yes,
 	}
-	if *prompt == "" {
-		fmt.Fprintln(os.Stderr, i18n.T("cli.error.prompt_required"))
-		os.Exit(1)
-	}
+}
 
-	paths, err := resolvePaths(*homeFlag)
+// runBootstrap holds the runtime resources opened for one CLI run.
+type runBootstrap struct {
+	paths    runtimePaths
+	catalog  *provider.Catalog
+	creds    *config.CredentialStore
+	stateDB  *store.DB
+	agent    *agent.Agent
+	settings config.Settings
+}
+
+// bootstrapRunTarget opens state.db, loads settings, and resolves the agent
+// (by display name or id) with its provider.
+func bootstrapRunTarget(opts runFlags, logger *slog.Logger) runBootstrap {
+	paths, err := resolvePaths(opts.home)
 	if err != nil {
 		logger.Error("log.cmd.resolve_paths", "error", err)
 		os.Exit(1)
 	}
-	catalog, creds, stateDB, err := bootstrapRuntime(paths, *mock, logger)
+	catalog, creds, stateDB, err := bootstrapRuntime(paths, opts.mock, logger)
 	if err != nil {
 		logger.Error("log.cmd.bootstrap", "error", err)
 		os.Exit(1)
 	}
-	if stateDB != nil {
-		defer stateDB.Close()
-	}
-
 	settings, err := config.LoadSettings(paths.home)
 	if err != nil {
 		logger.Error("log.config.load_settings", "error", err)
 		os.Exit(1)
 	}
-	logger = newLocaleLogger(*localeFlag, settings.Locale)
-	name := *agentName
+
+	name := opts.agent
 	if name == "" {
 		name = settings.DefaultAgent
 	}
-
 	a, err := agent.LoadByName(paths.agentsDir, service.NormalizeAgentName(name))
 	if err != nil {
 		logger.Error("log.agent.load", "error", err)
 		os.Exit(1)
 	}
-
-	p, err := resolveProvider(catalog, *mock)(a)
-	if err != nil {
+	// Probe provider resolution early so config errors surface before a run.
+	if _, err := resolveProvider(catalog, opts.mock)(a); err != nil {
 		logger.Error("log.provider.create", "error", err)
 		os.Exit(1)
 	}
+	return runBootstrap{paths: paths, catalog: catalog, creds: creds, stateDB: stateDB, agent: a, settings: settings}
+}
 
-	// In-pipeline user prompt optimization (agent-driven, non-fatal).
-	optimizedPrompt := service.OptimizeUserPrompt(context.Background(), a, p, *prompt, logger)
-
-	reg := newRegistry("") // uses current working directory
-	if !*mock {
-		registerRuntimeTools(reg, paths, settings, creds, logger)
+// resolveContinueSession returns the session id to resume: explicit --session
+// or the agent's latest persisted session for --continue.
+func resolveContinueSession(opts runFlags, svc *service.Service, a *agent.Agent) string {
+	if opts.session != "" {
+		return opts.session
 	}
-	limits := wireSubagent(a, settings, reg)
-	sess := session.New(a.Name)
-	events, err := loop.Run(context.Background(), loop.Config{
-		Provider: p, Registry: reg, Agent: a, Session: sess, Prompt: optimizedPrompt,
-		AgentsDir: paths.agentsDir, NewProvider: resolveProvider(catalog, *mock),
-		Subagent: limits, Shell: settings.Shell,
+	if !opts.cont {
+		return ""
+	}
+	sid, err := latestSessionID(svc, a.ID)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.continue_session", "error", err.Error()))
+		os.Exit(1)
+	}
+	if sid == "" {
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.no_session_to_continue"))
+		os.Exit(1)
+	}
+	return sid
+}
+
+func runCLI(args []string, logger *slog.Logger) {
+	opts := parseRunFlags(args)
+	if opts.format != "text" && opts.format != "json" {
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.format_invalid"))
+		os.Exit(1)
+	}
+	if opts.prompt == "" {
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.prompt_required"))
+		os.Exit(1)
+	}
+
+	boot := bootstrapRunTarget(opts, logger)
+	if boot.stateDB != nil {
+		defer boot.stateDB.Close()
+	}
+	logger = newLocaleLogger(opts.locale, boot.settings.Locale)
+
+	reg := newRegistry("")
+	svc := wireCLIService(cliServiceConfig{
+		paths: boot.paths, reg: reg, catalog: boot.catalog,
+		creds: boot.creds, stateDB: boot.stateDB, settings: boot.settings,
+		mock: opts.mock, logger: logger,
 	})
+	sid := resolveContinueSession(opts, svc, boot.agent)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	approver := cliRunApprover(opts.yes, opts.format == "json")
+	result, err := svc.PrepareRun(ctx, service.RunRequest{
+		Agent: boot.agent.Name, Prompt: opts.prompt, SessionID: sid, Source: "cli",
+	}, approver)
+	if err != nil {
+		logger.Error("log.agent.prepare", "error", err)
+		os.Exit(1)
+	}
+	defer result.Cleanup(svc.Registry)
+
+	events, err := loop.Run(ctx, result.Config)
 	if err != nil {
 		logger.Error("log.agent.run", "error", err)
 		os.Exit(1)
 	}
 
-	outputCLIResult(CLIOutputConfig{Format: *format, Events: events, Session: sess, Agent: a, Paths: paths, Logger: logger})
+	outputCLIResult(CLIOutputConfig{Format: opts.format, Events: events, Session: result.Session, Logger: logger})
+}
+
+// cliRunApprover picks the approver for a non-interactive run:
+// --yes approves everything; non-TTY or --json denies explicitly with an error.
+func cliRunApprover(yes, jsonFormat bool) loop.Approver {
+	if yes {
+		return loop.AutoApprover{}
+	}
+	if jsonFormat || !isInteractiveStdin() {
+		return &denyWithNotice{}
+	}
+	return CLIApprover{}
+}
+
+// denyWithNotice denies approval requests and explains why once per process.
+type denyWithNotice struct{ noticed bool }
+
+func (d *denyWithNotice) Approve(_ context.Context, req loop.ApprovalRequest) bool {
+	if !d.noticed {
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.approval_denied", "tool", req.Tool))
+		d.noticed = true
+	}
+	return false
+}
+
+// isInteractiveStdin reports whether stdin is a terminal.
+func isInteractiveStdin() bool {
+	info, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
+}
+
+// latestSessionID returns the most recent persisted session for an agent.
+func latestSessionID(svc *service.Service, agentName string) (string, error) {
+	metas, err := svc.ListSessions("")
+	if err != nil {
+		return "", err
+	}
+	for _, m := range metas {
+		if m.Agent == agentName {
+			return m.ID, nil
+		}
+	}
+	return "", nil
 }
 
 // CLIOutputConfig holds configuration for CLI output formatting.
@@ -191,8 +303,6 @@ type CLIOutputConfig struct {
 	Format  string
 	Events  <-chan event.Event
 	Session *session.Session
-	Agent   *agent.Agent
-	Paths   runtimePaths
 	Logger  *slog.Logger
 }
 
@@ -205,7 +315,7 @@ func outputCLIResult(cfg CLIOutputConfig) {
 		}
 		return
 	}
-	cfg.Logger.Info("log.agent.run_started", "session_id", cfg.Session.ID, "agent", cfg.Agent.Name, "provider", cfg.Agent.Provider, "model", cfg.Agent.Model, "home", cfg.Paths.home)
+	cfg.Logger.Info("log.agent.run_started", "session_id", cfg.Session.ID, "agent", cfg.Session.Agent)
 	tui.PrintEvents(cfg.Events)
 }
 
