@@ -96,6 +96,11 @@ type Event struct {
 	// combined, unlike the per-turn Input/OutputTokens above).
 	TotalInputTokens  int `json:"total_input_tokens,omitempty"`
 	TotalOutputTokens int `json:"total_output_tokens,omitempty"`
+
+	// Truncated is set on done when the last model completion hit the max
+	// output token limit (finish reason length/max_tokens, or output tokens
+	// reached the effective cap). UIs can warn without treating the run as failed.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 // StreamEvents writes JSON-line events to w until done or ctx cancelled.

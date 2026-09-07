@@ -181,7 +181,7 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 		return tokenDelta{}, true
 	}
 
-	text, reasoning, toolCalls, tokens, cancelled := consumeStream(tc.Ctx, chunks, tc.Out)
+	text, reasoning, toolCalls, tokens, finishReason, cancelled := consumeStream(tc.Ctx, chunks, tc.Out)
 	// Persist the real prompt token count reported by the provider. This is
 	// the authoritative usage of the request that just completed.
 	if tokens.input > 0 {
@@ -202,7 +202,7 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 			Role: provider.RoleAssistant, Content: text, ReasoningContent: reasoning,
 		})
 		endTurn(turnSpan, tc.Tel, turnCtx, tc.Turn)
-		forceEmit(tc.Out, event.Event{Type: event.TypeDone, Status: "completed", Turns: tc.Turn, InputTokens: tokens.input, OutputTokens: tokens.output, CacheReadInputTokens: tokens.cacheRead, CacheCreationInputTokens: tokens.cacheCreation, ContextWindow: tc.ContextWindow, SessionID: tc.Config.Session.ID, TotalInputTokens: tc.totalInput, TotalOutputTokens: tc.totalOutput})
+		forceEmit(tc.Out, completedDoneEvent(tc, tokens, finishReason))
 		// Compact even for plain text turns — otherwise pure chat sessions
 		// (no tool calls) never trigger context management.
 		compactIfNeeded(tc.Ctx, tc.Config, tc.Out, compactHint{turn: tc.Turn, log: tc.Log, window: tc.ContextWindow})
@@ -224,8 +224,12 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 }
 
 // consumeStream reads provider chunks and collects text, reasoning, and tool calls.
-func consumeStream(ctx context.Context, chunks <-chan provider.Chunk, out chan<- event.Event) (string, string, []provider.ToolCall, tokenDelta, bool) {
-	var text, reasoning string
+func consumeStream(
+	ctx context.Context,
+	chunks <-chan provider.Chunk,
+	out chan<- event.Event,
+) (string, string, []provider.ToolCall, tokenDelta, string, bool) {
+	var text, reasoning, finishReason string
 	var toolCalls []provider.ToolCall
 	var tokens tokenDelta
 
@@ -234,6 +238,9 @@ func consumeStream(ctx context.Context, chunks <-chan provider.Chunk, out chan<-
 		tokens.output += chunk.OutputTokens
 		tokens.cacheRead += chunk.CacheReadInputTokens
 		tokens.cacheCreation += chunk.CacheCreationInputTokens
+		if chunk.FinishReason != "" {
+			finishReason = chunk.FinishReason
+		}
 
 		if chunk.ReasoningDelta != "" {
 			reasoning += chunk.ReasoningDelta
@@ -248,11 +255,11 @@ func consumeStream(ctx context.Context, chunks <-chan provider.Chunk, out chan<-
 
 	select {
 	case <-ctx.Done():
-		return text, reasoning, toolCalls, tokens, true
+		return text, reasoning, toolCalls, tokens, finishReason, true
 	default:
 	}
 
-	return text, reasoning, toolCalls, tokens, false
+	return text, reasoning, toolCalls, tokens, finishReason, false
 }
 
 // ToolCollectContext holds dependencies for collecting tool results.
@@ -406,6 +413,18 @@ type doneStats struct {
 	window        int
 	totalInput    int
 	totalOutput   int
+}
+
+func completedDoneEvent(tc TurnContext, tokens tokenDelta, finishReason string) event.Event {
+	maxOut := provider.EffectiveMaxOutput(tc.Config.Agent.Model, tc.Config.Agent.MaxTokens)
+	return event.Event{
+		Type: event.TypeDone, Status: "completed", Turns: tc.Turn,
+		InputTokens: tokens.input, OutputTokens: tokens.output,
+		CacheReadInputTokens: tokens.cacheRead, CacheCreationInputTokens: tokens.cacheCreation,
+		ContextWindow: tc.ContextWindow, SessionID: tc.Config.Session.ID,
+		TotalInputTokens: tc.totalInput, TotalOutputTokens: tc.totalOutput,
+		Truncated: provider.IsOutputTruncated(finishReason, tokens.output, maxOut),
+	}
 }
 
 func emitCancelled(out chan<- event.Event, s doneStats) {

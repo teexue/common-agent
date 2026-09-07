@@ -18,7 +18,7 @@ func TestConsumeStreamAggregatesCacheTokens(t *testing.T) {
 	close(chunks)
 
 	out := make(chan event.Event, 16)
-	_, _, _, tokens, cancelled := consumeStream(context.Background(), chunks, out)
+	_, _, _, tokens, _, cancelled := consumeStream(context.Background(), chunks, out)
 	require.False(t, cancelled)
 	assert.Equal(t, 100, tokens.input)
 	assert.Equal(t, 10, tokens.output)

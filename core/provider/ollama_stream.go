@@ -14,6 +14,8 @@ import (
 type ollamaStreamEvent struct {
 	Message ollamaStreamMessage `json:"message"`
 	Done    bool                `json:"done"`
+	// DoneReason is set on the terminal event (e.g. "stop", "length").
+	DoneReason string `json:"done_reason"`
 	// usage fields on the terminal event
 	PromptEvalCount int `json:"prompt_eval_count"`
 	EvalCount       int `json:"eval_count"`
@@ -74,6 +76,7 @@ func (o *Ollama) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
 		if ev.Done {
 			SendChunk(ctx, ch, Chunk{
 				Done:         true,
+				FinishReason: ev.DoneReason,
 				InputTokens:  ev.PromptEvalCount,
 				OutputTokens: ev.EvalCount,
 			})

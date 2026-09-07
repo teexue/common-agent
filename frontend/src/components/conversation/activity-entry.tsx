@@ -88,6 +88,7 @@ function AssistantBody({
           />
         </div>
       )}
+      {entry.outputTruncated && !isActive && <OutputTruncatedBanner />}
       {isWaiting && (
         <div className="flex flex-col gap-1.5" aria-hidden>
           <div className="shimmer-line" />
@@ -95,6 +96,17 @@ function AssistantBody({
           <div className="shimmer-line" />
         </div>
       )}
+    </div>
+  )
+}
+
+function OutputTruncatedBanner() {
+  const { t } = useTranslation()
+  return (
+    <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
+      <p className="text-xs leading-relaxed text-warning">
+        {t("conversation.outputTruncated")}
+      </p>
     </div>
   )
 }

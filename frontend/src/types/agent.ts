@@ -30,6 +30,7 @@ export interface AgentEvent {
   cache_creation_input_tokens?: number // done: prompt cache writes across the run
   total_input_tokens?: number // done: cumulative input across all turns of the run
   total_output_tokens?: number // done: cumulative output across all turns of the run
+  truncated?: boolean // done: last completion hit max output tokens
   session_id?: string // done
 }
 
@@ -168,6 +169,8 @@ export interface ConversationEntry {
   timestamp: number
   isStreaming?: boolean
   compactionSummary?: string
+  /** Last completion hit the max output token limit. */
+  outputTruncated?: boolean
   usage?: TokenUsage
   attachments?: FileAttachment[]
 }

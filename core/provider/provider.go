@@ -82,6 +82,10 @@ type Chunk struct {
 	ToolCalls      []ToolCall
 	Done           bool
 
+	// FinishReason is the provider stop reason on the terminal chunk when known
+	// (e.g. "stop", "length", "max_tokens", "tool_calls"). Empty when unknown.
+	FinishReason string
+
 	// Usage is populated on the final chunk when the provider reports token counts.
 	InputTokens  int `json:"input_tokens,omitempty"`
 	OutputTokens int `json:"output_tokens,omitempty"`

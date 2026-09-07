@@ -330,13 +330,18 @@ func (o *OpenAI) readStream(ctx context.Context, r io.Reader, ch chan<- Chunk) {
 		accumulateToolCalls(toolAcc, choice.Delta.ToolCalls)
 
 		if choice.FinishReason != nil {
-			switch *choice.FinishReason {
+			reason := *choice.FinishReason
+			switch reason {
 			case "tool_calls":
 				flushToolCalls(toolAcc, ch, ctx)
 				toolAcc = map[int]*ToolCall{}
-			case "stop":
+			case "stop", "length":
 				flushToolCalls(toolAcc, ch, ctx)
-				ch <- Chunk{Done: true}
+				ch <- Chunk{Done: true, FinishReason: reason}
+				return
+			default:
+				flushToolCalls(toolAcc, ch, ctx)
+				ch <- Chunk{Done: true, FinishReason: reason}
 				return
 			}
 		}

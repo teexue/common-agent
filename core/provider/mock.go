@@ -9,9 +9,11 @@ import (
 
 // MockStep defines one provider response in sequence within a single Stream call.
 type MockStep struct {
-	Text      string
-	Reasoning string
-	ToolCalls []ToolCall
+	Text         string
+	Reasoning    string
+	ToolCalls    []ToolCall
+	OutputTokens int
+	FinishReason string
 }
 
 // MockProvider returns predefined streaming steps for tests and offline demos.
@@ -62,7 +64,7 @@ func (m *MockProvider) runSteps(ctx context.Context, ch chan<- Chunk, steps []Mo
 		}
 		m.emitStep(ctx, ch, step)
 		if i == len(steps)-1 {
-			sendDone(ctx, ch)
+			sendDone(ctx, ch, step)
 		}
 	}
 }
@@ -103,10 +105,14 @@ func emitRunes(ctx context.Context, ch chan<- Chunk, s string, makeChunk func(st
 	}
 }
 
-func sendDone(ctx context.Context, ch chan<- Chunk) {
+func sendDone(ctx context.Context, ch chan<- Chunk, step MockStep) {
 	select {
 	case <-ctx.Done():
-	case ch <- Chunk{Done: true}:
+	case ch <- Chunk{
+		Done:         true,
+		OutputTokens: step.OutputTokens,
+		FinishReason: step.FinishReason,
+	}:
 	}
 }
 

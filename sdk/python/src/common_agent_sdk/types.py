@@ -40,6 +40,7 @@ class AgentEvent(BaseModel):
     message: Optional[str] = None
     status: Optional[str] = None
     turns: Optional[int] = None
+    truncated: Optional[bool] = None
 
     model_config = {"populate_by_name": True}
 

@@ -77,6 +77,7 @@ export type ChatAction =
       /** Run-level cumulative usage from the done event; folded into totals. */
       totalInputTokens?: number
       totalOutputTokens?: number
+      truncated?: boolean
     }
   | { type: "STREAM_ERROR"; message: string }
   | { type: "CLEAR" }

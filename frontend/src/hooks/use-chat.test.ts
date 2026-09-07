@@ -402,4 +402,21 @@ describe("chatReducer token usage", () => {
     expect(state.inputTokens).toBe(0)
     expect(state.contextWindow).toBe(0)
   })
+
+  it("marks outputTruncated when done is truncated", () => {
+    let state = chatReducer(baseState(), {
+      type: "START_ASSISTANT",
+      entryId: "a1",
+    })
+    state = chatReducer(state, {
+      type: "STREAM_DONE",
+      entryId: "a1",
+      status: "completed",
+      turns: 1,
+      outputTokens: 8000,
+      truncated: true,
+    })
+    expect(state.messages[0]?.outputTruncated).toBe(true)
+    expect(state.isStreaming).toBe(false)
+  })
 })

@@ -449,8 +449,12 @@ func (a *Anthropic) processStreamEvent(sec StreamEventContext, ev anthropicStrea
 		}
 		sec.FlushLastTool()
 		*sec.LastToolIdx = -1
-		if ev.Delta.StopReason == "end_turn" {
-			sendChunk(sec.Ctx, sec.Ch, Chunk{Done: true, InputTokens: sec.InputTokens, OutputTokens: sec.OutputTokens, CacheReadInputTokens: sec.CacheReadInputTokens, CacheCreationInputTokens: sec.CacheCreationInputTokens})
+		if ev.Delta.StopReason == "end_turn" || ev.Delta.StopReason == "max_tokens" {
+			sendChunk(sec.Ctx, sec.Ch, Chunk{
+				Done: true, FinishReason: ev.Delta.StopReason,
+				InputTokens: sec.InputTokens, OutputTokens: sec.OutputTokens,
+				CacheReadInputTokens: sec.CacheReadInputTokens, CacheCreationInputTokens: sec.CacheCreationInputTokens,
+			})
 			return true, nil
 		}
 	case "message_stop":

@@ -164,6 +164,7 @@ function handleDone(
     contextWindow: event.context_window,
     totalInputTokens: event.total_input_tokens,
     totalOutputTokens: event.total_output_tokens,
+    truncated: event.truncated,
   })
   return true
 }

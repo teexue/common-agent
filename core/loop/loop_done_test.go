@@ -132,3 +132,36 @@ func TestRunDoneCarriesCacheStats(t *testing.T) {
 	assert.Equal(t, 70, done.CacheReadInputTokens)
 	assert.Equal(t, 30, done.CacheCreationInputTokens)
 }
+
+func TestRunDoneTruncatedWhenHittingMaxTokens(t *testing.T) {
+	reg := registry.New()
+	builtin.RegisterAll(reg, t.TempDir())
+	reg.MustRegister(echoTool{})
+
+	sc := &agent.Agent{
+		Name: "test", Provider: "mock", SystemPrompt: "test",
+		Tools: []string{"echo"}, Model: "unknown-model",
+		MaxTurns: 1, MaxTokens: 8000,
+	}
+	mock := &provider.MockProvider{
+		Calls: [][]provider.MockStep{{
+			{Text: "cut off", OutputTokens: 8000, FinishReason: "length"},
+		}},
+	}
+	events, err := loop.Run(context.Background(), loop.Config{
+		Provider: mock, Registry: reg, Agent: sc,
+		Session: session.New(sc.Name), Prompt: "hello",
+	})
+	require.NoError(t, err)
+
+	var done *event.Event
+	for ev := range events {
+		if ev.Type == event.TypeDone {
+			done = &ev
+		}
+	}
+	require.NotNil(t, done)
+	assert.Equal(t, "completed", done.Status)
+	assert.True(t, done.Truncated)
+	assert.Equal(t, 8000, done.OutputTokens)
+}

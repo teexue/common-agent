@@ -42,6 +42,8 @@ export interface AgentEvent {
   status?: string
   /** Turn count for done events */
   turns?: number
+  /** True when the last completion hit the max output token limit */
+  truncated?: boolean
 }
 
 /**

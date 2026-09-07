@@ -65,6 +65,7 @@
   },
   "conversation": {
     "compaction": "Context compacted",
+    "outputTruncated": "The reply was cut off at the max output token limit. Raise the agent's max output tokens, or send Continue.",
     "noAgentTitle": "No Agent configured",
     "noAgentDesc": "Create an Agent YAML config to get started. Use the «+» button in the Agent list, or run <code>agent-server config init</code>.",
     "workspaceTitle": "Agent workspace",
