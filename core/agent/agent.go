@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -176,6 +177,30 @@ func Resolve(dir, ref string) (*Agent, error) {
 		return byName, nil
 	}
 	return nil, fmt.Errorf("agent %q: %w", ref, os.ErrNotExist)
+}
+
+// ResolveDefault loads preferred when it exists; otherwise the first agent in
+// dir (ids sorted lexicographically). Empty preferred skips straight to the
+// first agent. Non-existence of preferred falls back; other load errors do not.
+func ResolveDefault(dir, preferred string) (*Agent, error) {
+	preferred = strings.TrimSuffix(strings.TrimSpace(preferred), ".yaml")
+	if preferred != "" {
+		a, err := Resolve(dir, preferred)
+		if err == nil {
+			return a, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	}
+	ids, err := ListAvailable(dir)
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("no agents configured in %q", dir)
+	}
+	return LoadByID(dir, ids[0])
 }
 
 // ListAvailable returns the ids of all agent YAML files in dir

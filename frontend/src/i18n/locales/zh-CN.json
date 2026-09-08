@@ -655,6 +655,7 @@
     "names": {
       "get_time": "获取时间",
       "read_file": "读取文件",
+      "read_image": "读取图片",
       "write_file": "写入文件",
       "edit_file": "编辑文件",
       "list_directory": "列出目录",
@@ -670,6 +671,7 @@
     "descriptions": {
       "get_time": "返回当前 UTC 时间（RFC3339）。",
       "read_file": "读取文件内容并以文本返回。",
+      "read_image": "读取图片文件（PNG/JPEG/GIF/WebP）。",
       "write_file": "将内容写入文件，必要时创建父目录。",
       "edit_file": "用精确字符串匹配替换文件中的文本，适合局部修改。",
       "list_directory": "列出目录的直接子项（非递归）。",

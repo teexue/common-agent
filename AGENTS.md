@@ -55,7 +55,7 @@ sdk/{ts,python}
 | 核心 | `core/session/` | 线程安全会话：`AddMessages` / `GetMessages` / `Clear` |
 | 核心 | `core/config/` | 用户配置 `~/.common-agent/`（settings、providers、`CredentialStore`、wizard） |
 | 扩展 | `tools/registry/` | 按名注册工具，解析给 LLM 的 definitions |
-| 内置 | `tools/builtin/` | `get_time`、`read_file`、`write_file` 等 |
+| 内置 | `tools/builtin/` | `get_time`、`read_file`、`read_image`、`write_file` 等 |
 
 - 包名小写、短、无下划线（`loop` 而非 `agent_loop`）；目录名即包名
 - 每个目录一个包；禁止 `util`、`common`、`helper`、`misc` 包或文件（含 `handler_misc.go`，必须按资源拆并改名）

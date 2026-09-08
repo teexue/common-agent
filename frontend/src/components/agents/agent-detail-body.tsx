@@ -2,10 +2,12 @@ import { useTranslation } from "react-i18next"
 import { Settings, Shield, Wrench } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { toolDisplayName } from "@/lib/tool-i18n"
+import { stripHiddenPickerTools } from "@/lib/tool-visibility"
 import type { AgentDetail } from "@/types/agent"
 
 export function AgentDetailBody({ detail }: { detail: AgentDetail }) {
   const { t } = useTranslation()
+  const tools = stripHiddenPickerTools(detail.tools ?? [])
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3">
@@ -43,7 +45,7 @@ export function AgentDetailBody({ detail }: { detail: AgentDetail }) {
         )}
       </div>
       {detail.system_prompt && <PromptBlock prompt={detail.system_prompt} />}
-      {(detail.tools ?? []).length > 0 && <ToolsBlock tools={detail.tools} />}
+      {tools.length > 0 && <ToolsBlock tools={tools} />}
       {detail.permissions && (
         <PermissionsSection permissions={detail.permissions} />
       )}
@@ -116,12 +118,12 @@ function PermissionsSection({
       <div className="flex flex-col gap-2">
         <PermBadgeRow
           label={t("agent.autoApprove")}
-          tools={permissions.auto_approve}
+          tools={stripHiddenPickerTools(permissions.auto_approve ?? [])}
           className="rounded-md bg-success/10 px-1.5 py-0 text-[10px] text-success"
         />
         <PermBadgeRow
           label={t("agent.alwaysDeny")}
-          tools={permissions.always_deny}
+          tools={stripHiddenPickerTools(permissions.always_deny ?? [])}
           className="rounded-md bg-destructive/10 px-1.5 py-0 text-[10px] text-destructive"
         />
       </div>

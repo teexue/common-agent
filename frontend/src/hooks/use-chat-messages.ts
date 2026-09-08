@@ -25,6 +25,10 @@ export function fromBackendMessages(msgs: BackendMsg[]): ConversationEntry[] {
     if (msg.role === "system") continue
 
     if (msg.role === "user") {
+      if (isToolImageUserMessage(msg)) {
+        attachToolImagePreview(entries, msg)
+        continue
+      }
       entries.push(userEntryFromBackend(msg, entries.length))
     }
 
@@ -53,6 +57,49 @@ export function fromBackendMessages(msgs: BackendMsg[]): ConversationEntry[] {
     }
   }
   return entries
+}
+
+/** Must match provider.ToolImageUserPrefix — synthetic vision follow-ups. */
+const TOOL_IMAGE_USER_PREFIX = "[image from tool "
+
+function isToolImageUserMessage(msg: BackendMsg): boolean {
+  return (msg.content ?? "").startsWith(TOOL_IMAGE_USER_PREFIX)
+}
+
+function toolNameFromImageMarker(content: string): string | null {
+  if (!content.startsWith(TOOL_IMAGE_USER_PREFIX)) return null
+  const rest = content.slice(TOOL_IMAGE_USER_PREFIX.length)
+  if (!rest.endsWith("]")) return null
+  const name = rest.slice(0, -1).trim()
+  return name || null
+}
+
+function attachToolImagePreview(
+  entries: ConversationEntry[],
+  msg: BackendMsg
+): void {
+  const toolName = toolNameFromImageMarker(msg.content ?? "")
+  const urls = (msg.content_parts ?? [])
+    .filter((p) => p.type === "image_url" && p.image_url?.url)
+    .map((p) => p.image_url!.url)
+  if (!toolName || urls.length === 0) return
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i]
+    if (entry.role !== "assistant" || !entry.toolCalls?.length) continue
+    for (let j = entry.toolCalls.length - 1; j >= 0; j--) {
+      const tc = entry.toolCalls[j]
+      if (tc.name !== toolName) continue
+      const base =
+        tc.output && typeof tc.output === "object" && !Array.isArray(tc.output)
+          ? (tc.output as Record<string, unknown>)
+          : {}
+      entry.toolCalls[j] = {
+        ...tc,
+        output: { ...base, data_url: urls[0], data_urls: urls },
+      }
+      return
+    }
+  }
 }
 
 function userEntryFromBackend(

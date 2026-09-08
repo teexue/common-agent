@@ -167,11 +167,7 @@ func bootstrapRunTarget(opts runFlags, logger *slog.Logger) runBootstrap {
 		os.Exit(1)
 	}
 
-	name := opts.agent
-	if name == "" {
-		name = settings.DefaultAgent
-	}
-	a, err := agent.LoadByName(paths.agentsDir, service.NormalizeAgentName(name))
+	a, err := resolveRunAgent(paths.agentsDir, opts.agent, settings.DefaultAgent)
 	if err != nil {
 		logger.Error("log.agent.load", "error", err)
 		os.Exit(1)

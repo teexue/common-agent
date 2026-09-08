@@ -12,6 +12,7 @@ import (
 	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/core/store"
 	"github.com/teexue/common-agent/core/tui"
+	"golang.org/x/term"
 )
 
 func runSessions(args []string, logger *slog.Logger) {
@@ -126,21 +127,23 @@ func sessionsResume(args []string, logger *slog.Logger) {
 		creds: creds, stateDB: stateDB, settings: settings,
 		mock: *mock, logger: logger,
 	})
-	// Resolve to the stable ID so /agent marking and later PrepareRun calls
-	// attribute sessions consistently.
-	agentName := agentRef
-	if a, err := svc.GetAgent(agentRef); err == nil {
-		agentName = a.ID
+	a, err := svc.GetAgent(agentRef)
+	if err != nil {
+		logger.Error("log.agent.load", "error", err)
+		os.Exit(1)
+	}
+
+	if term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+		if err := launchChatTUI(svc, paths, a, loaded); err != nil {
+			logger.Error("log.chat.tui", "error", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	state := &chatState{
-		svc:   svc,
-		paths: paths,
-		agent: agentName,
-		sess:  loaded,
-		reg:   reg,
+		svc: svc, paths: paths, agent: a.ID, sess: loaded, reg: reg,
 	}
-
 	fmt.Println(tui.Success(i18n.T("cli.sessions.resumed", "id", loaded.ID, "agent", loaded.Agent)))
 	msgs := loaded.GetMessages()
 	fmt.Println(tui.Muted(i18n.T("cli.sessions.message_count", "count", len(msgs))))
@@ -153,7 +156,6 @@ func sessionsResume(args []string, logger *slog.Logger) {
 	defer rl.Close()
 	state.readline = rl
 	defer withSignalContext(state)()
-
 	runChatLoop(state)
 }
 

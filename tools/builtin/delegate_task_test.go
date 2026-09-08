@@ -3,6 +3,8 @@ package builtin_test
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -80,4 +82,56 @@ func TestDelegateTask_ChildCannotNest(t *testing.T) {
 	_, err := builtin.DelegateTask{}.Execute(ctx, json.RawMessage(`{"task":"nested"}`))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "depth limit")
+}
+
+func TestDelegateTask_LoadsImages(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dot.png"), tinyPNG, 0o644))
+
+	reg := registry.New()
+	parent := &agent.Agent{
+		ID: "agt", Name: "parent", Provider: "mock", Model: "m",
+		SystemPrompt: "parent", MaxTurns: 3, MaxTokens: 128,
+	}
+	ctx := loop.WithSpawn(context.Background(), loop.Spawn{
+		Registry: reg,
+		NewProvider: func(*agent.Agent) (provider.Provider, error) {
+			return &provider.MockProvider{
+				Calls: [][]provider.MockStep{{{Text: "saw image"}}},
+			}, nil
+		},
+		Policy:  permission.AllowAllPolicy{},
+		Agent:   parent,
+		WorkDir: dir,
+	})
+	ctx = loop.WithParentEventChan(ctx, make(chan event.Event, 8))
+
+	res, err := builtin.DelegateTask{}.Execute(ctx, json.RawMessage(`{"task":"describe","images":["dot.png"]}`))
+	require.NoError(t, err)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(res.Output, &out))
+	assert.Equal(t, "saw image", out["response"])
+	assert.EqualValues(t, 1, out["images"])
+}
+
+func TestDelegateTask_BadImage(t *testing.T) {
+	dir := t.TempDir()
+	reg := registry.New()
+	parent := &agent.Agent{
+		ID: "agt", Name: "parent", Provider: "mock", Model: "m",
+		SystemPrompt: "parent", MaxTurns: 3, MaxTokens: 128,
+	}
+	ctx := loop.WithSpawn(context.Background(), loop.Spawn{
+		Registry: reg,
+		NewProvider: func(*agent.Agent) (provider.Provider, error) {
+			return &provider.MockProvider{Calls: [][]provider.MockStep{{{Text: "ok"}}}}, nil
+		},
+		Policy:  permission.AllowAllPolicy{},
+		Agent:   parent,
+		WorkDir: dir,
+	})
+	ctx = loop.WithParentEventChan(ctx, make(chan event.Event, 8))
+	_, err := builtin.DelegateTask{}.Execute(ctx, json.RawMessage(`{"task":"x","images":["missing.png"]}`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "load image")
 }

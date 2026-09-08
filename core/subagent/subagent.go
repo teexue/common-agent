@@ -32,6 +32,8 @@ type Config struct {
 	Task string
 	// Context is optional additional context provided to the sub-agent.
 	Context string
+	// Images are multimodal image parts attached to the child prompt.
+	Images []provider.ContentPart
 	// MaxTurns overrides the sub-agent's max_turns (0 = use agent default).
 	MaxTurns int
 	// Timeout is unused; global Limits.Timeout applies instead.
@@ -125,7 +127,7 @@ func childLoopConfig(cfg Config, deps Deps, a *agent.Agent, p provider.Provider,
 	}
 	return loop.Config{
 		Provider: p, Registry: deps.Registry, Agent: a,
-		Session: sess, Prompt: prompt,
+		Session: sess, Prompt: prompt, Images: cfg.Images,
 		Logger: deps.Logger, Policy: deps.Policy, Approver: deps.Approver,
 		Store: deps.Store, WorkDir: deps.WorkDir, Shell: deps.Shell,
 		AgentsDir: deps.AgentsDir, NewProvider: deps.NewProvider,

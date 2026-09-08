@@ -162,7 +162,7 @@ func rowToSession(row SessionRow) (*session.Session, error) {
 
 func titleFromProviderMessages(msgs []provider.Message) string {
 	for _, m := range msgs {
-		if m.Role == provider.RoleUser {
+		if m.Role == provider.RoleUser && !provider.IsToolImageUserMessage(m) {
 			return session.TitleFromPrompt(m.Content)
 		}
 	}

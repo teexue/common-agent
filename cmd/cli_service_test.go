@@ -153,3 +153,21 @@ func TestLatestSessionID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, got)
 }
+
+// TestResolveRunAgent_FallsBackToFirstWhenDefaultMissing covers the CLI
+// default path that previously failed on the chat-assistant placeholder.
+func TestResolveRunAgent_FallsBackToFirstWhenDefaultMissing(t *testing.T) {
+	_, _, home := newRunService(t)
+	agentsDir := config.AgentsDir(home)
+
+	a, err := resolveRunAgent(agentsDir, "", "chat-assistant")
+	require.NoError(t, err)
+	assert.Equal(t, "agt_run", a.ID)
+}
+
+// TestResolveRunAgent_ExplicitMissingStillErrors keeps --agent strict.
+func TestResolveRunAgent_ExplicitMissingStillErrors(t *testing.T) {
+	_, _, home := newRunService(t)
+	_, err := resolveRunAgent(config.AgentsDir(home), "missing-agent", "chat-assistant")
+	require.Error(t, err)
+}

@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/teexue/common-agent/core/event"
 	"github.com/teexue/common-agent/core/i18n"
 )
@@ -25,11 +27,12 @@ var DefaultRenderOptions = RenderOptions{
 	ShowReasoning: true,
 }
 
-// Renderer streams agent events to a terminal with Claude Code–style formatting.
+// Renderer streams agent events to a terminal with clean, readable formatting.
 type Renderer struct {
 	out    io.Writer
 	opts   RenderOptions
 	opened bool // assistant block started
+	needNL bool // text stream may lack a trailing newline before the next block
 }
 
 // NewRenderer creates a renderer writing to w.
@@ -52,6 +55,7 @@ func (r *Renderer) render(ev event.Event) {
 	case event.TypeTextDelta:
 		r.ensureAssistantBlock()
 		_, _ = io.WriteString(r.out, ev.Content)
+		r.needNL = !strings.HasSuffix(ev.Content, "\n")
 
 	case event.TypeReasoningDelta:
 		if !r.opts.ShowReasoning {
@@ -59,34 +63,40 @@ func (r *Renderer) render(ev event.Event) {
 		}
 		r.ensureAssistantBlock()
 		_, _ = io.WriteString(r.out, dimStyle.Render(ev.Content))
+		r.needNL = !strings.HasSuffix(ev.Content, "\n")
 
 	case event.TypeToolStart:
 		r.ensureAssistantBlock()
 		r.closeLine()
 		input := formatJSON(ev.Input)
-		line := fmt.Sprintf("⏺ %s(%s)", ev.Tool, input)
-		_, _ = fmt.Fprintln(r.out, toolStyle.Render(line))
+		line := ev.Tool
+		if input != "" {
+			line = fmt.Sprintf("%s(%s)", ev.Tool, input)
+		}
+		_, _ = fmt.Fprintln(r.out, toolStyle.Render("● "+line))
 
 	case event.TypeToolResult:
+		r.closeLine()
 		output := formatJSON(ev.Output)
 		for _, line := range wrapToolResult(output) {
-			_, _ = fmt.Fprintln(r.out, mutedStyle.Render("  ⎿  "+line))
+			_, _ = fmt.Fprintln(r.out, mutedStyle.Render("  ↳ "+line))
 		}
 
 	case event.TypeToolApproval:
 		r.closeLine()
-		_, _ = fmt.Fprintln(r.out, toolStyle.Render("⏸ "+ev.Tool))
+		_, _ = fmt.Fprintln(r.out, toolStyle.Render("◎ "+ev.Tool))
 
 	case event.TypeCompaction:
 		r.closeLine()
-		_, _ = fmt.Fprintln(r.out, mutedStyle.Render("⟳ "+ev.Content))
+		_, _ = fmt.Fprintln(r.out, mutedStyle.Render("↻ "+ev.Content))
 
 	case event.TypeSubAgentStart:
 		r.closeLine()
-		_, _ = fmt.Fprintln(r.out, toolStyle.Render("↳ "+ev.Tool))
+		_, _ = fmt.Fprintln(r.out, toolStyle.Render("→ "+ev.Tool))
 
 	case event.TypeSubAgentEnd:
-		_, _ = fmt.Fprintln(r.out, mutedStyle.Render("↲ "+ev.Tool))
+		r.closeLine()
+		_, _ = fmt.Fprintln(r.out, mutedStyle.Render("← "+ev.Tool))
 
 	case event.TypeError:
 		r.closeLine()
@@ -111,11 +121,15 @@ func (r *Renderer) ensureAssistantBlock() {
 	}
 	r.opened = true
 	_, _ = fmt.Fprintln(r.out)
-	_, _ = fmt.Fprintln(r.out, accentStyle.Render(i18n.T("tui.assistant.label")))
+	_, _ = fmt.Fprintln(r.out, labelStyle.Render("◆ "+i18n.T("tui.assistant.label")))
 }
 
 func (r *Renderer) closeLine() {
-	// noop — streaming handles newlines naturally; tool blocks add their own
+	if !r.needNL {
+		return
+	}
+	_, _ = fmt.Fprintln(r.out)
+	r.needNL = false
 }
 
 func formatJSON(v any) string {
@@ -158,21 +172,25 @@ func wrapToolResult(s string) []string {
 	return []string{s[:max] + "..."}
 }
 
-// PrintWelcome shows a compact session header.
+// PrintWelcome shows a compact session header without a fixed-width box
+// (those break on CJK and wide glyphs).
 func PrintWelcome(agentName, providerName, model string) {
-	border := borderStyle
-	title := titleStyle.Render(i18n.T("tui.welcome.title"))
-	line := strings.Repeat("─", 42)
-	titlePlain := i18n.T("tui.welcome.title")
+	meta := i18n.T("tui.welcome.meta",
+		"agent", agentName, "provider", providerName, "model", model)
+	body := titleStyle.Render(i18n.T("tui.welcome.title")) + "\n" +
+		mutedStyle.Render(meta)
 
-	top := border.Render("╭" + line + "╮")
-	fmt.Println(top)
-	fmt.Println(border.Render("│") + title + strings.Repeat(" ", 42-len(titlePlain)) + border.Render("│"))
-	fmt.Println(border.Render("│") + mutedStyle.Render(fmt.Sprintf("%-37s", i18n.T("tui.welcome.agent", "value", agentName))) + border.Render("│"))
-	fmt.Println(border.Render("│") + mutedStyle.Render(fmt.Sprintf("%-37s", i18n.T("tui.welcome.provider", "value", providerName))) + border.Render("│"))
-	fmt.Println(border.Render("│") + mutedStyle.Render(fmt.Sprintf("%-37s", i18n.T("tui.welcome.model", "value", model))) + border.Render("│"))
-	fmt.Println(border.Render("╰" + line + "╯"))
+	card := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(accent).
+		PaddingLeft(1).
+		Render(body)
+
+	fmt.Println()
+	fmt.Println(card)
+	fmt.Println()
 	fmt.Println(hintStyle.Render(i18n.T("tui.welcome.hint")))
+	fmt.Println(ruleStyle.Render(strings.Repeat("─", 36)))
 }
 
 // PrintHelp shows slash commands.
@@ -187,7 +205,8 @@ func PrintHelp() {
 		{"/tools [agent]", i18n.T("tui.help.tools")},
 	}
 	for _, row := range rows {
-		fmt.Printf("  %-22s %s\n", toolStyle.Render(row.cmd), mutedStyle.Render(row.desc))
+		cmd := toolStyle.Width(16).Render(row.cmd)
+		fmt.Printf("  %s %s\n", cmd, mutedStyle.Render(row.desc))
 	}
 	fmt.Println()
 }

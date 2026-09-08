@@ -67,6 +67,26 @@ func TestRun_BasicExecution(t *testing.T) {
 	}
 }
 
+func TestChildLoopConfig_IncludesImages(t *testing.T) {
+	imgs := []provider.ContentPart{{
+		Type:     "image_url",
+		ImageURL: &provider.ImageURL{URL: "data:image/png;base64,x"},
+	}}
+	cfg := childLoopConfig(
+		Config{Task: "look", Images: imgs},
+		Deps{},
+		&agent.Agent{Name: "a"},
+		nil,
+		session.New("child"),
+	)
+	if len(cfg.Images) != 1 {
+		t.Fatalf("Images = %d, want 1", len(cfg.Images))
+	}
+	if cfg.Images[0].Type != "image_url" {
+		t.Fatalf("Images[0].Type = %q", cfg.Images[0].Type)
+	}
+}
+
 func TestRun_EmitsSubAgentEvents(t *testing.T) {
 	deps := setupDeps()
 	ctx := context.Background()

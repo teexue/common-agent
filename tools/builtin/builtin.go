@@ -39,6 +39,7 @@ func RegisterAll(r *registry.Registry, workDir string) {
 
 	// File operation tools
 	r.MustRegister(ReadFile{WorkDir: workDir})
+	r.MustRegister(ReadImage{WorkDir: workDir})
 	r.MustRegister(WriteFile{WorkDir: workDir})
 	r.MustRegister(ListDirectory{WorkDir: workDir})
 	r.MustRegister(EditFile{WorkDir: workDir})

@@ -6,9 +6,19 @@ import (
 
 	"github.com/teexue/common-agent/core/agent"
 	"github.com/teexue/common-agent/core/provider"
+	"github.com/teexue/common-agent/core/service"
 	"github.com/teexue/common-agent/tools/builtin"
 	"github.com/teexue/common-agent/tools/registry"
 )
+
+// resolveRunAgent picks the agent for CLI run/chat: an explicit --agent must
+// exist; otherwise try settings default then the first agent under agentsDir.
+func resolveRunAgent(agentsDir, flagAgent, defaultAgent string) (*agent.Agent, error) {
+	if flagAgent != "" {
+		return agent.LoadByName(agentsDir, service.NormalizeAgentName(flagAgent))
+	}
+	return agent.ResolveDefault(agentsDir, service.NormalizeAgentName(defaultAgent))
+}
 
 func newRegistry(workDir string) *registry.Registry {
 	// If no workDir specified, use current working directory.

@@ -238,7 +238,10 @@ func titleFromMessages(msgs []json.RawMessage) string {
 		if err := json.Unmarshal(raw, &m); err != nil {
 			continue
 		}
-		if m.Role == string(provider.RoleUser) {
+		if m.Role == string(provider.RoleUser) &&
+			!provider.IsToolImageUserMessage(provider.Message{
+				Role: provider.RoleUser, Content: m.Content,
+			}) {
 			return TitleFromPrompt(m.Content)
 		}
 	}

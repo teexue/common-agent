@@ -96,6 +96,7 @@ function searchFilesText(obj: Record<string, unknown>): string | null {
 const EXTRACT: Record<string, (obj: Record<string, unknown>) => string | null> =
   {
     read_file: pathOf,
+    read_image: pathOf,
     create_directory: pathOf,
     list_directory: pathOf,
     delete_file: pathOf,

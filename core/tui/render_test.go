@@ -33,10 +33,10 @@ func TestRendererToolFlow(t *testing.T) {
 	if !strings.Contains(out, "Assistant") {
 		t.Fatalf("expected Assistant header: %q", out)
 	}
-	if !strings.Contains(out, "⏺ echo") {
+	if !strings.Contains(out, "● echo") {
 		t.Fatalf("expected tool line: %q", out)
 	}
-	if !strings.Contains(out, "⎿") {
+	if !strings.Contains(out, "↳") {
 		t.Fatalf("expected tool result: %q", out)
 	}
 	if strings.Contains(out, "[done]") {

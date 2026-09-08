@@ -31,11 +31,21 @@ func NewAgentPolicy(p Permissions) *AgentPolicy {
 
 // Check evaluates the tool call against the allow/deny lists.
 func (sp *AgentPolicy) Check(call ToolCall) Decision {
-	if sp.autoApprove[call.Name] {
+	name := permissionToolName(call.Name)
+	if sp.autoApprove[name] {
 		return Allow
 	}
-	if sp.alwaysDeny[call.Name] {
+	if sp.alwaysDeny[name] {
 		return Deny
 	}
 	return Confirm
+}
+
+// permissionToolName maps tools that share a permission surface.
+// read_image follows read_file so image reads are not configured separately.
+func permissionToolName(name string) string {
+	if name == "read_image" {
+		return "read_file"
+	}
+	return name
 }

@@ -11,6 +11,7 @@ import {
 } from "@/lib/api"
 import { EMPTY_FORM, formDataToYaml, mcpConfigToForm } from "@/lib/agent-yaml"
 import type { AgentFormData } from "@/lib/agent-yaml"
+import { stripHiddenPickerTools } from "@/lib/tool-visibility"
 import type { AgentDetail, ProviderInfo, ToolInfo } from "@/types/agent"
 
 export function agentDetailToForm(d: AgentDetail): AgentFormData {
@@ -20,7 +21,7 @@ export function agentDetailToForm(d: AgentDetail): AgentFormData {
     provider: d.provider,
     model: d.model,
     systemPrompt: d.system_prompt || "",
-    tools: d.tools || [],
+    tools: stripHiddenPickerTools(d.tools || []),
     ...formRuntime(d),
     ...formPermissions(d),
     mcpServers: (d.mcp_servers ?? []).map(mcpConfigToForm),
@@ -39,10 +40,12 @@ function formRuntime(d: AgentDetail) {
 }
 
 function formPermissions(d: AgentDetail) {
+  const tools = stripHiddenPickerTools(d.tools || [])
   return {
-    autoApprove:
-      d.permissions == null ? d.tools || [] : d.permissions.auto_approve || [],
-    alwaysDeny: d.permissions?.always_deny || [],
+    autoApprove: stripHiddenPickerTools(
+      d.permissions == null ? tools : d.permissions.auto_approve || []
+    ),
+    alwaysDeny: stripHiddenPickerTools(d.permissions?.always_deny || []),
   }
 }
 

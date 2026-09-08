@@ -21,19 +21,18 @@ import (
 	"github.com/teexue/common-agent/core/session"
 	"github.com/teexue/common-agent/core/tui"
 	"github.com/teexue/common-agent/tools/registry"
+	"golang.org/x/term"
 )
 
-// chatState is the REPL-scoped wiring: one shared Service plus the currently
-// selected agent and session handles. Per-turn state (provider, policy, MCP,
-// skills) is rebuilt by PrepareRun each turn, matching the Web path.
+// chatState is the legacy readline REPL fallback for non-TTY environments.
 type chatState struct {
 	svc      *service.Service
 	paths    runtimePaths
 	agent    string
-	sess     *session.Session // nil = start a new session on the next turn
+	sess     *session.Session
 	reg      *registry.Registry
 	readline *readline.Instance
-	sigCtx   context.Context // SIGINT/SIGTERM-cancelled base for run contexts
+	sigCtx   context.Context
 }
 
 func runChat(args []string, logger *slog.Logger) {
@@ -62,11 +61,6 @@ func runChat(args []string, logger *slog.Logger) {
 		logger.Error("log.config.load_settings", "error", err)
 		os.Exit(1)
 	}
-	name := *agentName
-	if name == "" {
-		name = settings.DefaultAgent
-	}
-
 	reg := newRegistry("")
 	svc := wireCLIService(cliServiceConfig{
 		paths: paths, reg: reg, catalog: catalog,
@@ -74,14 +68,29 @@ func runChat(args []string, logger *slog.Logger) {
 		mock: *mock, logger: logger,
 	})
 
-	// Resolve the agent up front so a bad name fails before the REPL starts;
-	// later turns re-resolve through PrepareRun like the Web path does.
-	a, err := svc.GetAgent(name)
+	a, err := resolveRunAgent(paths.agentsDir, *agentName, settings.DefaultAgent)
 	if err != nil {
 		logger.Error("log.agent.load", "error", err)
 		os.Exit(1)
 	}
 
+	if term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+		err := tui.RunChat(tui.ChatConfig{
+			Runner:    serviceChatRunner{svc: svc},
+			Agent:     a,
+			AgentsDir: paths.agentsDir,
+		})
+		if err != nil {
+			logger.Error("log.chat.tui", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	runChatREPL(svc, paths, a, reg, logger)
+}
+
+func runChatREPL(svc *service.Service, paths runtimePaths, a *agent.Agent, reg *registry.Registry, logger *slog.Logger) {
 	rl, err := newChatReadline(paths.home)
 	if err != nil {
 		logger.Error("log.chat.readline", "error", err)
@@ -89,11 +98,19 @@ func runChat(args []string, logger *slog.Logger) {
 	}
 	defer rl.Close()
 
-	// Track the stable ID so session attribution matches PrepareRun / resume.
 	state := &chatState{svc: svc, paths: paths, agent: a.ID, reg: reg, readline: rl}
 	defer withSignalContext(state)()
 	tui.PrintWelcome(a.Name, a.Provider, a.Model)
 	runChatLoop(state)
+}
+
+func launchChatTUI(svc *service.Service, paths runtimePaths, a *agent.Agent, sess *session.Session) error {
+	return tui.RunChat(tui.ChatConfig{
+		Runner:    serviceChatRunner{svc: svc},
+		Agent:     a,
+		Session:   sess,
+		AgentsDir: paths.agentsDir,
+	})
 }
 
 // withSignalContext registers SIGINT/SIGTERM cancellation for the REPL and
@@ -158,10 +175,7 @@ func runChatTurn(line string, state *chatState) {
 	tui.PrintEvents(events)
 }
 
-// chatTurnRequest builds the PrepareRun request for one REPL turn. The first
-// turn (sess nil) passes no SessionID so PrepareRun creates the session; later
-// turns resume it by id. Without a store the conversation is replayed via
-// Messages so history survives across turns.
+// chatTurnRequest builds the PrepareRun request for one REPL turn.
 func chatTurnRequest(line string, state *chatState) service.RunRequest {
 	req := service.RunRequest{Agent: state.agent, Prompt: line, Source: "chat"}
 	if state.sess == nil {
@@ -175,8 +189,7 @@ func chatTurnRequest(line string, state *chatState) service.RunRequest {
 	return req
 }
 
-// prepareChatTurn calls PrepareRun, falling back to a fresh session (history
-// replayed) when the persisted session was deleted while the REPL is open.
+// prepareChatTurn calls PrepareRun, falling back when the session was deleted.
 func prepareChatTurn(line string, state *chatState, ctx context.Context) (*service.RunResult, error) {
 	req := chatTurnRequest(line, state)
 	result, err := state.svc.PrepareRun(ctx, req, CLIApprover{})
@@ -210,8 +223,7 @@ func handleChatCommand(line string, state *chatState) (exit bool) {
 	}
 }
 
-// handleClearCommand saves the current session (old /clear behavior) and
-// resets to a fresh session on the next turn.
+// handleClearCommand saves the current session and resets for the next turn.
 func handleClearCommand(state *chatState) bool {
 	if state.svc.Store != nil && state.sess != nil {
 		if err := state.svc.Store.Save(state.sess); err != nil {
@@ -230,14 +242,11 @@ func handleAgentCommand(parts []string, state *chatState) bool {
 	if len(parts) < 2 {
 		return listChatAgents(state)
 	}
-	// Probe the agent through the service so failures surface before switching.
 	a, err := state.svc.GetAgent(parts[1])
 	if err != nil {
 		fmt.Println(tui.Error(err.Error()))
 		return false
 	}
-	// Track the stable ID so session attribution and lookups by ID stay
-	// consistent regardless of how the user referenced the agent.
 	state.agent = a.ID
 	state.sess = nil
 	fmt.Println(tui.Success(i18n.T("tui.chat.agent_switched", "agent", a.Name, "provider", a.Provider, "model", a.Model)))

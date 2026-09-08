@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { File } from "lucide-react"
+import { File, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Rec } from "@/components/inspector/tool-detail-utils"
 import type { DiffLine } from "@/components/inspector/diff-utils"
@@ -138,15 +138,17 @@ export function FilePanel({
   path,
   meta,
   children,
+  icon: Icon = File,
 }: {
   path: string
   meta?: ReactNode
   children: ReactNode
+  icon?: LucideIcon
 }) {
   return (
     <div className="overflow-hidden rounded-md border border-border/70 bg-muted/20">
       <div className="flex items-center gap-2 border-b border-border/70 bg-muted/40 px-2.5 py-1.5">
-        <File className="h-3 w-3 shrink-0 text-primary" />
+        <Icon className="h-3 w-3 shrink-0 text-primary" />
         <span
           className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground"
           title={path}

@@ -1,4 +1,5 @@
 import type { McpServerConfig } from "@/types/agent"
+import { stripHiddenPickerTools } from "@/lib/tool-visibility"
 
 /** Form data shape for the Agent editor. */
 export interface AgentFormData {
@@ -161,18 +162,21 @@ export function mcpServersToYaml(servers: McpServerFormItem[]): string {
 }
 
 function emitPermissions(form: AgentFormData, lines: string[]): void {
-  const hasConfirm = form.tools.some((t) => !form.autoApprove.includes(t))
-  if (form.alwaysDeny.length === 0 && !hasConfirm) return
+  const tools = stripHiddenPickerTools(form.tools)
+  const autoApprove = stripHiddenPickerTools(form.autoApprove)
+  const alwaysDeny = stripHiddenPickerTools(form.alwaysDeny)
+  const hasConfirm = tools.some((t) => !autoApprove.includes(t))
+  if (alwaysDeny.length === 0 && !hasConfirm) return
   lines.push(`permissions:`)
-  if (form.autoApprove.length > 0) {
+  if (autoApprove.length > 0) {
     lines.push(`  auto_approve:`)
-    for (const t of form.autoApprove) lines.push(`    - ${t}`)
+    for (const t of autoApprove) lines.push(`    - ${t}`)
   } else {
     lines.push(`  auto_approve: []`)
   }
-  if (form.alwaysDeny.length > 0) {
+  if (alwaysDeny.length > 0) {
     lines.push(`  always_deny:`)
-    for (const t of form.alwaysDeny) lines.push(`    - ${t}`)
+    for (const t of alwaysDeny) lines.push(`    - ${t}`)
   } else {
     lines.push(`  always_deny: []`)
   }
@@ -201,7 +205,9 @@ function emitHeader(form: AgentFormData, lines: string[]): void {
     lines.push(yamlIndent(form.systemPrompt, "  "))
   }
   lines.push(`tools:`)
-  for (const t of form.tools) lines.push(`  - ${yamlScalar(t)}`)
+  for (const t of stripHiddenPickerTools(form.tools)) {
+    lines.push(`  - ${yamlScalar(t)}`)
+  }
   lines.push(`max_turns: ${form.maxTurns}`)
   if (form.maxTokens) lines.push(`max_tokens: ${form.maxTokens}`)
   lines.push(`tool_execution:`)

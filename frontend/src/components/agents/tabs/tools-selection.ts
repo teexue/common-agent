@@ -1,7 +1,14 @@
 import type { TFunction } from "i18next"
 import type { AgentFormData } from "@/lib/agent-yaml"
+import {
+  HIDDEN_PICKER_TOOLS,
+  stripHiddenPickerTools,
+  visibleCatalogTools,
+} from "@/lib/tool-visibility"
 import { toolDisplayDescription, toolDisplayName } from "@/lib/tool-i18n"
 import type { ToolInfo } from "@/types/agent"
+
+export { HIDDEN_PICKER_TOOLS, stripHiddenPickerTools, visibleCatalogTools }
 
 export function filterTools(
   tools: ToolInfo[],
@@ -9,8 +16,9 @@ export function filterTools(
   t: TFunction
 ): ToolInfo[] {
   const q = query.trim().toLowerCase()
-  if (!q) return tools
-  return tools.filter((tool) => {
+  const catalog = visibleCatalogTools(tools)
+  if (!q) return catalog
+  return catalog.filter((tool) => {
     const label = toolDisplayName(tool.name, t).toLowerCase()
     const desc = toolDisplayDescription(
       tool.name,

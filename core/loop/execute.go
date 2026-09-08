@@ -30,36 +30,35 @@ type ToolExecContext struct {
 }
 
 // executeOneTool runs a single tool call and emits tool_start / tool_result events.
-func executeOneTool(tc ToolExecContext) json.RawMessage {
+func executeOneTool(tc ToolExecContext) tool.Result {
 	return executeTool(tc)
 }
 
-func executeTool(tc ToolExecContext) json.RawMessage {
+func executeTool(tc ToolExecContext) tool.Result {
 	inputJSON := prepareInput(tc.Call.Arguments, tc.Log)
 	emit(tc.Ctx, tc.Out, event.Event{Type: event.TypeToolStart, Tool: tc.Call.Name, Input: inputJSON, ToolCallID: tc.Call.ID})
 
 	if result, denied := checkPermission(tc.Ctx, tc.Pol, tc.Approver, tc.Call, tc.Out); denied {
-		return result
+		return tool.Result{Output: result}
 	}
 
 	fireOnToolStartHook(tc.Hooks, tc.Call, tc.Log)
 
 	t, ok := tc.Reg.Get(tc.Call.Name)
 	if !ok {
-		return emitToolNotFound(tc.Ctx, tc.Hooks, tc.Call, tc.Out)
+		return tool.Result{Output: emitToolNotFound(tc.Ctx, tc.Hooks, tc.Call, tc.Out)}
 	}
 
 	res, execErr := executeWithTelemetry(tc.Ctx, t, tc.Call, tc.Out)
-
 	if execErr != nil {
-		return emitToolError(tc.Ctx, tc.Hooks, tc.Call, execErr, tc.Out)
+		return tool.Result{Output: emitToolError(tc.Ctx, tc.Hooks, tc.Call, execErr, tc.Out)}
 	}
 
 	if tc.Hooks != nil {
 		_ = tc.Hooks.OnToolResult(tc.Ctx, hook.ToolResultInfo{Name: tc.Call.Name, Output: res.Output})
 	}
 	emit(tc.Ctx, tc.Out, event.Event{Type: event.TypeToolResult, Tool: tc.Call.Name, Output: res.Output, ToolCallID: tc.Call.ID})
-	return res.Output
+	return res
 }
 
 // prepareInput normalizes tool arguments for display.
@@ -164,4 +163,18 @@ func emitToolError(ctx context.Context, hooks *hook.Chain, call provider.ToolCal
 	}
 	emit(ctx, out, event.Event{Type: event.TypeToolResult, Tool: call.Name, Output: json.RawMessage(outVal), ToolCallID: call.ID})
 	return json.RawMessage(outVal)
+}
+
+// imageContentParts keeps only image_url parts for multimodal follow-up messages.
+func imageContentParts(parts []provider.ContentPart) []provider.ContentPart {
+	if len(parts) == 0 {
+		return nil
+	}
+	out := make([]provider.ContentPart, 0, len(parts))
+	for _, p := range parts {
+		if p.Type == "image_url" && p.ImageURL != nil && p.ImageURL.URL != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

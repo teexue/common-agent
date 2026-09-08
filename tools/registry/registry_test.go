@@ -89,8 +89,8 @@ func TestNames(t *testing.T) {
 	builtin.RegisterAll(reg, t.TempDir())
 
 	names := reg.Names()
-	if len(names) != 11 {
-		t.Fatalf("got %d names, want 11", len(names))
+	if len(names) != 12 {
+		t.Fatalf("got %d names, want 12", len(names))
 	}
 	// Names should be sorted.
 	if names[0] != "create_directory" {
@@ -114,8 +114,8 @@ func TestList(t *testing.T) {
 	builtin.RegisterAll(reg, t.TempDir())
 
 	tools := reg.List()
-	if len(tools) != 11 {
-		t.Fatalf("got %d tools, want 11", len(tools))
+	if len(tools) != 12 {
+		t.Fatalf("got %d tools, want 12", len(tools))
 	}
 	// List should be sorted by name.
 	if tools[0].Name() != "create_directory" {

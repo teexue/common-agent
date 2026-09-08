@@ -94,3 +94,24 @@ func TestAgentPolicy_EmptyLists(t *testing.T) {
 		t.Fatalf("expected Confirm for empty lists, got %s", decision)
 	}
 }
+
+func TestAgentPolicy_ReadImageFollowsReadFile(t *testing.T) {
+	pol := permission.NewAgentPolicy(permission.Permissions{
+		AutoApprove: []string{"read_file"},
+	})
+	if got := pol.Check(permission.ToolCall{Name: "read_image"}); got != permission.Allow {
+		t.Fatalf("read_image with read_file auto_approve: got %s, want Allow", got)
+	}
+
+	deny := permission.NewAgentPolicy(permission.Permissions{
+		AlwaysDeny: []string{"read_file"},
+	})
+	if got := deny.Check(permission.ToolCall{Name: "read_image"}); got != permission.Deny {
+		t.Fatalf("read_image with read_file always_deny: got %s, want Deny", got)
+	}
+
+	confirm := permission.NewAgentPolicy(permission.Permissions{})
+	if got := confirm.Check(permission.ToolCall{Name: "read_image"}); got != permission.Confirm {
+		t.Fatalf("read_image alone: got %s, want Confirm", got)
+	}
+}

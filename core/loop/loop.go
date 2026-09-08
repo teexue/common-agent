@@ -26,6 +26,7 @@ type pendingResult struct {
 	toolName string
 	output   json.RawMessage
 	args     json.RawMessage
+	parts    []provider.ContentPart
 }
 
 // Run executes the agent loop and streams events.
@@ -37,7 +38,7 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 	if err != nil {
 		return nil, err
 	}
-	toolDefs, err := cfg.Registry.Definitions(cfg.Agent.Tools)
+	toolDefs, err := cfg.Registry.Definitions(ExpandImpliedTools(cfg.Agent.Tools))
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +306,7 @@ func collectParallelResults(tc ToolCollectContext) []pendingResult {
 			defer func() { <-sem }()
 			res := executeOneTool(ToolExecContext{Ctx: tc.Ctx, Reg: tc.Config.Registry, Call: call, Out: tc.Out, Log: tc.Log, Pol: tc.Pol, Hooks: tc.Hooks, Approver: tc.Approver})
 			select {
-			case resultCh <- indexedResult{i, pendingResult{idx: i, callID: call.ID, toolName: call.Name, args: call.Arguments, output: res}}:
+			case resultCh <- indexedResult{i, pendingResult{idx: i, callID: call.ID, toolName: call.Name, args: call.Arguments, output: res.Output, parts: res.ContentParts}}:
 			case <-tc.Ctx.Done():
 			}
 		}(call, i)
@@ -330,7 +331,7 @@ func collectSerialResults(tc ToolCollectContext) []pendingResult {
 	results := make([]pendingResult, 0, len(tc.ToolCalls))
 	for i, call := range tc.ToolCalls {
 		res := executeOneTool(ToolExecContext{Ctx: tc.Ctx, Reg: tc.Config.Registry, Call: call, Out: tc.Out, Log: tc.Log, Pol: tc.Pol, Hooks: tc.Hooks, Approver: tc.Approver})
-		results = append(results, pendingResult{idx: i, callID: call.ID, toolName: call.Name, args: call.Arguments, output: res})
+		results = append(results, pendingResult{idx: i, callID: call.ID, toolName: call.Name, args: call.Arguments, output: res.Output, parts: res.ContentParts})
 	}
 	return results
 }
@@ -348,6 +349,19 @@ func recordToolResults(cfg Config, results []pendingResult, window int) {
 		cfg.Session.AddMessages(provider.Message{
 			Role: provider.RoleTool, ToolCallID: tr.callID, Name: tr.toolName, Content: content,
 		})
+		// Vision APIs require image blocks on user/assistant turns, not as
+		// JSON inside RoleTool. Attach them as a follow-up user message
+		// (hidden from chat UIs via provider.IsToolImageUserMessage).
+		if imgs := imageContentParts(tr.parts); len(imgs) > 0 {
+			label := provider.ToolImageUserContent(tr.toolName)
+			cfg.Session.AddMessages(provider.Message{
+				Role:    provider.RoleUser,
+				Content: label,
+				ContentParts: append([]provider.ContentPart{{
+					Type: "text", Text: label,
+				}}, imgs...),
+			})
+		}
 	}
 }
 
