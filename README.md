@@ -55,16 +55,18 @@
 
 ## 快速使用
 
-一键下载到当前目录（得到无架构后缀的 `common-agent` / `common-agent.exe`）：
+一键下载到当前目录：
+
+macOS / Linux：
 
 ```bash
-# macOS / Linux
 curl -fsSL https://raw.githubusercontent.com/teexue/common-agent/main/scripts/install.sh | bash
 ./common-agent
 ```
 
+Windows（PowerShell）：
+
 ```powershell
-# Windows（PowerShell）
 irm https://raw.githubusercontent.com/teexue/common-agent/main/scripts/install.ps1 | iex
 .\common-agent.exe
 ```
