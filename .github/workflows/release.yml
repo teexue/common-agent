@@ -39,9 +39,9 @@ jobs:
 
       - name: Generate checksums
         working-directory: bin
-        run: sha256sum agent-server-* > checksums.txt
+        run: sha256sum common-agent-* > checksums.txt
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: bin/agent-server-*
+          files: bin/common-agent-*

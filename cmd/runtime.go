@@ -55,7 +55,7 @@ func bootstrapRuntime(paths runtimePaths, useMock bool, logger *slog.Logger) (*p
 	creds, err := config.NewCredentialStore(paths.home)
 	if err != nil {
 		_ = db.Close()
-		return nil, nil, nil, fmt.Errorf("load credentials: %w (run: agent-server config init)", err)
+		return nil, nil, nil, fmt.Errorf("load credentials: %w (run: common-agent config init)", err)
 	}
 
 	catalog, err := db.LoadCatalog(creds.Lookup)
@@ -65,7 +65,7 @@ func bootstrapRuntime(paths runtimePaths, useMock bool, logger *slog.Logger) (*p
 			return nil, creds, db, nil
 		}
 		_ = db.Close()
-		return nil, nil, nil, fmt.Errorf("load providers: %w (run: agent-server config init)", err)
+		return nil, nil, nil, fmt.Errorf("load providers: %w (run: common-agent config init)", err)
 	}
 	logger.Debug("log.runtime.ready", "home", paths.home)
 	return catalog, creds, db, nil

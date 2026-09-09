@@ -5,7 +5,7 @@
 	build-windows-amd64 build-windows-arm64
 
 BIN_DIR := bin
-BINARY  := agent-server
+BINARY  := common-agent
 PKG     := ./cmd
 CGO     := 0
 

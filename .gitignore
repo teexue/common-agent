@@ -1,4 +1,5 @@
 /bin/
+common-agent
 agent-server
 .env
 

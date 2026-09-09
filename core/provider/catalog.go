@@ -154,7 +154,7 @@ func (e ProfileEntry) resolve(name string, credLookup func(string) string) (Prof
 	// A configured api_key_env means a key is required (e.g. ollama_cloud).
 	// An empty api_key_env (local Ollama) means no key is needed.
 	if e.APIKeyEnv != "" && apiKey == "" {
-		return Profile{}, fmt.Errorf("API key for %q not found; run: agent-server config set-key %s <key>", e.APIKeyEnv, e.APIKeyEnv)
+		return Profile{}, fmt.Errorf("API key for %q not found; run: common-agent config set-key %s <key>", e.APIKeyEnv, e.APIKeyEnv)
 	}
 
 	vendor, hasVendor := LookupVendor(name)

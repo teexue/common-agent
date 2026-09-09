@@ -38,7 +38,7 @@ func resolveProvider(catalog *provider.Catalog, useMock bool) func(a *agent.Agen
 			return mockProvider(), nil
 		}
 		if catalog == nil {
-			return nil, fmt.Errorf("no provider configured; add one in the Settings UI or run: agent-server config set provider")
+			return nil, fmt.Errorf("no provider configured; add one in the Settings UI or run: common-agent config set provider")
 		}
 		return catalog.ResolveForAgent(a.Provider)
 	}

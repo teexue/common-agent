@@ -55,18 +55,32 @@
 
 ## 快速使用
 
-从 [Releases](https://github.com/teexue/common-agent/releases/latest) 下载对应平台的二进制，无需安装 Go 或 Node.js。无参数启动即打开 Web 控制台（默认 `http://localhost:8080`）。浏览器里注册第一个账户，该用户会成为管理员；随后在设置里填写模型提供商与 API Key 即可对话。关掉运行窗口或进程后服务会停止。
+一键下载到当前目录（得到无架构后缀的 `common-agent` / `common-agent.exe`）：
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/teexue/common-agent/main/scripts/install.sh | bash
+./common-agent
+```
+
+```powershell
+# Windows（PowerShell）
+irm https://raw.githubusercontent.com/teexue/common-agent/main/scripts/install.ps1 | iex
+.\common-agent.exe
+```
+
+也可从 [Releases](https://github.com/teexue/common-agent/releases/latest) 手动下载对应平台的二进制，无需安装 Go 或 Node.js。无参数启动即打开 Web 控制台（默认 `http://localhost:8080`）。浏览器里注册第一个账户，该用户会成为管理员；随后在设置里填写模型提供商与 API Key 即可对话。关掉运行窗口或进程后服务会停止。
 
 按系统选择文件：
 
 | 系统 | 架构 | 文件 |
 |------|------|------|
-| Windows | x64 | `agent-server-windows-amd64.exe` |
-| Windows | ARM | `agent-server-windows-arm64.exe` |
-| macOS | Apple 芯片 | `agent-server-darwin-arm64` |
-| macOS | Intel | `agent-server-darwin-amd64` |
-| Linux | x64 | `agent-server-linux-amd64` |
-| Linux | ARM | `agent-server-linux-arm64` |
+| Windows | x64 | `common-agent-windows-amd64.exe` |
+| Windows | ARM | `common-agent-windows-arm64.exe` |
+| macOS | Apple 芯片 | `common-agent-darwin-arm64` |
+| macOS | Intel | `common-agent-darwin-amd64` |
+| Linux | x64 | `common-agent-linux-amd64` |
+| Linux | ARM | `common-agent-linux-arm64` |
 
 ### Windows
 
@@ -77,19 +91,19 @@
 ### macOS / Linux
 
 ```bash
-chmod +x agent-server-darwin-arm64   # 换成你下载的文件名
-./agent-server-darwin-arm64
+chmod +x common-agent-darwin-arm64   # 换成你下载的文件名
+./common-agent-darwin-arm64
 ```
 
-浏览器打开 [http://localhost:8080](http://localhost:8080)。macOS 若提示无法打开，在「系统设置 → 隐私与安全性」里允许，或执行 `xattr -d com.apple.quarantine agent-server-darwin-arm64` 后再运行。
+浏览器打开 [http://localhost:8080](http://localhost:8080)。macOS 若提示无法打开，在「系统设置 → 隐私与安全性」里允许，或执行 `xattr -d com.apple.quarantine common-agent-darwin-arm64` 后再运行。
 
-换端口：`./agent-server-linux-amd64 -addr :8090`。
+换端口：`./common-agent-linux-amd64 -addr :8090`。
 
 ## 从源码构建
 
 ```bash
 make                            # 构建（需要 Go 和 Node.js）
-./bin/agent-server config init  # 可选：命令行配置模型提供商与 API Key
-./bin/agent-server              # 启动 Web 界面（默认 :8080）
+./bin/common-agent config init  # 可选：命令行配置模型提供商与 API Key
+./bin/common-agent              # 启动 Web 界面（默认 :8080）
 ```
 
