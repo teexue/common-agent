@@ -90,22 +90,3 @@ irm https://raw.githubusercontent.com/teexue/common-agent/main/scripts/install.p
 
 若 SmartScreen 拦截，选「更多信息」再「仍要运行」。
 
-### macOS / Linux
-
-```bash
-chmod +x common-agent-darwin-arm64   # 换成你下载的文件名
-./common-agent-darwin-arm64
-```
-
-浏览器打开 [http://localhost:8080](http://localhost:8080)。macOS 若提示无法打开，在「系统设置 → 隐私与安全性」里允许，或执行 `xattr -d com.apple.quarantine common-agent-darwin-arm64` 后再运行。
-
-换端口：`./common-agent-linux-amd64 -addr :8090`。
-
-## 从源码构建
-
-```bash
-make                            # 构建（需要 Go 和 Node.js）
-./bin/common-agent config init  # 可选：命令行配置模型提供商与 API Key
-./bin/common-agent              # 启动 Web 界面（默认 :8080）
-```
-
