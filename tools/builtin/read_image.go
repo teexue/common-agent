@@ -79,15 +79,19 @@ func (r ReadImage) Execute(ctx context.Context, input json.RawMessage) (tool.Res
 	if mediaType == "" {
 		return tool.Result{}, fmt.Errorf("unsupported or unrecognized image type")
 	}
+	prepared, mediaType, err := prepareVisionImage(data, mediaType)
+	if err != nil {
+		return tool.Result{}, err
+	}
 	detail := args.Detail
 	if detail == "" {
 		detail = "auto"
 	}
-	dataURL := "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(data)
+	dataURL := "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(prepared)
 	out, _ := json.Marshal(map[string]any{
 		"path":       args.Path,
 		"media_type": mediaType,
-		"bytes":      len(data),
+		"bytes":      len(prepared),
 		"detail":     detail,
 	})
 	return tool.Result{

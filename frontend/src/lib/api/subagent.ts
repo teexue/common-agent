@@ -4,6 +4,7 @@ export interface SubagentSettings {
   enabled: boolean
   max_turns: number
   timeout: number
+  max_concurrent: number
 }
 
 /** Fetches global sub-agent limits. */

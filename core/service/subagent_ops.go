@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	maxSubagentTurns   = 100
-	maxSubagentTimeout = 3600
+	maxSubagentTurns        = 100
+	maxSubagentTimeout      = 3600
+	maxSubagentConcurrent   = 32
 )
 
 // GetSubagentSettings returns normalized global sub-agent limits.
@@ -47,10 +48,7 @@ func (s *Service) loadSettings() (config.Settings, error) {
 }
 
 func (s *Service) applySubagent(a *agent.Agent) loop.SubagentLimits {
-	view := config.SubagentView{
-		Enabled: true, MaxTurns: config.DefaultSubagentMaxTurns,
-		MaxDepth: config.DefaultSubagentMaxDepth,
-	}
+	view := config.Settings{}.SubagentView()
 	if s.HomeDir != "" {
 		if settings, err := config.LoadSettings(s.HomeDir); err == nil {
 			view = settings.SubagentView()
@@ -59,6 +57,7 @@ func (s *Service) applySubagent(a *agent.Agent) loop.SubagentLimits {
 	limits := loop.SubagentLimits{
 		Enabled: view.Enabled, MaxTurns: view.MaxTurns,
 		MaxDepth: config.DefaultSubagentMaxDepth, Timeout: view.Timeout,
+		MaxConcurrent: view.MaxConcurrent,
 	}
 	if s.Registry != nil {
 		if _, ok := s.Registry.Get(subagent.ToolName); ok {
@@ -81,6 +80,12 @@ func validateSubagentView(v *config.SubagentView) error {
 	}
 	if v.Timeout > maxSubagentTimeout {
 		return &ArgError{Field: "timeout", Message: fmt.Sprintf("must be <= %d", maxSubagentTimeout)}
+	}
+	if v.MaxConcurrent <= 0 {
+		v.MaxConcurrent = config.DefaultSubagentMaxConcurrent
+	}
+	if v.MaxConcurrent > maxSubagentConcurrent {
+		return &ArgError{Field: "max_concurrent", Message: fmt.Sprintf("must be <= %d", maxSubagentConcurrent)}
 	}
 	return nil
 }

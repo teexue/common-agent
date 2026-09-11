@@ -55,6 +55,14 @@ function SubagentFields({
           onChange={(n) => s.setForm({ ...s.form, max_turns: n })}
         />
         <SubagentNumber
+          label={t("settings.subagentMaxConcurrent")}
+          hint={t("settings.subagentMaxConcurrentHint")}
+          value={s.form.max_concurrent}
+          disabled={!canSave}
+          min={1}
+          onChange={(n) => s.setForm({ ...s.form, max_concurrent: n })}
+        />
+        <SubagentNumber
           label={t("settings.subagentTimeout")}
           hint={t("settings.subagentTimeoutHint")}
           value={s.form.timeout}
@@ -73,19 +81,21 @@ function SubagentNumber({
   hint,
   value,
   disabled,
+  min = 0,
   onChange,
 }: {
   label: string
   hint: string
   value: number
   disabled: boolean
+  min?: number
   onChange: (n: number) => void
 }) {
   return (
     <SettingsField label={label} hint={hint}>
       <Input
         type="number"
-        min={0}
+        min={min}
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value) || 0)}

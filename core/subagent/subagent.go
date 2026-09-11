@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/teexue/common-agent/core/agent"
@@ -21,6 +22,10 @@ import (
 const (
 	// DefaultMaxDepth is the deepest child run allowed (1 = main agent only).
 	DefaultMaxDepth = 1
+	// StatusQueued is emitted on TypeSubAgentStart while waiting for a concurrency slot.
+	StatusQueued = "queued"
+	// StatusRunning is emitted on TypeSubAgentStart when the child session begins.
+	StatusRunning = "running"
 )
 
 // Config configures a sub-agent run.
@@ -79,7 +84,10 @@ type Result struct {
 func Run(ctx context.Context, cfg Config, deps Deps, parentOut chan<- event.Event) (*Result, error) {
 	var limits loop.SubagentLimits
 	if cfg.Limits == (loop.SubagentLimits{}) {
-		limits = loop.SubagentLimits{Enabled: true, MaxTurns: 5, MaxDepth: DefaultMaxDepth}
+		limits = loop.SubagentLimits{
+			Enabled: true, MaxTurns: 5, MaxDepth: DefaultMaxDepth,
+			MaxConcurrent: loop.DefaultSubagentMaxConcurrent,
+		}
 	} else {
 		limits = loop.NormalizeSubagentLimits(cfg.Limits)
 	}
@@ -87,11 +95,36 @@ func Run(ctx context.Context, cfg Config, deps Deps, parentOut chan<- event.Even
 	if cfg.Depth > limits.MaxDepth {
 		return nil, fmt.Errorf("sub-agent depth limit exceeded (%d)", limits.MaxDepth)
 	}
+	release, err := reserveSlot(ctx, cfg, parentOut, limits.MaxConcurrent)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	if limits.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(limits.Timeout)*time.Second)
 		defer cancel()
 	}
+	return runWithLimits(ctx, cfg, deps, parentOut, limits)
+}
+
+// reserveSlot takes a concurrency slot, emitting StatusQueued when it must wait.
+func reserveSlot(ctx context.Context, cfg Config, parentOut chan<- event.Event, max int) (func(), error) {
+	if release, ok := tryAcquireSlot(max); ok {
+		return release, nil
+	}
+	emitEvent(ctx, parentOut, event.Event{
+		Type:       event.TypeSubAgentStart,
+		Tool:       ToolName,
+		Content:    cfg.Task,
+		ToolCallID: loop.ToolCallIDFrom(ctx),
+		Status:     StatusQueued,
+		Message:    strconv.Itoa(max),
+	})
+	return acquireSlot(ctx, max)
+}
+
+func runWithLimits(ctx context.Context, cfg Config, deps Deps, parentOut chan<- event.Event, limits loop.SubagentLimits) (*Result, error) {
 	a, err := loadSubAgent(deps, cfg, limits)
 	if err != nil {
 		return nil, err
@@ -102,20 +135,24 @@ func Run(ctx context.Context, cfg Config, deps Deps, parentOut chan<- event.Even
 	}
 	sess := newChildSession(cfg, deps, a)
 	loopCfg := childLoopConfig(cfg, deps, a, p, sess)
+	callID := loop.ToolCallIDFrom(ctx)
 	emitEvent(ctx, parentOut, event.Event{
-		Type: event.TypeSubAgentStart, Tool: a.Name, Content: cfg.Task, SessionID: sess.ID,
+		Type: event.TypeSubAgentStart, Tool: a.Name, Content: cfg.Task,
+		SessionID: sess.ID, ToolCallID: callID, Status: StatusRunning,
 	})
 	events, err := loop.Run(ctx, loopCfg)
 	if err != nil {
 		emitEvent(ctx, parentOut, event.Event{
-			Type: event.TypeSubAgentEnd, Tool: a.Name, Content: fmt.Sprintf("error: %v", err), SessionID: sess.ID,
+			Type: event.TypeSubAgentEnd, Tool: a.Name, Content: fmt.Sprintf("error: %v", err),
+			SessionID: sess.ID, ToolCallID: callID,
 		})
 		return nil, fmt.Errorf("run sub-agent: %w", err)
 	}
 	result := collectResult(events)
 	result.SessionID = sess.ID
 	emitEvent(ctx, parentOut, event.Event{
-		Type: event.TypeSubAgentEnd, Tool: a.Name, Content: result.Response, SessionID: sess.ID,
+		Type: event.TypeSubAgentEnd, Tool: a.Name, Content: result.Response,
+		SessionID: sess.ID, ToolCallID: callID,
 	})
 	return result, nil
 }

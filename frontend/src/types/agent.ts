@@ -21,7 +21,7 @@ export interface AgentEvent {
   approval_id?: string // tool_approval_required
   code?: string // error
   message?: string // error
-  status?: string // done: "completed" | "failed" | "cancelled"
+  status?: string // done: completed|failed|cancelled; sub_agent_start: queued|running
   turns?: number // done
   input_tokens?: number // done
   output_tokens?: number // done
@@ -196,10 +196,13 @@ export interface ToolCallEntry {
     | "error"
     | "denied"
     | "pending_approval"
+    | "sub_agent_queued"
     | "sub_agent_running"
   startTime?: number
   endTime?: number
   sessionId?: string
+  /** Max concurrent sub-agents while status is sub_agent_queued. */
+  queueMax?: number
 }
 
 export type StreamStatus = "idle" | "streaming" | "error" | "done"

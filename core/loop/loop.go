@@ -43,6 +43,7 @@ func Run(ctx context.Context, cfg Config) (<-chan event.Event, error) {
 		return nil, err
 	}
 	seedMessages(cfg)
+	cfg.imageKeepFrom = imageKeepFromAfterSeed(cfg)
 	cfg.failStreak = &toolFailStreak{}
 	cfg.failStreak.seed(cfg.Session.GetMessages())
 	ctx = attachRunContext(ctx, cfg)
@@ -172,7 +173,10 @@ func executeTurn(tc TurnContext) (tokenDelta, bool) {
 	// compaction can project the delta appended after this response.
 	reqMsgCount := len(tc.Config.Session.GetMessages())
 	chunks, err := tc.Config.Provider.Stream(tc.Ctx, provider.Request{
-		Model: tc.Config.Agent.Model, Messages: tc.Config.Session.GetMessages(),
+		Model: tc.Config.Agent.Model,
+		Messages: provider.DropImagesBefore(
+			tc.Config.Session.GetMessages(), tc.Config.imageKeepFrom,
+		),
 		Tools: tc.ToolDefs, MaxTokens: tc.Config.Agent.MaxTokens,
 		ContextWindow: tc.ContextWindow,
 	})
@@ -290,20 +294,19 @@ func collectParallelResults(tc ToolCollectContext) []pendingResult {
 		idx    int
 		result pendingResult
 	}
-	resultCh := make(chan indexedResult, maxParallel*2)
+	resultCh := make(chan indexedResult, len(tc.ToolCalls))
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, maxParallel)
+	toolSem := make(chan struct{}, maxParallel)
 
 	for i, call := range tc.ToolCalls {
 		wg.Add(1)
 		go func(call provider.ToolCall, i int) {
 			defer wg.Done()
-			select {
-			case <-tc.Ctx.Done():
+			release, ok := acquireToolSlot(tc.Ctx, toolSem, call.Name)
+			if !ok {
 				return
-			case sem <- struct{}{}:
 			}
-			defer func() { <-sem }()
+			defer release()
 			res := executeOneTool(ToolExecContext{Ctx: tc.Ctx, Reg: tc.Config.Registry, Call: call, Out: tc.Out, Log: tc.Log, Pol: tc.Pol, Hooks: tc.Hooks, Approver: tc.Approver})
 			select {
 			case resultCh <- indexedResult{i, pendingResult{idx: i, callID: call.ID, toolName: call.Name, args: call.Arguments, output: res.Output, parts: res.ContentParts}}:
@@ -325,6 +328,20 @@ func collectParallelResults(tc ToolCollectContext) []pendingResult {
 		}
 	}
 	return results
+}
+
+// acquireToolSlot gates ordinary tools with toolSem. Delegate tools skip it —
+// their concurrency is enforced inside subagent.Run.
+func acquireToolSlot(ctx context.Context, toolSem chan struct{}, toolName string) (func(), bool) {
+	if IsDelegateTool(toolName) {
+		return func() {}, true
+	}
+	select {
+	case <-ctx.Done():
+		return nil, false
+	case toolSem <- struct{}{}:
+		return func() { <-toolSem }, true
+	}
 }
 
 func collectSerialResults(tc ToolCollectContext) []pendingResult {

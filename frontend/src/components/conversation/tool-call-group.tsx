@@ -54,7 +54,10 @@ function getGroupStatus(
   t: TFunction
 ): { label: string; icon: typeof Check; color: string } {
   const running = toolCalls.some(
-    (tc) => tc.status === "running" || tc.status === "sub_agent_running"
+    (tc) =>
+      tc.status === "running" ||
+      tc.status === "sub_agent_queued" ||
+      tc.status === "sub_agent_running"
   )
   if (running)
     return {

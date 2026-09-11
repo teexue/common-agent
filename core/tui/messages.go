@@ -76,6 +76,9 @@ func renderTool(theme Theme, t ToolCard) string {
 	case ToolPending:
 		icon = "◎"
 		style = theme.Warn
+	case ToolQueued:
+		icon = "…"
+		style = theme.Muted
 	}
 	line := fmt.Sprintf("%s %s", icon, t.Name)
 	if t.Input != "" {

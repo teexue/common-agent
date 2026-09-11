@@ -38,7 +38,8 @@ export interface AgentEvent {
   code?: string
   /** Error message for error events */
   message?: string
-  /** Completion status for done events: "completed" | "failed" | "cancelled" */
+  /** Completion status for done events: "completed" | "failed" | "cancelled".
+   * Also used by sub_agent_start: "queued" | "running". */
   status?: string
   /** Turn count for done events */
   turns?: number

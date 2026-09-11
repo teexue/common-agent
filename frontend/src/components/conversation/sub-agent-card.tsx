@@ -16,7 +16,16 @@ function sessionIdOf(tc: ToolCallEntry): string | undefined {
 }
 
 function isLive(status: string): boolean {
-  return status === "running" || status === "sub_agent_running"
+  return (
+    status === "running" ||
+    status === "sub_agent_queued" ||
+    status === "sub_agent_running"
+  )
+}
+
+function liveLabel(tc: ToolCallEntry, t: (key: string) => string): string {
+  if (tc.status === "sub_agent_queued") return t("status.queued")
+  return t("status.delegating")
 }
 
 export function SubAgentCard({ toolCall }: { toolCall: ToolCallEntry }) {
@@ -24,7 +33,7 @@ export function SubAgentCard({ toolCall }: { toolCall: ToolCallEntry }) {
   const [open, setOpen] = useState(false)
   const live = isLive(toolCall.status)
   const summary = extractInputSummary(toolCall.name, toolCall.input)
-  const label = live ? t("status.delegating") : t("subAgent.clickToView")
+  const label = live ? liveLabel(toolCall, t) : t("subAgent.clickToView")
   return (
     <>
       <Button
@@ -49,6 +58,8 @@ export function SubAgentCard({ toolCall }: { toolCall: ToolCallEntry }) {
         onOpenChange={setOpen}
         sessionId={sessionIdOf(toolCall)}
         live={live}
+        queued={toolCall.status === "sub_agent_queued"}
+        queueMax={toolCall.queueMax}
       />
     </>
   )

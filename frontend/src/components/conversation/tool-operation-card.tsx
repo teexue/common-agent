@@ -45,10 +45,16 @@ function runningStatus(t: TFunction, sub: boolean): StatusCfg {
       }
 }
 
+function queuedStatus(t: TFunction): StatusCfg {
+  return { icon: Clock, color: "text-chart-2", label: t("status.queued") }
+}
+
 function resolveStatus(toolCall: ToolCallEntry, t: TFunction): StatusCfg {
   switch (toolCall.status) {
     case "running":
       return runningStatus(t, false)
+    case "sub_agent_queued":
+      return queuedStatus(t)
     case "sub_agent_running":
       return runningStatus(t, true)
     case "pending_approval":
@@ -85,7 +91,11 @@ function formatDuration(start?: number, end?: number): string | null {
 }
 
 function StatusIcon({ status, config }: { status: string; config: StatusCfg }) {
-  if (status === "running" || status === "sub_agent_running")
+  if (
+    status === "running" ||
+    status === "sub_agent_queued" ||
+    status === "sub_agent_running"
+  )
     return (
       <Loader2 className={cn("h-3 w-3 shrink-0 animate-spin", config.color)} />
     )

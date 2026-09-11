@@ -118,6 +118,7 @@
   "tui.approval.prompt": " [Y/n] ",
   "tui.done.status_unknown": "未知",
   "tui.done.footer": "done · {status} · {turns} 轮",
+  "tui.subagent.queued": "排队等待槽位（最多 {max}）",
   "tui.assistant.label": "助手",
   "tui.welcome.title": "common-agent",
   "tui.welcome.meta": "{agent} · {provider} · {model}",

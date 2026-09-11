@@ -118,6 +118,7 @@
   "tui.approval.prompt": " [Y/n] ",
   "tui.done.status_unknown": "unknown",
   "tui.done.footer": "done · {status} · {turns} turns",
+  "tui.subagent.queued": "waiting for slot (max {max})",
   "tui.assistant.label": "Assistant",
   "tui.welcome.title": "common-agent",
   "tui.welcome.meta": "{agent} · {provider} · {model}",

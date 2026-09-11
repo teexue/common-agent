@@ -15,11 +15,15 @@ export function SubAgentDialog({
   onOpenChange,
   sessionId,
   live,
+  queued,
+  queueMax,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   sessionId?: string
   live: boolean
+  queued?: boolean
+  queueMax?: number
 }) {
   const { t } = useTranslation()
   return (
@@ -33,7 +37,12 @@ export function SubAgentDialog({
           <DialogDescription>{t("subAgent.dialogHint")}</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-          <SubAgentDialogBody sessionId={sessionId} live={live && open} />
+          <SubAgentDialogBody
+            sessionId={sessionId}
+            live={live && open}
+            queued={queued}
+            queueMax={queueMax}
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -43,16 +52,23 @@ export function SubAgentDialog({
 function SubAgentDialogBody({
   sessionId,
   live,
+  queued,
+  queueMax,
 }: {
   sessionId?: string
   live: boolean
+  queued?: boolean
+  queueMax?: number
 }) {
   const { t } = useTranslation()
   if (!sessionId) {
+    const text = queued
+      ? t("subAgent.waiting", { max: queueMax ?? "—" })
+      : t("subAgent.starting")
     return (
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
-        {t("subAgent.starting")}
+        {text}
       </p>
     )
   }

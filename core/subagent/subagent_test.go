@@ -103,10 +103,10 @@ func TestRun_EmitsSubAgentEvents(t *testing.T) {
 	close(out)
 	var hasStart, hasEnd bool
 	for ev := range out {
-		if ev.Type == event.TypeSubAgentStart {
+		if ev.Type == event.TypeSubAgentStart && ev.SessionID != "" {
 			hasStart = true
-			if ev.SessionID == "" {
-				t.Error("expected session_id on TypeSubAgentStart")
+			if ev.Status != StatusRunning {
+				t.Errorf("expected status %q, got %q", StatusRunning, ev.Status)
 			}
 		}
 		if ev.Type == event.TypeSubAgentEnd {

@@ -18,6 +18,8 @@ type ToolStatus string
 const (
 	// ToolRunning means the tool is executing.
 	ToolRunning ToolStatus = "running"
+	// ToolQueued means a sub-agent is waiting for a concurrency slot.
+	ToolQueued ToolStatus = "queued"
 	// ToolPending means the tool awaits human approval.
 	ToolPending ToolStatus = "pending_approval"
 	// ToolDone means the tool finished successfully.

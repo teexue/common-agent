@@ -34,9 +34,7 @@ func ApplyEvent(entries []Entry, ev event.Event) []Entry {
 	case event.TypeDone:
 		return finishStreaming(entries)
 	case event.TypeSubAgentStart:
-		return appendToolStart(entries, event.Event{
-			Type: event.TypeToolStart, Tool: "sub:" + ev.Tool, ToolCallID: ev.ToolCallID,
-		})
+		return appendSubAgentStart(entries, ev)
 	case event.TypeSubAgentEnd:
 		return appendToolResult(entries, event.Event{
 			Type: event.TypeToolResult, Tool: "sub:" + ev.Tool, ToolCallID: ev.ToolCallID,
@@ -74,6 +72,44 @@ func appendToolStart(entries []Entry, ev event.Event) []Entry {
 	return entries
 }
 
+func appendSubAgentStart(entries []Entry, ev event.Event) []Entry {
+	entries = ensureAssistant(entries)
+	i := len(entries) - 1
+	id := ev.ToolCallID
+	name := "sub:" + ev.Tool
+	status := ToolRunning
+	input := ev.Content
+	if ev.Status == "queued" {
+		status = ToolQueued
+		if ev.Message != "" {
+			input = "waiting max=" + ev.Message
+			if ev.Content != "" {
+				input += " · " + ev.Content
+			}
+		}
+	}
+	if id != "" {
+		for j := range entries[i].Tools {
+			t := &entries[i].Tools[j]
+			if t.ID == id {
+				t.Name = name
+				t.Status = status
+				if input != "" {
+					t.Input = input
+				}
+				return entries
+			}
+		}
+	}
+	if id == "" {
+		id = name
+	}
+	entries[i].Tools = append(entries[i].Tools, ToolCard{
+		ID: id, Name: name, Input: input, Status: status,
+	})
+	return entries
+}
+
 func appendToolResult(entries []Entry, ev event.Event) []Entry {
 	if len(entries) == 0 {
 		return entries
@@ -86,7 +122,7 @@ func appendToolResult(entries []Entry, ev event.Event) []Entry {
 	out := rawString(ev.Output)
 	for j := range entries[i].Tools {
 		t := &entries[i].Tools[j]
-		if (id != "" && t.ID == id) || (id == "" && t.Name == ev.Tool && t.Status == ToolRunning) {
+		if (id != "" && t.ID == id) || (id == "" && t.Name == ev.Tool && (t.Status == ToolRunning || t.Status == ToolQueued)) {
 			t.Output = out
 			t.Status = ToolDone
 			return entries

@@ -8,18 +8,35 @@ type Handler = (
   dispatch: Dispatch
 ) => boolean
 
+function subAgentStatus(event: AgentEvent): ToolCallEntry["status"] {
+  if (event.status === "queued") return "sub_agent_queued"
+  return "sub_agent_running"
+}
+
+function parseQueueMax(event: AgentEvent): number | undefined {
+  if (event.status !== "queued" || !event.message) return
+  const n = Number.parseInt(event.message, 10)
+  return Number.isFinite(n) && n > 0 ? n : undefined
+}
+
 function makeToolCall(event: AgentEvent, prefix: string): ToolCallEntry {
+  const isSub =
+    prefix === "sa" ||
+    event.tool === "delegate_task" ||
+    event.type === "sub_agent_start"
   return {
     id: `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     toolCallId: event.tool_call_id,
     name: event.tool ?? (prefix === "sa" ? "sub-agent" : "unknown"),
     input: event.input ?? event.content ?? "",
-    status:
-      prefix === "sa" || event.tool === "delegate_task"
-        ? "sub_agent_running"
-        : "running",
+    status: isSub
+      ? prefix === "tc"
+        ? "sub_agent_queued"
+        : subAgentStatus(event)
+      : "running",
     startTime: Date.now(),
     sessionId: event.session_id,
+    queueMax: parseQueueMax(event),
   }
 }
 

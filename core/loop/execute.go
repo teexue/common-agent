@@ -133,7 +133,7 @@ func emitToolNotFound(ctx context.Context, hooks *hook.Chain, call provider.Tool
 
 // executeWithTelemetry runs the tool with telemetry tracing.
 func executeWithTelemetry(ctx context.Context, t tool.Tool, call provider.ToolCall, out chan<- event.Event) (tool.Result, error) {
-	toolCtx := WithParentEventChan(ctx, out)
+	toolCtx := WithToolCallID(WithParentEventChan(ctx, out), call.ID)
 	toolStart := time.Now()
 	var toolSpan trace.Span
 	if tel := GetTelemetry(ctx); tel != nil {

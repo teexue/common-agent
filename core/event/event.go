@@ -80,7 +80,8 @@ type Event struct {
 	Code    string `json:"code,omitempty"`
 	Message string `json:"message,omitempty"`
 
-	// done
+	// done / sub_agent_start (queued while waiting for a concurrency slot;
+	// running once the child session starts)
 	Status        string `json:"status,omitempty"`
 	Turns         int    `json:"turns,omitempty"`
 	InputTokens   int    `json:"input_tokens,omitempty"`
@@ -143,6 +144,10 @@ func PrintEvents(events <-chan Event) {
 		case TypeCompaction:
 			fmt.Printf("\n⟳ %s\n", ev.Content)
 		case TypeSubAgentStart:
+			if ev.Status == "queued" {
+				fmt.Printf("\n↳ Sub-agent queued (max %s): %s\n", ev.Message, ev.Content)
+				continue
+			}
 			fmt.Printf("\n↳ Sub-agent %s: %s\n", ev.Tool, ev.Content)
 		case TypeSubAgentEnd:
 			fmt.Printf("↲ Sub-agent %s done\n", ev.Tool)

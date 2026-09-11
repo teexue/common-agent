@@ -86,6 +86,10 @@ type Config struct {
 	// failStreak tracks consecutive identical tool failures within a run.
 	failStreak *toolFailStreak
 
+	// imageKeepFrom is the first session message index whose image payloads
+	// may be sent to the model. Earlier images belong to prior user turns.
+	imageKeepFrom int
+
 	// AgentsDir and NewProvider let tools spawn nested loop.Run calls
 	// (delegate_task). Optional; empty means sub-agent spawning is disabled.
 	AgentsDir   string

@@ -23,7 +23,7 @@ func TestSaveAndGetSubagentSettings(t *testing.T) {
 	bindConfigDB(t, home)
 	svc := &service.Service{HomeDir: home}
 	err := svc.SaveSubagentSettings(config.SubagentView{
-		Enabled: false, MaxTurns: 7, MaxDepth: 2, Timeout: 15,
+		Enabled: false, MaxTurns: 7, MaxDepth: 2, Timeout: 15, MaxConcurrent: 3,
 	})
 	require.NoError(t, err)
 	view, err := svc.GetSubagentSettings()
@@ -32,6 +32,7 @@ func TestSaveAndGetSubagentSettings(t *testing.T) {
 	assert.Equal(t, 7, view.MaxTurns)
 	assert.Equal(t, config.DefaultSubagentMaxDepth, view.MaxDepth)
 	assert.Equal(t, 15, view.Timeout)
+	assert.Equal(t, 3, view.MaxConcurrent)
 }
 
 func TestPrepareRun_InjectsDelegateTask(t *testing.T) {
@@ -61,4 +62,5 @@ tools: [get_time]
 	assert.True(t, result.Config.Subagent.Enabled)
 	assert.Equal(t, config.DefaultSubagentMaxTurns, result.Config.Subagent.MaxTurns)
 	assert.Equal(t, config.DefaultSubagentMaxDepth, result.Config.Subagent.MaxDepth)
+	assert.Equal(t, config.DefaultSubagentMaxConcurrent, result.Config.Subagent.MaxConcurrent)
 }

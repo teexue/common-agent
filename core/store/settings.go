@@ -17,10 +17,11 @@ const (
 
 // SubagentSettings is the persisted global sub-agent section.
 type SubagentSettings struct {
-	Enabled  *bool `json:"enabled,omitempty"`
-	MaxTurns int   `json:"max_turns,omitempty"`
-	MaxDepth int   `json:"max_depth,omitempty"`
-	Timeout  int   `json:"timeout,omitempty"`
+	Enabled       *bool `json:"enabled,omitempty"`
+	MaxTurns      int   `json:"max_turns,omitempty"`
+	MaxDepth      int   `json:"max_depth,omitempty"`
+	Timeout       int   `json:"timeout,omitempty"`
+	MaxConcurrent int   `json:"max_concurrent,omitempty"`
 }
 
 // Settings mirrors config.Settings for persistence.

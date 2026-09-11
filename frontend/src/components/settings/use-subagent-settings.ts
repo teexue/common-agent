@@ -9,10 +9,16 @@ const empty: SubagentSettings = {
   enabled: true,
   max_turns: 5,
   timeout: 0,
+  max_concurrent: 2,
 }
 
 function toForm(v: SubagentSettings): SubagentSettings {
-  return { enabled: v.enabled, max_turns: v.max_turns, timeout: v.timeout }
+  return {
+    enabled: v.enabled,
+    max_turns: v.max_turns,
+    timeout: v.timeout,
+    max_concurrent: v.max_concurrent,
+  }
 }
 
 export function useSubagentSettings() {

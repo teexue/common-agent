@@ -71,6 +71,21 @@ func seedMessages(cfg Config) {
 	}
 }
 
+// imageKeepFromAfterSeed returns the first message index that may carry
+// image payloads for this run: the newly seeded user turn (attachments) and
+// any messages appended later (tool reads). Prior-turn images are dropped
+// only on the outbound model request.
+func imageKeepFromAfterSeed(cfg Config) int {
+	n := len(cfg.Session.GetMessages())
+	if cfg.Prompt != "" || len(cfg.Images) > 0 {
+		if n == 0 {
+			return 0
+		}
+		return n - 1
+	}
+	return n
+}
+
 func attachRunContext(ctx context.Context, cfg Config) context.Context {
 	if cfg.WorkDir != "" {
 		ctx = WithWorkDir(ctx, cfg.WorkDir)

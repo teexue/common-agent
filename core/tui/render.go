@@ -92,6 +92,14 @@ func (r *Renderer) render(ev event.Event) {
 
 	case event.TypeSubAgentStart:
 		r.closeLine()
+		if ev.Status == "queued" {
+			msg := i18n.T("tui.subagent.queued", "max", ev.Message)
+			if ev.Content != "" {
+				msg += ": " + ev.Content
+			}
+			_, _ = fmt.Fprintln(r.out, mutedStyle.Render("… "+msg))
+			break
+		}
 		_, _ = fmt.Fprintln(r.out, toolStyle.Render("→ "+ev.Tool))
 
 	case event.TypeSubAgentEnd:
